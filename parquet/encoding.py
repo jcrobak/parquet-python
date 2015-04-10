@@ -111,8 +111,8 @@ def read_rle(fo, header, bit_width):
         data += fo.read(1)
     data = data + zero_data[len(data):]
     value = struct.unpack("<i", data)[0]
-    logger.debug("Read RLE group with value %s of byte-width %s and count %s",
-                 value, width, count)
+    # logger.debug("Read RLE group with value %s of byte-width %s and count %s",
+    #              value, width, count)
     for i in range(count):
         yield value
 
@@ -135,8 +135,8 @@ def read_bitpacked(fo, header, width):
     num_groups = header >> 1
     count = num_groups * 8
     byte_count = (width * count)/8
-    logger.debug("Reading a bit-packed run with: %s groups, count %s, bytes %s",
-        num_groups, count, byte_count)
+    # logger.debug("Reading a bit-packed run with: %s groups, count %s, bytes %s",
+    #     num_groups, count, byte_count)
     raw_bytes = array.array('B', fo.read(byte_count)).tolist()
     current_byte = 0
     b = raw_bytes[current_byte]
@@ -147,9 +147,9 @@ def read_bitpacked(fo, header, width):
     total = len(raw_bytes)*8;
     while (total >= width):
         # TODO zero-padding could produce extra zero-values
-        logger.debug("  read bitpacked: width=%s window=(%s %s) b=%s,"
-                     " current_byte=%s",
-                     width, bits_wnd_l, bits_wnd_r, bin(b), current_byte)
+        #logger.debug("  read bitpacked: width=%s window=(%s %s) b=%s,"
+        #             " current_byte=%s",
+        #             width, bits_wnd_l, bits_wnd_r, bin(b), current_byte)
         if bits_wnd_r >= 8:
             bits_wnd_r -= 8
             bits_wnd_l -= 8
@@ -158,7 +158,7 @@ def read_bitpacked(fo, header, width):
             res.append((b >> bits_wnd_r) & mask)
             total -= width
             bits_wnd_r += width
-            logger.debug("  read bitpackage: added: %s", res[-1])
+            # logger.debug("  read bitpackage: added: %s", res[-1])
         elif current_byte + 1 < len(raw_bytes):
             current_byte += 1
             b |= (raw_bytes[current_byte] << bits_wnd_l)
