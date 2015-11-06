@@ -1,6 +1,6 @@
 """Utils for working with the parquet thrift models"""
 
-from ttypes import FieldRepetitionType
+from parquet.ttypes import FieldRepetitionType
 
 
 class SchemaHelper(object):

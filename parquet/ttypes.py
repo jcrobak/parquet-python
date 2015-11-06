@@ -294,7 +294,7 @@ class SchemaElement:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -400,7 +400,7 @@ class DataPageHeader:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -442,7 +442,7 @@ class IndexPageHeader:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -520,7 +520,7 @@ class DictionaryPageHeader:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -663,7 +663,7 @@ class PageHeader:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -739,7 +739,7 @@ class KeyValue:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -812,7 +812,7 @@ class SortingColumn:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -886,7 +886,7 @@ class ColumnMetaData:
         if ftype == TType.LIST:
           self.encodings = []
           (_etype3, _size0) = iprot.readListBegin()
-          for _i4 in xrange(_size0):
+          for _i4 in range(_size0):
             _elem5 = iprot.readI32();
             self.encodings.append(_elem5)
           iprot.readListEnd()
@@ -896,7 +896,7 @@ class ColumnMetaData:
         if ftype == TType.LIST:
           self.path_in_schema = []
           (_etype9, _size6) = iprot.readListBegin()
-          for _i10 in xrange(_size6):
+          for _i10 in range(_size6):
             _elem11 = iprot.readString();
             self.path_in_schema.append(_elem11)
           iprot.readListEnd()
@@ -926,7 +926,7 @@ class ColumnMetaData:
         if ftype == TType.LIST:
           self.key_value_metadata = []
           (_etype15, _size12) = iprot.readListBegin()
-          for _i16 in xrange(_size12):
+          for _i16 in range(_size12):
             _elem17 = KeyValue()
             _elem17.read(iprot)
             self.key_value_metadata.append(_elem17)
@@ -1036,7 +1036,7 @@ class ColumnMetaData:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -1128,7 +1128,7 @@ class ColumnChunk:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -1174,7 +1174,7 @@ class RowGroup:
         if ftype == TType.LIST:
           self.columns = []
           (_etype24, _size21) = iprot.readListBegin()
-          for _i25 in xrange(_size21):
+          for _i25 in range(_size21):
             _elem26 = ColumnChunk()
             _elem26.read(iprot)
             self.columns.append(_elem26)
@@ -1195,7 +1195,7 @@ class RowGroup:
         if ftype == TType.LIST:
           self.sorting_columns = []
           (_etype30, _size27) = iprot.readListBegin()
-          for _i31 in xrange(_size27):
+          for _i31 in range(_size27):
             _elem32 = SortingColumn()
             _elem32.read(iprot)
             self.sorting_columns.append(_elem32)
@@ -1249,7 +1249,7 @@ class RowGroup:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
@@ -1315,7 +1315,7 @@ class FileMetaData:
         if ftype == TType.LIST:
           self.schema = []
           (_etype38, _size35) = iprot.readListBegin()
-          for _i39 in xrange(_size35):
+          for _i39 in range(_size35):
             _elem40 = SchemaElement()
             _elem40.read(iprot)
             self.schema.append(_elem40)
@@ -1331,7 +1331,7 @@ class FileMetaData:
         if ftype == TType.LIST:
           self.row_groups = []
           (_etype44, _size41) = iprot.readListBegin()
-          for _i45 in xrange(_size41):
+          for _i45 in range(_size41):
             _elem46 = RowGroup()
             _elem46.read(iprot)
             self.row_groups.append(_elem46)
@@ -1342,7 +1342,7 @@ class FileMetaData:
         if ftype == TType.LIST:
           self.key_value_metadata = []
           (_etype50, _size47) = iprot.readListBegin()
-          for _i51 in xrange(_size47):
+          for _i51 in range(_size47):
             _elem52 = KeyValue()
             _elem52.read(iprot)
             self.key_value_metadata.append(_elem52)
@@ -1414,7 +1414,7 @@ class FileMetaData:
 
   def __repr__(self):
     L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+      for key, value in self.__dict__.items()]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):

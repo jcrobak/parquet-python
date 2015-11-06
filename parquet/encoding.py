@@ -1,13 +1,10 @@
 import array
 import math
 import struct
-import cStringIO
+import io
 import logging
 
-from ttypes import Type
-
-logger = logging.getLogger("parquet")
-
+from parquet.ttypes import Type
 
 def read_plain_boolean(fo):
     """Reads a boolean using the plain encoding"""
@@ -98,8 +95,8 @@ def read_rle(fo, header, bit_width):
     value that's repeated. Yields the value repeated count times.
     """
     count = header >> 1
-    zero_data = "\x00\x00\x00\x00"
-    data = ""
+    zero_data = b"\x00\x00\x00\x00"
+    data = b""
     width = byte_width(bit_width)
     if width >= 1:
         data += fo.read(1)
@@ -111,8 +108,6 @@ def read_rle(fo, header, bit_width):
         data += fo.read(1)
     data = data + zero_data[len(data):]
     value = struct.unpack("<i", data)[0]
-    logger.debug("Read RLE group with value %s of byte-width %s and count %s",
-                 value, width, count)
     for i in range(count):
         yield value
 
@@ -134,9 +129,7 @@ def read_bitpacked(fo, header, width):
     """
     num_groups = header >> 1
     count = num_groups * 8
-    byte_count = (width * count)/8
-    logger.debug("Reading a bit-packed run with: %s groups, count %s, bytes %s",
-        num_groups, count, byte_count)
+    byte_count = int((width * count)/8)
     raw_bytes = array.array('B', fo.read(byte_count)).tolist()
     current_byte = 0
     b = raw_bytes[current_byte]
@@ -144,12 +137,9 @@ def read_bitpacked(fo, header, width):
     bits_wnd_l = 8
     bits_wnd_r = 0
     res = []
-    total = len(raw_bytes)*8;
+    total = len(raw_bytes)*8
     while (total >= width):
         # TODO zero-padding could produce extra zero-values
-        logger.debug("  read bitpacked: width=%s window=(%s %s) b=%s,"
-                     " current_byte=%s",
-                     width, bits_wnd_l, bits_wnd_r, bin(b), current_byte)
         if bits_wnd_r >= 8:
             bits_wnd_r -= 8
             bits_wnd_l -= 8
@@ -158,7 +148,6 @@ def read_bitpacked(fo, header, width):
             res.append((b >> bits_wnd_r) & mask)
             total -= width
             bits_wnd_r += width
-            logger.debug("  read bitpackage: added: %s", res[-1])
         elif current_byte + 1 < len(raw_bytes):
             current_byte += 1
             b |= (raw_bytes[current_byte] << bits_wnd_l)
@@ -175,17 +164,11 @@ def read_bitpacked_deprecated(fo, byte_count, count, width):
     word = 0
     bits_in_word = 0
     while len(res) < count and index <= len(raw_bytes):
-        logger.debug("index = %d", index)
-        logger.debug("bits in word = %d", bits_in_word)
-        logger.debug("word = %s", bin(word))
         if bits_in_word >= width:
             # how many bits over the value is stored
             offset = (bits_in_word - width)
-            logger.debug("offset = %d", offset)
-
             # figure out the value
             value = (word & (mask << offset)) >> offset
-            logger.debug("value = %d (%s)", value, bin(value))
             res.append(value)
 
             bits_in_word -= width
@@ -208,7 +191,7 @@ def read_rle_bit_packed_hybrid(fo, width, length=None):
         raw_bytes = fo.read(length)
         if raw_bytes == '':
             return None
-        io_obj = cStringIO.StringIO(raw_bytes)
+        io_obj = io.BytesIO(raw_bytes)
     res = []
     while io_obj.tell() < length:
         header = read_unsigned_var_int(io_obj)
