@@ -6,6 +6,7 @@ Created on Thu Oct 22 15:45:54 2015
 """
 from __future__ import absolute_import, division, print_function
 from parquet import main as parquet
+from parquet.converted_types import convert_column
 from collections import defaultdict
 import pandas as pd
 
@@ -47,7 +48,12 @@ class ParquetFile(object):
                     else:
                         dict_items = parquet.read_dictionary_page(
                                 self.fo, ph, cmd, width)
-        return pd.DataFrame(res)
+        out = pd.DataFrame(res)
+        for col in columns:
+            schemae = [s for s in self.schema if col==s.name.decode()][0]
+            if schemae.converted_type:
+                out[col] = convert_column(out[col], schemae)
+        return out
 
 if __name__ == '__main__':
     import os

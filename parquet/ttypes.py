@@ -250,7 +250,16 @@ class SchemaElement:
         else:
           iprot.skip(ftype)
       else:
-        iprot.skip(ftype)
+        if ftype == TType.I32:
+            piece = iprot.readI32()
+        elif ftype == TType.STRING:
+            piece = iprot.readString()
+        else:
+            iprot.skip(ftype)
+            piece = None
+        self.extra = getattr(self, 'extra', [])
+        self.extra.append(piece)
+        # iprot.skip(ftype)
       iprot.readFieldEnd()
     iprot.readStructEnd()
 
