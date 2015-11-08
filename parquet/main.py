@@ -274,9 +274,10 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     # TODO Actually use the definition and repetition levels.
 
     if daph.encoding == Encoding.PLAIN:
+        width = getattr(column_metadata, 'width')
         for i in range(daph.num_values):
             vals.append(
-                encoding.read_plain(io_obj, column_metadata.type, None))
+                encoding.read_plain(io_obj, column_metadata.type, width))
     elif daph.encoding == Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]

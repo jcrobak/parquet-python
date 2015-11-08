@@ -37,6 +37,7 @@ class ParquetFile(object):
                 self.fo.seek(offset, 0)
                 values_seen = 0
                 cmd = col.meta_data
+                cmd.width = width
                 dict_items = []
                 while values_seen < rg.num_rows:
                     ph = parquet._read_page_header(self.fo)
