@@ -10,6 +10,26 @@ from parquet.converted_types import convert_column
 from collections import defaultdict
 import pandas as pd
 
+def schema_full_names(schema):
+    """Rationalize schema names as given in column chunk metadata.
+    Probably inverse of how the "children" were assigned in the first place."""
+    level = 0
+    prior = []
+    children = []
+    schema[0].fullname = 'Root'
+    for s in schema[1:]:  # ignore root node
+        s.fullname = '.'.join(prior + [s.name.decode()])
+        if s.num_children is not None:
+            level += 1
+            prior.append(s.name.decode())
+            children.append(s.num_children)
+        elif level > 0:
+            children[-1] -= 1
+            if children[-1] == 0:
+                prior.pop(-1)
+                children.pop(-1)
+                level -= 1
+
 class ParquetFile(object):
     def __init__(self, filename):
         self.fo = open(filename, 'rb')
@@ -19,6 +39,7 @@ class ParquetFile(object):
         self.rows = [row.num_rows for row in self.rg]
         self.cg = self.rg[0].columns
         self.schema = self.footer.schema
+        schema_full_names(self.schema)
         self.cols = [".".join(x.decode() for x in c.meta_data.path_in_schema) for c in
                          self.cg]
 
@@ -29,7 +50,7 @@ class ParquetFile(object):
             cg = rg.columns
             for col in cg:
                 name = ".".join(x.decode() for x in col.meta_data.path_in_schema)
-                ind = [s for s in self.schema if s.name.decode()==name]
+                ind = [s for s in self.schema if s.fullname==name]
                 width = ind[0].type_length
                 if name not in columns:
                     continue
