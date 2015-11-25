@@ -269,7 +269,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         bit_width = encoding.width_from_max_int(max_repetition_level)
         repetition_levels = _read_data(io_obj,
                                        daph.repetition_level_encoding,
-                                       daph.num_values)
+                                       daph.num_values, bit_width)
 
     # TODO Actually use the definition and repetition levels.
 

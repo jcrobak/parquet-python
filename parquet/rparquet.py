@@ -31,22 +31,37 @@ def schema_full_names(schema):
                 level -= 1
 
 class ParquetFile(object):
+    "Represents parquet file. Schema is read on init."
     def __init__(self, filename):
+        "Access and analyze parquet file."
         self.fo = open(filename, 'rb')
         self.footer = parquet._read_footer(self.fo)
         self.schema_helper = parquet.schema.SchemaHelper(self.footer.schema)
         self.rg = self.footer.row_groups
         self.rows = [row.num_rows for row in self.rg]
         self.cg = self.rg[0].columns
-        self.schema = self.footer.schema
-        schema_full_names(self.schema)
+        self.schema = [s for s in self.footer.schema if s.num_children is None]
+        schema_full_names(self.footer.schema)
         self.cols = [".".join(x.decode() for x in c.meta_data.path_in_schema) for c in
                          self.cg]
+        self.rows = self.footer.num_rows
 
     def get_columns(self, columns=None):
+        """
+        Load given columns as a dataframe.
+        
+        Columns is either a list (a subset of self.cols), or if None,
+        gets all columns.
+        
+        Will attempt to transform 'Converted' types.
+        """
         columns = columns or self.cols
         res = defaultdict(list)
+        # Alternative to appending values to a list is to make arrays
+        # beforehand using the schema, and assign
         for rg in self.rg:
+            # Alternative to reading whole file: iterate over row-groups
+            # or be able to limit max number of rows returned
             cg = rg.columns
             for col in cg:
                 name = ".".join(x.decode() for x in col.meta_data.path_in_schema)

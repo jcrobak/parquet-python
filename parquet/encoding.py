@@ -25,6 +25,7 @@ def read_plain_int64(fo):
 
 def read_plain_int96(fo):
     """Reads a 96-bit int using the plain encoding"""
+    return read_plain_byte_array_fixed(fo, 12)
     tup = struct.unpack("<qi", fo.read(12))
     return tup[0] << 32 | tup[1]
 
