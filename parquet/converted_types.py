@@ -19,14 +19,19 @@ def invert_dict(d):
     return {v:k for k, v in d.items()}
 
 
-def convert_spark_timestamp(data):
+def map_spark_timestamp(x):
     """Special conversion for 'timestamp' column as created by spark, and
     possibly hive. Such a column does not have a 'converted type' defined,
     but is instead labeled in the alternative metadata stored in the footer
     key-value aread.
     
     Data should be a column/series of 12-byte values (INT96).
+    
+    Note that times are assumed to be UTC.
     """
+    sec = int.from_bytes(x[:8], 'little') / 1000000000
+    days = int.from_bytes(x[8:], 'little') - 2440588
+    return datetime.datetime.fromtimestamp(days * 24 * 3600 + sec)
 
 
 def convert_column(data, schemae):
