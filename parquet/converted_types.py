@@ -5,6 +5,7 @@ things built from primitive types.
 """
 import datetime
 import pandas as pd
+import numpy as np
 import struct
 import sys
 PY3 = sys.version_info.major > 2
@@ -58,7 +59,13 @@ def convert_column(data, schemae):
     elif ctype == 'TIMESTAMP_MILLIS':
         out = pd.to_datetime(data, unit='ms')        
     elif ctype == 'UTF8':
+        ## TODO: need decoder for py2
         out = data.map(bytes.decode) if PY3 else out
+    elif ctype[0] == "U":
+        # unsigned integers of various widths
+        arr = data.values
+        arr.dtype = np.dtype('u' + arr.dtype.name)
+        out = pd.Series(arr)
     else:
         print("Converted type %i not handled" % ctype)
         out = data
