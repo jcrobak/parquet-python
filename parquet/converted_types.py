@@ -5,6 +5,9 @@ things built from primitive types.
 """
 import datetime
 import pandas as pd
+import struct
+import sys
+PY3 = sys.version_info.major > 2
 
 # define bytes->int for non 2, 4, 8 byte ints
 if hasattr(int, 'from_bytes'):
@@ -27,11 +30,12 @@ def map_spark_timestamp(x):
     
     Data should be a column/series of 12-byte values (INT96).
     
-    Note that times are assumed to be UTC.
+    Use with series.map(map_spark_timestamp)
+
+    Note that times are assumed to be UTC.    
     """
-    sec = int.from_bytes(x[:8], 'little') / 1000000000
-    days = int.from_bytes(x[8:], 'little') - 2440588
-    return datetime.datetime.fromtimestamp(days * 86400 + sec)
+    sec, days = struct.unpack('<ql', x)
+    return datetime.datetime.fromtimestamp((days - 2440588) * 86400 + sec / 1000000000)
 
 
 def convert_column(data, schemae):
@@ -48,17 +52,15 @@ def convert_column(data, schemae):
     elif ctype == 'DATE':
         # NB: If there are both DATE and TIME_MILLIS, should combine to
         # datetime as done in map_spark_timestamp
-        epoch = datetime.date(1970, 1, 1)
-        out = data.map(lambda x: datetime.timedelta(days=int(x)) + epoch)
+        out = (data * 86400000000000).astype('datetime64[ns]')
+    elif ctype == 'TIME_MILLIS':
+        out = (data * 1e6).astype('timedelta64[ns]')
     elif ctype == 'TIMESTAMP_MILLIS':
         out = pd.to_datetime(data, unit='ms')        
-    elif ctype == 'LIST':   # or array
-        print("Array type not handled")
-        out = data
     elif ctype == 'UTF8':
-        out = data.map(bytes.decode)
+        out = data.map(bytes.decode) if PY3 else out
     else:
-        print("Converted type %i not known" % ctype)
+        print("Converted type %i not handled" % ctype)
         out = data
     return out
 
