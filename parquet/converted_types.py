@@ -31,7 +31,7 @@ def map_spark_timestamp(x):
     """
     sec = int.from_bytes(x[:8], 'little') / 1000000000
     days = int.from_bytes(x[8:], 'little') - 2440588
-    return datetime.datetime.fromtimestamp(days * 24 * 3600 + sec)
+    return datetime.datetime.fromtimestamp(days * 86400 + sec)
 
 
 def convert_column(data, schemae):
@@ -46,15 +46,19 @@ def convert_column(data, schemae):
         else:
             out = data / scale
     elif ctype == 'DATE':
+        # NB: If there are both DATE and TIME_MILLIS, should combine to
+        # datetime as done in map_spark_timestamp
         epoch = datetime.date(1970, 1, 1)
         out = data.map(lambda x: datetime.timedelta(days=int(x)) + epoch)
-    elif ctype == 'TIMSTAMP_MILLIS':
-        out = pd.to_datetime(unit='ms')        
+    elif ctype == 'TIMESTAMP_MILLIS':
+        out = pd.to_datetime(data, unit='ms')        
     elif ctype == 'LIST':   # or array
-        print("Array type not handled" % schemae.converted_type)
-        out = data        
+        print("Array type not handled")
+        out = data
+    elif ctype == 'UTF8':
+        out = data.map(bytes.decode)
     else:
-        print("Converted type %i not known" % schemae.converted_type)
+        print("Converted type %i not known" % ctype)
         out = data
     return out
 
