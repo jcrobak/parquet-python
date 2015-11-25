@@ -4,6 +4,7 @@ Deal with parquet logical types (aka converted types), higher-order
 things built from primitive types.
 """
 import datetime
+import pandas as pd
 
 # define bytes->int for non 2, 4, 8 byte ints
 if hasattr(int, 'from_bytes'):
@@ -42,6 +43,8 @@ def convert_column(data, schemae):
     elif ctype == 'DATE':
         epoch = datetime.date(1970, 1, 1)
         out = data.map(lambda x: datetime.timedelta(days=int(x)) + epoch)
+    elif ctype == 'TIMSTAMP_MILLIS':
+        out = pd.to_datetime(unit='ms')        
     elif ctype == 'LIST':   # or array
         print("Array type not handled" % schemae.converted_type)
         out = data        
