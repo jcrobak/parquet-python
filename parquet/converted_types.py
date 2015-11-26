@@ -35,7 +35,10 @@ def map_spark_timestamp(x):
 
     Note that times are assumed to be UTC.    
     """
-    sec, days = struct.unpack('<ql', x)
+    if len(x) == 12:
+        sec, days = struct.unpack('<ql', x)
+    else:
+        sec, days = struct.unpack('<ql', x+b'\0'*(12-len(x)))
     return datetime.datetime.fromtimestamp((days - 2440588) * 86400 + sec / 1000000000)
 
 

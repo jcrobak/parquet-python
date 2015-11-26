@@ -141,6 +141,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     daph = page_header.data_page_header
     raw_bytes = _read_page(fo, page_header, column_metadata)
     io_obj = io.BytesIO(raw_bytes)
+    V0 = values_seen
     # definition levels are skipped if data is required.
     if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
         max_definition_level = schema_helper.max_definition_level(
@@ -178,16 +179,20 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         dict_values_bytes = io_obj.read()
         dict_values_io_obj = io.BytesIO(dict_values_bytes)
         # TODO jcrobak -- not sure that this loop is needed?
-        while values_seen < daph.num_values:
+        while total_seen < daph.num_values:
             values = encoding.read_rle_bit_packed_hybrid(
                 dict_values_io_obj, bit_width, len(dict_values_bytes))
             if len(values) + total_seen > daph.num_values:
                 values = values[0: daph.num_values - total_seen]
             arr[values_seen:values_seen+len(values)] =  [dictionary[v] for v in values]
             values_seen += len(values)
+            total_seen += len(values)
     else:
         raise ParquetFormatException("Unsupported encoding: %s",
                                      _get_name(Encoding, daph.encoding))
+    if values_seen == V0:
+        import pdb
+        pdb.set_trace()
     return values_seen
 
 
