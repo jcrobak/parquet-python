@@ -5,12 +5,14 @@ Created on Thu Oct 22 15:45:54 2015
 @author: mdurant
 """
 from __future__ import absolute_import, division, print_function
-from parquet import main as parquet
+from parquet import main as mparquet
 from parquet.converted_types import convert_column
 from collections import defaultdict
 import pandas as pd
 import numpy as np
 from parquet.encoding import np_dtypes
+import parquet.schema
+
 
 def schema_full_names(schema):
     """Rationalize schema names as given in column chunk metadata.
@@ -37,7 +39,7 @@ class ParquetFile(object):
     def __init__(self, filename):
         "Access and analyze parquet file."
         self.fo = open(filename, 'rb')
-        self.footer = parquet._read_footer(self.fo)
+        self.footer = mparquet._read_footer(self.fo)
         self.schema_helper = parquet.schema.SchemaHelper(self.footer.schema)
         self.rg = self.footer.row_groups
         self.rows = [row.num_rows for row in self.rg]
@@ -77,19 +79,19 @@ class ParquetFile(object):
                     arr = np.empty(rg.num_rows, dtype=np.dtype('S%i'%width))
                 else:
                     arr = np.empty(rg.num_rows, dtype=np_dtypes[cmd.type])
-                offset = parquet._get_offset(cmd)
+                offset = mparquet._get_offset(cmd)
                 self.fo.seek(offset, 0)
                 values_seen = 0
                 dict_items = []
                 while values_seen < rg.num_rows:
-                    ph = parquet._read_page_header(self.fo)
-                    if ph.type == parquet.PageType.DATA_PAGE:
-                        parquet.read_data_page(self.fo,
+                    ph = mparquet._read_page_header(self.fo)
+                    if ph.type == mparquet.PageType.DATA_PAGE:
+                        mparquet.read_data_page(self.fo,
                                 self.schema_helper, ph, cmd, dict_items,
                                 arr, values_seen)
                         values_seen += ph.data_page_header.num_values
                     else:
-                        dict_items = parquet.read_dictionary_page(
+                        dict_items = mparquet.read_dictionary_page(
                                 self.fo, ph, cmd, width)
                 res[name].append(arr)
         res = {key:np.concatenate(d) for key, d in res.items()}
