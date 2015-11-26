@@ -9,6 +9,8 @@ from parquet import main as parquet
 from parquet.converted_types import convert_column
 from collections import defaultdict
 import pandas as pd
+import numpy as np
+from parquet.encoding import np_dtypes
 
 def schema_full_names(schema):
     """Rationalize schema names as given in column chunk metadata.
@@ -67,24 +69,30 @@ class ParquetFile(object):
                 name = ".".join(x.decode() for x in col.meta_data.path_in_schema)
                 ind = [s for s in self.schema if s.fullname==name]
                 width = ind[0].type_length
-                if name not in columns:
-                    continue
-                offset = parquet._get_offset(col.meta_data)
-                self.fo.seek(offset, 0)
-                values_seen = 0
                 cmd = col.meta_data
                 cmd.width = width
+                if name not in columns:
+                    continue
+                if cmd.type == 7:
+                    arr = np.empty(rg.num_rows, dtype=np.dtype('S%i'%width))
+                else:
+                    arr = np.empty(rg.num_rows, dtype=np_dtypes[cmd.type])
+                offset = parquet._get_offset(cmd)
+                self.fo.seek(offset, 0)
+                values_seen = 0
                 dict_items = []
                 while values_seen < rg.num_rows:
                     ph = parquet._read_page_header(self.fo)
                     if ph.type == parquet.PageType.DATA_PAGE:
-                        values = parquet.read_data_page(self.fo,
-                                self.schema_helper, ph, cmd, dict_items)
-                        res[name] += values
+                        parquet.read_data_page(self.fo,
+                                self.schema_helper, ph, cmd, dict_items,
+                                arr, values_seen)
                         values_seen += ph.data_page_header.num_values
                     else:
                         dict_items = parquet.read_dictionary_page(
                                 self.fo, ph, cmd, width)
+                res[name].append(arr)
+        res = {key:np.concatenate(d) for key, d in res.items()}
         out = pd.DataFrame(res)
         for col in columns:
             schemae = [s for s in self.schema if col==s.name.decode()][0]
@@ -93,6 +101,12 @@ class ParquetFile(object):
         return out
 
 if __name__ == '__main__':
-    import os
+    import os, time
+    t0 = time.time()
     f = ParquetFile(os.sep.join([os.path.expanduser('~'), 'try.parquet']))
     out = f.get_columns()
+    t1 = time.time()
+    f2 = ParquetFile('/Users/mdurant/Downloads/parquet-data/impala/1.1.1-GZIP/customer.impala.parquet')
+    out2 = f2.get_columns()
+    t2 = time.time()
+    print(t1-t0, t2-t1)
