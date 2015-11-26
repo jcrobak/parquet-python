@@ -1,11 +1,8 @@
-import array
 import math
 import struct
 import io
-import logging
 import numpy as np
 
-from parquet.ttypes import Type
 np_dtypes = {
     0: np.dtype('bool'),
     1: np.dtype('int32'),
@@ -104,42 +101,22 @@ def width_from_max_int(value):
     return int(math.ceil(math.log(value + 1, 2)))
 
 
-def _mask_for_bits(i):
-    """Helper function for read_bitpacked to generage a mask to grab i bits."""
-    return (1 << i) - 1
-
-
 def read_bitpacked(fo, header, width):
-    """Reads a bitpacked run of the rle/bitpack hybrid.
-
-    Supports width >8 (crossing bytes).
-    """
     num_groups = header >> 1
     count = num_groups * 8
     byte_count = int((width * count)/8)
-    raw_bytes = array.array('B', fo.read(byte_count)).tolist()
-    current_byte = 0
-    b = raw_bytes[current_byte]
-    mask = _mask_for_bits(width)
-    bits_wnd_l = 8
-    bits_wnd_r = 0
-    res = []
-    total = len(raw_bytes)*8
-    while (total >= width):
-        # TODO zero-padding could produce extra zero-values
-        if bits_wnd_r >= 8:
-            bits_wnd_r -= 8
-            bits_wnd_l -= 8
-            b >>= 8
-        elif bits_wnd_l - bits_wnd_r >= width:
-            res.append((b >> bits_wnd_r) & mask)
-            total -= width
-            bits_wnd_r += width
-        elif current_byte + 1 < len(raw_bytes):
-            current_byte += 1
-            b |= (raw_bytes[current_byte] << bits_wnd_l)
-            bits_wnd_l += 8
-    return res
+    if width == 8:
+        res = np.frombuffer(fo.read(byte_count), dtype=np.uint8)
+    elif width == 16:
+        res = np.frombuffer(fo.read(byte_count), dtype=np.uint16)
+    else:
+        arr = np.frombuffer(fo.read(byte_count), dtype=np.uint8)
+        bits = np.unpackbits(arr)
+        rarr = bits.reshape((-1, 8))[:, ::-1].ravel()
+        count = len(rarr) // width
+        rearr = rarr[:width*count].reshape((-1, width))
+        res = (2**np.arange(width) * rearr).sum(axis=1)
+    return res.tolist()      
 
 
 def read_rle_bit_packed_hybrid(fo, width, length=None):

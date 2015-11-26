@@ -1,20 +1,12 @@
 from __future__ import absolute_import, division, print_function
 import gzip
-import json
-import logging
 import struct
 import io
-import sys
-from collections import defaultdict
 from parquet.ttypes import (FileMetaData, CompressionCodec, Encoding,
                     FieldRepetitionType, PageHeader, PageType, Type)
 from thrift.protocol import TCompactProtocol
 from thrift.transport import TTransport
 from parquet import encoding
-from parquet import schema
-
-
-logger = logging.getLogger("parquet")
 
 try:
     import snappy
@@ -149,7 +141,6 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     daph = page_header.data_page_header
     raw_bytes = _read_page(fo, page_header, column_metadata)
     io_obj = io.BytesIO(raw_bytes)
-    vals = []
     # definition levels are skipped if data is required.
     if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
         max_definition_level = schema_helper.max_definition_level(
