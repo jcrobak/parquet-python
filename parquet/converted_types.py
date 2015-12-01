@@ -12,10 +12,12 @@ PY3 = sys.version_info.major > 2
 
 # define bytes->int for non 2, 4, 8 byte ints
 if hasattr(int, 'from_bytes'):
-    b2int = lambda x: int.from_bytes(x, 'big')
+    intbig = lambda x: int.from_bytes(x, 'big')
+    intlittle = lambda x: int.from_bytes(x, 'little')
 else:
     import codecs
-    b2int = lambda x: int(codecs.encode(x, 'hex'), 16)
+    intbig = lambda x: int(codecs.encode(x, 'hex'), 16)
+    intlittle = lambda x: int(codecs.encode(x[::-1], 'hex'), 16)
 
 
 def invert_dict(d):
@@ -27,7 +29,7 @@ def map_spark_timestamp(x):
     """Special conversion for 'timestamp' column as created by spark, and
     possibly hive. Such a column does not have a 'converted type' defined,
     but is instead labeled in the alternative metadata stored in the footer
-    key-value aread.
+    key-value area.
     
     Data should be a column/series of 12-byte values (INT96).
     
@@ -37,7 +39,7 @@ def map_spark_timestamp(x):
     """
     if len(x) == 12:
         sec, days = struct.unpack('<ql', x)
-    else:
+    else:  # For the case that numpy has sripper trailing null bytes
         sec, days = struct.unpack('<ql', x+b'\0'*(12-len(x)))
     return datetime.datetime.fromtimestamp((days - 2440588) * 86400 + sec / 1000000000)
 
@@ -48,9 +50,8 @@ def convert_column(data, schemae):
     ctype = types_i[schemae.converted_type]
     if  ctype == 'DECIMAL':
         scale = 10**schemae.extra[0]
-        precision = schemae.extra[1]   # not used - defined by byte width
         if data.dtype == object:
-            out = data.map(b2int) / scale
+            out = data.map(intbig) / scale
         else:
             out = data / scale
     elif ctype == 'DATE':
