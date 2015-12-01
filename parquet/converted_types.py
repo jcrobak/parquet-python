@@ -7,11 +7,13 @@ import datetime
 import pandas as pd
 import numpy as np
 import struct
+import json
+import bson
 import sys
 PY3 = sys.version_info.major > 2
 
 # define bytes->int for non 2, 4, 8 byte ints
-if hasattr(int, 'from_bytes'):
+if PY3:
     intbig = lambda x: int.from_bytes(x, 'big')
     intlittle = lambda x: int.from_bytes(x, 'little')
 else:
@@ -39,7 +41,7 @@ def map_spark_timestamp(x):
     """
     if len(x) == 12:
         sec, days = struct.unpack('<ql', x)
-    else:  # For the case that numpy has sripper trailing null bytes
+    else:  # For the case that numpy has stripped trailing null bytes
         sec, days = struct.unpack('<ql', x+b'\0'*(12-len(x)))
     return datetime.datetime.fromtimestamp((days - 2440588) * 86400 + sec / 1000000000)
 
@@ -70,6 +72,10 @@ def convert_column(data, schemae):
         arr = data.values
         arr.dtype = np.dtype('u' + arr.dtype.name)
         out = pd.Series(arr)
+    elif ctype == 'JSON':
+        out = data.map(bytes.decode).map(json.loads)
+    elif ctype == 'BSON':
+        out = data.map(bson.decode_all)
     else:
         print("Converted type %i not handled" % ctype)
         out = data
