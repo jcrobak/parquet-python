@@ -128,12 +128,16 @@ def df_to_parquet(df, filename, index=False):
         fmd = FileMetaData(num_rows=len(df), created_by=b'python-parquet',
                            schema=[], row_groups=[])
         rg = RowGroup(num_rows=len(df), columns=[])
+        fmd.schema.append(SchemaElement(type=0, name=b'Root', num_children=len(df.columns)))
         for col in df:
             binary = df[col].values.tostring()
             typ = df[col].dtype
-            if typ == 'int':
+            if typ == 'int64':
                 typcode = 2
-            fmd.schema.append(SchemaElement(type=0, name=b'Root', num_children=len(df.columns)))
+            if typ == 'int32':
+                typcode = 1
+            if typ == 'float64':
+                typcode = 5
             fmd.schema.append(SchemaElement(type=typcode, name=col.encode()))
             cmd = ColumnMetaData(type=typcode, encodings=[0], path_in_schema=[col.encode()],
                                  codec=0, num_values=len(df), total_uncompressed_size=len(binary),
@@ -159,7 +163,9 @@ def df_to_parquet(df, filename, index=False):
 
 if __name__ == '__main__':
     import os, time
-    df = pd.DataFrame({'x': np.arange(10, dtype='int64')})
+    df = pd.DataFrame({'x': np.arange(10, dtype='int64'),
+                       'y': np.arange(10, dtype='int32'),
+                       'z': np.arange(10, dtype='float64')})
     df_to_parquet(df, 'temp.parquet')
     f = ParquetFile('temp.parquet')
     f.get_columns()
