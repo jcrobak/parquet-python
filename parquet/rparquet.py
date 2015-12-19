@@ -6,12 +6,11 @@ Created on Thu Oct 22 15:45:54 2015
 """
 from __future__ import absolute_import, division, print_function
 from parquet import main as mparquet
+from parquet.writer import df_to_parquet
 from parquet.converted_types import convert_column
 from collections import defaultdict
 import pandas as pd
 import numpy as np
-import io
-import struct
 from parquet.encoding import np_dtypes
 import parquet.schema
 
@@ -42,6 +41,7 @@ class ParquetFile(object):
         "Access and analyze parquet file."
         self.fo = open(filename, 'rb')
         self.footer = mparquet._read_footer(self.fo)
+        print(self.fo.tell())
         self.schema_helper = parquet.schema.SchemaHelper(self.footer.schema)
         self.rg = self.footer.row_groups
         self.rows = [row.num_rows for row in self.rg]
@@ -87,6 +87,7 @@ class ParquetFile(object):
                 dict_items = []
                 while values_seen < rg.num_rows:
                     ph = mparquet._read_page_header(self.fo)
+                    print(ph)
                     if ph.type == mparquet.PageType.DATA_PAGE:
                         mparquet.read_data_page(self.fo,
                                 self.schema_helper, ph, cmd, dict_items,
@@ -104,62 +105,6 @@ class ParquetFile(object):
                 out[col] = convert_column(out[col], schemae)
         return out
 
-from parquet.ttypes import (FileMetaData, CompressionCodec, Encoding,
-                    FieldRepetitionType, PageHeader, PageType, Type,
-                    SchemaElement, RowGroup, ColumnChunk, ColumnMetaData,
-                    DataPageHeader, PageHeader)
-from thrift.protocol import TCompactProtocol
-from thrift.transport import TTransport
-"""  BOOLEAN = 0
-  INT32 = 1
-  INT64 = 2
-  INT96 = 3
-  FLOAT = 4
-  DOUBLE = 5
-  BYTE_ARRAY = 6
-  FIXED_LEN_BYTE_ARRAY = 7"""
-
-def df_to_parquet(df, filename, index=False):
-    with open(filename, 'wb') as fo:
-        fo.write(b'PAR1')
-        footer = io.BytesIO()
-        tin = TTransport.TFileObjectTransport(footer)
-        pin = TCompactProtocol.TCompactProtocol(tin)
-        fmd = FileMetaData(num_rows=len(df), created_by=b'python-parquet',
-                           schema=[], row_groups=[], version=1, key_value_metadata=[])
-        rg = RowGroup(num_rows=len(df), columns=[])
-        fmd.schema.append(SchemaElement(type=0, name=b'Root', num_children=len(df.columns)))
-        for col in df:
-            binary = df[col].values.tostring()
-            typ = df[col].dtype
-            if typ == 'int64':
-                typcode = 2
-            if typ == 'int32':
-                typcode = 1
-            if typ == 'float64':
-                typcode = 5
-            fmd.schema.append(SchemaElement(type=typcode, name=col.encode(), repetition_type=1))
-            cmd = ColumnMetaData(type=typcode, encodings=[0], path_in_schema=[col.encode()],
-                                 codec=0, num_values=len(df), total_uncompressed_size=len(binary),
-                                 total_compressed_size=len(binary), data_page_offset=fo.tell())
-            dph = DataPageHeader(num_values=len(df), encoding=0, definition_level_encoding=0, repetition_level_encoding=0)
-            ph = PageHeader(type=0, uncompressed_page_size=len(binary), compressed_page_size=len(binary),
-                            data_page_header=dph)
-            tin = TTransport.TFileObjectTransport(fo)
-            now = TCompactProtocol.TCompactProtocol(tin)
-            ph.write(now)
-            fo.write(binary)
-            chunk = ColumnChunk(file_offset=fo.tell(), meta_data=cmd)
-            rg.columns.append(chunk)
-        fmd.row_groups.append(rg)
-        rg.total_byte_size = fo.tell() - 4
-        fmd.write(pin)
-        binary = footer.getvalue()
-        footer_size = len(binary)
-        fo.write(binary)
-        fo.write(struct.pack('<i', footer_size))
-        fo.write(b'PAR1')
-    return ParquetFile(filename)
 
 if __name__ == '__main__':
     import os, time

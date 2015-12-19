@@ -154,6 +154,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
                                            daph.definition_level_encoding,
                                            daph.num_values,
                                            bit_width)
+            
 
     # repetition levels are skipped if data is at the first level.
     if len(column_metadata.path_in_schema) > 1:
