@@ -41,7 +41,6 @@ class ParquetFile(object):
         "Access and analyze parquet file."
         self.fo = open(filename, 'rb')
         self.footer = mparquet._read_footer(self.fo)
-        print(self.fo.tell())
         self.schema_helper = parquet.schema.SchemaHelper(self.footer.schema)
         self.rg = self.footer.row_groups
         self.rows = [row.num_rows for row in self.rg]
@@ -87,7 +86,6 @@ class ParquetFile(object):
                 dict_items = []
                 while values_seen < rg.num_rows:
                     ph = mparquet._read_page_header(self.fo)
-                    print(ph)
                     if ph.type == mparquet.PageType.DATA_PAGE:
                         mparquet.read_data_page(self.fo,
                                 self.schema_helper, ph, cmd, dict_items,
