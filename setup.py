@@ -11,6 +11,7 @@ setup(name='parquet',
     packages=[ 'parquet' ],
     install_requires=[
         'thrift',
+        'bitstring'
     ],
     extras_require = {
         'snappy support': ['python-snappy']

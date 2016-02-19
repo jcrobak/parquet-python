@@ -3,7 +3,7 @@ import math
 import struct
 import cStringIO
 import logging
-
+import bitstring 
 from ttypes import Type
 
 logger = logging.getLogger("parquet")
@@ -11,13 +11,23 @@ logger = logging.getLogger("parquet")
 
 def read_plain_boolean(fo):
     """Reads a boolean using the plain encoding"""
-    raise NotImplemented
 
+    a = bitstring.Bits(fo)
+    if a.len > 0 :
+        v = a[0]
+        return  v
+    else:
+        return False
 
+    
 def read_plain_int32(fo):
     """Reads a 32-bit int using the plain encoding"""
-    tup = struct.unpack("<i", fo.read(4))
-    return tup[0]
+    d = fo.read(4)
+    if len(d) > 3:
+        tup = struct.unpack("<i", d)
+        return tup[0]
+    else:
+        return 0
 
 
 def read_plain_int64(fo):
