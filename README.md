@@ -16,6 +16,35 @@ parquet-python is not yet uploaded to PyPi as the code has a lot of bugs. To get
 
 You may need to install the `thrift` and `python-snappy` projects with `easy_install` or `pip`. To install parquet-python system-wide, run `python setup.py install`.
 
+## Example
+
+parquet-python currently has two programatic interfaces with similar functionality to Python's csv reader. First, it supports a DictReader which returns a dictionary per row. Second, it has a reader which returns a list of values for each row. Both function require a file-like object and support an optional `columns` field to only read the specified columns.
+
+```lang=python
+
+import parquet
+import json
+
+## assuming parquet file with two rows and three columns:
+## foo bar baz
+## 1   2   3
+## 4   5   6
+
+with open("test.parquet") as fo:
+   # prints:
+   # {"foo": 1, "bar": 2}
+   # {"foo": 4, "bar": 5}
+   for row in parquet.DictReader(fo, columns=['foo', 'bar']):
+       print(json.dumps(row))
+
+
+with open("test.parquet") as fo:
+   # prints:
+   # 1,2
+   # 4,5
+   for row in parquet.reader(fo, columns=['foo', 'bar]):
+       print(",".join([str(r) for r in row]))
+```
 
 # Todos
 
