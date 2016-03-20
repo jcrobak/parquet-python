@@ -257,8 +257,9 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     raw_bytes = _read_page(fo, page_header, column_metadata)
     io_obj = cStringIO.StringIO(raw_bytes)
     vals = []
+    debug_logging = logger.isEnabledFor(logging.DEBUG)
 
-    if logger.isEnabledFor(logging.DEBUG):
+    if debug_logging:
         logger.debug("  definition_level_encoding: %s",
                      _get_name(Encoding, daph.definition_level_encoding))
         logger.debug("  repetition_level_encoding: %s",
@@ -270,7 +271,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         max_definition_level = schema_helper.max_definition_level(
             column_metadata.path_in_schema)
         bit_width = encoding.width_from_max_int(max_definition_level)
-        if logger.isEnabledFor(logging.DEBUG):
+        if debug_logging:
             logger.debug("  max def level: %s   bit_width: %s",
                          max_definition_level, bit_width)
         if bit_width == 0:
@@ -281,7 +282,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
                                            daph.num_values,
                                            bit_width)
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if debug_logging:
             logger.debug("  Definition levels: %s", len(definition_levels))
 
     # repetition levels are skipped if data is at the first level.
@@ -299,12 +300,12 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         for i in range(daph.num_values):
             vals.append(
                 encoding.read_plain(io_obj, column_metadata.type, None))
-        if logger.isEnabledFor(logging.DEBUG):
+        if debug_logging:
             logger.debug("  Values: %s", len(vals))
     elif daph.encoding == Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]
-        if logger.isEnabledFor(logging.DEBUG):
+        if debug_logging:
             logger.debug("bit_width: %d", bit_width)
         total_seen = 0
         dict_values_bytes = io_obj.read()
@@ -369,6 +370,7 @@ def reader(fo, columns=None):
     schema_helper = schema.SchemaHelper(footer.schema)
     keys = columns if columns else [s.name for s in
                                     footer.schema if s.type]
+    debug_logging = logger.isEnabledFor(logging.DEBUG)
     for rg in footer.row_groups:
         res = defaultdict(list)
         row_group_rows = rg.num_rows
@@ -382,12 +384,12 @@ def reader(fo, columns=None):
             offset = _get_offset(cmd)
             fo.seek(offset, 0)
             values_seen = 0
-            if logger.isEnabledFor(logging.DEBUG):
+            if debug_logging:
                 logger.debug("reading column chunk of type: %s",
                              _get_name(Type, cmd.type))
             while values_seen < row_group_rows:
                 ph = _read_page_header(fo)
-                if logger.isEnabledFor(logging.DEBUG):
+                if debug_logging:
                     logger.debug("Reading page (type=%s, "
                                  "uncompressed=%s bytes, "
                                  "compressed=%s bytes)",
@@ -401,11 +403,11 @@ def reader(fo, columns=None):
                     res[".".join(cmd.path_in_schema)] += values
                     values_seen += ph.data_page_header.num_values
                 elif ph.type == PageType.DICTIONARY_PAGE:
-                    if logger.isEnabledFor(logging.DEBUG):
+                    if debug_logging:
                         logger.debug(ph)
                     assert dict_items == []
                     dict_items = read_dictionary_page(fo, ph, cmd)
-                    if logger.isEnabledFor(logging.DEBUG):
+                    if debug_logging:
                         logger.debug("Dictionary: %s", str(dict_items))
                 else:
                     logger.warn("Skipping unknown page type={0}".format(
