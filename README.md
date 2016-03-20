@@ -20,7 +20,7 @@ You may need to install the `thrift` and `python-snappy` projects with `easy_ins
 
 parquet-python currently has two programatic interfaces with similar functionality to Python's csv reader. First, it supports a DictReader which returns a dictionary per row. Second, it has a reader which returns a list of values for each row. Both function require a file-like object and support an optional `columns` field to only read the specified columns.
 
-```lang=python
+```python
 
 import parquet
 import json
