@@ -68,6 +68,7 @@ class TestReadApi(unittest.TestCase):
 
 class TestCompatibility(object):
 
+    tc = unittest.TestCase('__init__')
     td = "test-data"
     files = [(os.path.join(td, p), os.path.join(td, "nation.csv")) for p in
              ["gzip-nation.impala.parquet", "nation.dict.parquet",
@@ -134,30 +135,17 @@ class TestCompatibility(object):
         with open(csv_file, 'rb') as f:
             expected_data = list(csv.reader(f, delimiter='|'))
 
-        def _custom_datatype(in_dict, keys):
-            '''
-            return rows like the csv outputter
+        actual_data = []
+        with open(parquet_file) as parquet_fo:
+            actual_data = list(parquet.DictReader(parquet_fo))
 
-            Could convert to a dataframe like this:
-                import pandas
-                df = pandas.DataFrame(in_dict)
-                return df
-            '''
-            columns = [in_dict[key] for key in keys]
-            rows = zip(*columns)
-            return rows
-
-        actual_data = parquet.dump(parquet_file, Options(format='custom'), out=_custom_datatype)
-
-        assert len(expected_data) == len(actual_data)
+        self.tc.assertEquals(len(expected_data), len(actual_data))
         footer = parquet.read_footer(parquet_file)
         cols = [s.name for s in footer.schema]
-
         for expected, actual in zip(expected_data, actual_data):
-            assert len(expected) == len(actual)
-            for i, c in enumerate(cols):
-                if c in actual:
-                    assert expected[i] == actual[c]
+            self.tc.assertEquals(len(expected), len(actual))
+            for i, c in enumerate([c for c in cols if c in actual]):
+                self.tc.assertEquals(expected[i], str(actual[c]))
 
     def test_all_files(self):
         for parquet_file, csv_file in self.files:

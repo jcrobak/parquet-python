@@ -4,7 +4,7 @@ import logging
 import struct
 import cStringIO
 import sys
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from ttypes import (FileMetaData, CompressionCodec, Encoding,
                     FieldRepetitionType, PageHeader, PageType, Type)
 from thrift.protocol import TCompactProtocol
@@ -326,13 +326,41 @@ def read_dictionary_page(fo, page_header, column_metadata):
     return dict_items
 
 
-def _dump(fo, options, out=sys.stdout):
-    def println(value):
-        out.write(value + "\n")
+def DictReader(fo, columns=None):
+    """
+    Reader for a parquet file object.
 
+    This function is a generator returning an OrderedDict for each row
+    of data in the parquet file. Nested values will be flattend into the
+    top-level dict and can be referenced with '.' notation (e.g. 'foo' -> 'bar'
+    is referenced as 'foo.bar')
+
+    :param fo: the file containing parquet data
+    :param columns: the columns to include. If None (default), all columns
+                    are included. Nested values are referenced with "." notation
+    """
+    footer = _read_footer(fo)
+    keys = columns if columns else [s.name for s in
+                                    footer.schema if s.type]
+
+    for row in reader(fo, columns):
+        yield OrderedDict(zip(keys, row))
+
+def reader(fo, columns=None):
+    """
+    Reader for a parquet file object.
+
+    This function is a generator returning a list of values for each row
+    of data in the parquet file.
+
+    :param fo: the file containing parquet data
+    :param columns: the columns to include. If None (default), all columns
+                    are included. Nested values are referenced with "." notation
+    """
     footer = _read_footer(fo)
     schema_helper = schema.SchemaHelper(footer.schema)
-    total_count = 0
+    keys = columns if columns else [s.name for s in
+                                    footer.schema if s.type]
     for rg in footer.row_groups:
         res = defaultdict(list)
         row_group_rows = rg.num_rows
@@ -340,7 +368,7 @@ def _dump(fo, options, out=sys.stdout):
             dict_items = []
             cmd = cg.meta_data
             # skip if the list of columns is specified and this isn't in it
-            if options.col and not ".".join(cmd.path_in_schema) in options.col:
+            if columns and not ".".join(cmd.path_in_schema) in columns:
                 continue
 
             offset = _get_offset(cmd)
@@ -370,21 +398,29 @@ def _dump(fo, options, out=sys.stdout):
                 else:
                     logger.warn("Skipping unknown page type={0}".format(
                         _get_name(PageType, ph.type)))
-        keys = options.col if options.col else [s.name for s in
-                                                footer.schema if s.name in res]
-        if options.format == 'custom':
-            custom_datatype = out(res, keys)
-            return custom_datatype
-        if options.format == "csv" and not options.no_headers:
-            println("\t".join(keys))
+
         for i in range(rg.num_rows):
-            if options.limit != -1 and i + total_count >= options.limit:
-                return
-            if options.format == "csv":
-                println("\t".join(str(res[k][i]) for k in keys))
-            elif options.format == "json":
-                println(json.dumps(dict([(k, res[k][i]) for k in keys])))
-        total_count += rg.num_rows
+            yield [res[k][i] for k in keys if res[k]]
+
+def _dump(fo, options, out=sys.stdout):
+    def println(value):
+        out.write(value + "\n")
+
+    total_count = 0
+    keys = None
+    for row in DictReader(fo, options.col):
+        if not keys:
+            keys = row.keys()
+        if total_count == 0 and options.format == "csv" and not options.no_headers:
+            println("\t".join(keys))
+
+        if options.limit != -1 and i + total_count >= options.limit:
+            return
+        if options.format == "csv":
+            println("\t".join(str(v) for v in row.values()))
+        elif options.format == "json":
+            println(json.dumps(row))
+        total_count += 1
 
 
 def dump(filename, options, out=sys.stdout):
