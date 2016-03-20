@@ -51,7 +51,8 @@ def _read_footer(fo):
     """Reads the footer from the given file object, returning a FileMetaData
     object. This method assumes that the fo references a valid parquet file"""
     footer_size = _get_footer_size(fo)
-    logger.debug("Footer size in bytes: %s", footer_size)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Footer size in bytes: %s", footer_size)
     fo.seek(-(8 + footer_size), 2)  # seek to beginning of footer
     tin = TTransport.TFileObjectTransport(fo)
     pin = TCompactProtocol.TCompactProtocol(tin)
@@ -212,11 +213,13 @@ def _read_page(fo, page_header, column_metadata):
                 "Unsupported Codec: {0}".format(codec))
     else:
         raw_bytes = bytes_from_file
-    logger.debug(
-        "Read page with compression type {0}. Bytes {1} -> {2}".format(
-        _get_name(CompressionCodec, codec),
-        page_header.compressed_page_size,
-        page_header.uncompressed_page_size))
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "Read page with compression type {0}. Bytes {1} -> {2}".format(
+            _get_name(CompressionCodec, codec),
+            page_header.compressed_page_size,
+            page_header.uncompressed_page_size))
     assert len(raw_bytes) == page_header.uncompressed_page_size, \
         "found {0} raw bytes (expected {1})".format(
             len(raw_bytes),
@@ -255,19 +258,21 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     io_obj = cStringIO.StringIO(raw_bytes)
     vals = []
 
-    logger.debug("  definition_level_encoding: %s",
-                 _get_name(Encoding, daph.definition_level_encoding))
-    logger.debug("  repetition_level_encoding: %s",
-                 _get_name(Encoding, daph.repetition_level_encoding))
-    logger.debug("  encoding: %s", _get_name(Encoding, daph.encoding))
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("  definition_level_encoding: %s",
+                     _get_name(Encoding, daph.definition_level_encoding))
+        logger.debug("  repetition_level_encoding: %s",
+                     _get_name(Encoding, daph.repetition_level_encoding))
+        logger.debug("  encoding: %s", _get_name(Encoding, daph.encoding))
 
     # definition levels are skipped if data is required.
     if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
         max_definition_level = schema_helper.max_definition_level(
             column_metadata.path_in_schema)
         bit_width = encoding.width_from_max_int(max_definition_level)
-        logger.debug("  max def level: %s   bit_width: %s",
-                     max_definition_level, bit_width)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("  max def level: %s   bit_width: %s",
+                         max_definition_level, bit_width)
         if bit_width == 0:
             definition_levels = [0] * daph.num_values
         else:
@@ -276,7 +281,8 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
                                            daph.num_values,
                                            bit_width)
 
-        logger.debug("  Definition levels: %s", len(definition_levels))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("  Definition levels: %s", len(definition_levels))
 
     # repetition levels are skipped if data is at the first level.
     if len(column_metadata.path_in_schema) > 1:
@@ -293,11 +299,13 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         for i in range(daph.num_values):
             vals.append(
                 encoding.read_plain(io_obj, column_metadata.type, None))
-        logger.debug("  Values: %s", len(vals))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("  Values: %s", len(vals))
     elif daph.encoding == Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]
-        logger.debug("bit_width: %d", bit_width)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("bit_width: %d", bit_width)
         total_seen = 0
         dict_values_bytes = io_obj.read()
         dict_values_io_obj = cStringIO.StringIO(dict_values_bytes)
@@ -374,16 +382,18 @@ def reader(fo, columns=None):
             offset = _get_offset(cmd)
             fo.seek(offset, 0)
             values_seen = 0
-            logger.debug("reading column chunk of type: %s",
-                         _get_name(Type, cmd.type))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("reading column chunk of type: %s",
+                             _get_name(Type, cmd.type))
             while values_seen < row_group_rows:
                 ph = _read_page_header(fo)
-                logger.debug("Reading page (type=%s, "
-                             "uncompressed=%s bytes, "
-                             "compressed=%s bytes)",
-                             _get_name(PageType, ph.type),
-                             ph.uncompressed_page_size,
-                             ph.compressed_page_size)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Reading page (type=%s, "
+                                 "uncompressed=%s bytes, "
+                                 "compressed=%s bytes)",
+                                 _get_name(PageType, ph.type),
+                                 ph.uncompressed_page_size,
+                                 ph.compressed_page_size)
 
                 if ph.type == PageType.DATA_PAGE:
                     values = read_data_page(fo, schema_helper, ph, cmd,
@@ -391,10 +401,12 @@ def reader(fo, columns=None):
                     res[".".join(cmd.path_in_schema)] += values
                     values_seen += ph.data_page_header.num_values
                 elif ph.type == PageType.DICTIONARY_PAGE:
-                    logger.debug(ph)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(ph)
                     assert dict_items == []
                     dict_items = read_dictionary_page(fo, ph, cmd)
-                    logger.debug("Dictionary: %s", str(dict_items))
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Dictionary: %s", str(dict_items))
                 else:
                     logger.warn("Skipping unknown page type={0}".format(
                         _get_name(PageType, ph.type)))
