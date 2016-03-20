@@ -1,4 +1,8 @@
 language: python
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y libsnappy-dev
+  - pip install python-snappy
 install:
   - pip install tox
 script:
