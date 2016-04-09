@@ -2,7 +2,7 @@
 
 parquet-python is a pure-python implementation (currently with only read-support) of the [parquet format](https://github.com/Parquet/parquet-format). It comes with a script for reading parquet files and outputting the data to stdout as JSON or TSV (without the overhead of JVM startup). Performance has not yet been optimized, but it's useful for debugging and quick viewing of data in files.
 
-Not all parts of the parquet-format have been implemented yet or tested e.g. nested data and the deprecated bit-packing encoding -- see Todos below for a full list. With that said, parquet-python is capable of reading all the data files from the [parquet-compatability](https://github.com/Parquet/parquet-compatibility) project.
+Not all parts of the parquet-format have been implemented yet or tested e.g. nested data -- see Todos below for a full list. With that said, parquet-python is capable of reading all the data files from the [parquet-compatability](https://github.com/Parquet/parquet-compatibility) project.
 
 
 # requirements
@@ -48,8 +48,6 @@ with open("test.parquet") as fo:
 
 # Todos
 
-* Support the deprecated bitpacking
-* Support for bitwidths > 8
 * Fix handling of repetition-levels and definition-levels
 * Tests for nested schemas, null data
 * Support reading of data from HDFS via snakebite and/or webhdfs.
