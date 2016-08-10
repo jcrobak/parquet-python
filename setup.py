@@ -13,6 +13,11 @@ setup(name='parquet',
         'python-snappy',
         'thriftpy>=0.3.6',
     ],
+    extras_require={
+        ':python_version=="2.7"': [
+            "backports.csv",
+        ],
+    },
     entry_points={
         'console_scripts': [
             'parquet = parquet.__main__:main',
