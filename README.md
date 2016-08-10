@@ -14,7 +14,7 @@ parquet-python has been tested on python 2.7. It depends on `thrift` (0.9) and `
 
 parquet-python is not yet uploaded to PyPi as the code has a lot of bugs. To get started, clone the project, change into the parquet-python directory, and run `python -m parquet`.
 
-You may need to install the `thrift` and `python-snappy` projects with `easy_install` or `pip`. To install parquet-python system-wide, run `python setup.py install`.
+You may need to install the `thrift` and `python-snappy` projects with `easy_install` or `pip`. To install parquet-python system-wide, run `python setup.py install`. `python-snappy` requires the snappy native library be installed.
 
 ## Example
 
