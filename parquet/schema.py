@@ -1,7 +1,12 @@
 """Utils for working with the parquet thrift models"""
 
-from ttypes import FieldRepetitionType
+import os
 
+import thriftpy
+
+
+THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
+parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=str("parquet_thrift"))
 
 class SchemaHelper(object):
 
@@ -18,14 +23,14 @@ class SchemaHelper(object):
     def is_required(self, name):
         """Returns true iff the schema element with the given name is
         required"""
-        return self.schema_element(name).repetition_type == FieldRepetitionType.REQUIRED
+        return self.schema_element(name).repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
 
     def max_repetition_level(self, path):
         """get the max repetition level for the given schema path."""
         max_level = 0
         for part in path:
             se = self.schema_element(part)
-            if se.repetition_type == FieldRepetitionType.REQUIRED:
+            if se.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED:
                 max_level += 1
         return max_level
 
@@ -34,6 +39,6 @@ class SchemaHelper(object):
         max_level = 0
         for part in path:
             se = self.schema_element(part)
-            if se.repetition_type != FieldRepetitionType.REQUIRED:
+            if se.repetition_type != parquet_thrift.FieldRepetitionType.REQUIRED:
                 max_level += 1
         return max_level

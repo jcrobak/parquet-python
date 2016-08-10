@@ -10,14 +10,14 @@ setup(name='parquet',
     author_email='joecrow@gmail.com',
     packages=[ 'parquet' ],
     install_requires=[
-        'thrift',
+        'python-snappy',
+        'thriftpy>=0.3.6',
     ],
-    extras_require = {
-        'snappy support': ['python-snappy']
-    },
     entry_points={
         'console_scripts': [
             'parquet = parquet.__main__:main',
         ]
     },
+    package_data={'parquet': ['*.thrift']},
+    include_package_data=True,
 )
