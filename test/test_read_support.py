@@ -7,6 +7,8 @@ import unittest
 
 import parquet
 
+TEST_FILE = "test-data/nation.impala.parquet"
+CSV_FILE = "test-data/nation.csv"
 
 class TestFileFormat(unittest.TestCase):
     def test_header_magic_bytes(self):
@@ -31,14 +33,13 @@ class TestFileFormat(unittest.TestCase):
 
 class TestMetadata(unittest.TestCase):
 
-    f = "test-data/nation.impala.parquet"
 
     def test_footer_bytes(self):
-        with open(self.f) as fo:
+        with open(TEST_FILE) as fo:
             self.assertEquals(327, parquet._get_footer_size(fo))
 
     def test_read_footer(self):
-        footer = parquet.read_footer(self.f)
+        footer = parquet.read_footer(TEST_FILE)
         self.assertEquals(
             set([s.name for s in footer.schema]),
             set(["schema", "n_regionkey", "n_name", "n_nationkey",
@@ -46,8 +47,7 @@ class TestMetadata(unittest.TestCase):
 
     def test_dump_metadata(self):
         data = StringIO.StringIO()
-        parquet.dump_metadata(self.f, data)
-
+        parquet.dump_metadata(TEST_FILE, data)
 
 class Options(object):
 
@@ -64,7 +64,19 @@ class TestReadApi(unittest.TestCase):
         pass
 
     def test_limit(self):
-        pass
+        """Test the limit option"""
+        limit = 2
+        expected_data = []
+        with open(CSV_FILE, 'rb') as f:
+            expected_data = list(csv.reader(f, delimiter='|'))[:limit]
+
+        actual_raw_data = StringIO.StringIO()
+        parquet.dump(TEST_FILE, Options(limit=limit), out=actual_raw_data)
+        actual_raw_data.seek(0, 0)
+        actual_data = list(csv.reader(actual_raw_data, delimiter='\t'))
+
+        self.assertListEqual(expected_data, actual_data)
+
 
 class TestCompatibility(object):
 

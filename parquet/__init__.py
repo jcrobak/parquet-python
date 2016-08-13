@@ -429,7 +429,7 @@ def _dump(fo, options, out=sys.stdout):
         if total_count == 0 and options.format == "csv" and not options.no_headers:
             println("\t".join(keys))
 
-        if options.limit != -1 and i + total_count >= options.limit:
+        if options.limit != -1 and total_count >= options.limit:
             return
         if options.format == "csv":
             println("\t".join(str(v) for v in row.values()))
