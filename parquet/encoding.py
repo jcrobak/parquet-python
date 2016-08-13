@@ -1,10 +1,14 @@
 import array
 import math
+import os
 import struct
 import cStringIO
 import logging
 
-from ttypes import Type
+import thriftpy
+
+THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
+parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=str("parquet_thrift"))
 
 logger = logging.getLogger("parquet")
 
@@ -55,20 +59,20 @@ def read_plain_byte_array_fixed(fo, fixed_length):
     return fo.read(fixed_length)
 
 DECODE_PLAIN = {
-    Type.BOOLEAN: read_plain_boolean,
-    Type.INT32: read_plain_int32,
-    Type.INT64: read_plain_int64,
-    Type.INT96: read_plain_int96,
-    Type.FLOAT: read_plain_float,
-    Type.DOUBLE: read_plain_double,
-    Type.BYTE_ARRAY: read_plain_byte_array,
-    Type.FIXED_LEN_BYTE_ARRAY: read_plain_byte_array_fixed
+    parquet_thrift.Type.BOOLEAN: read_plain_boolean,
+    parquet_thrift.Type.INT32: read_plain_int32,
+    parquet_thrift.Type.INT64: read_plain_int64,
+    parquet_thrift.Type.INT96: read_plain_int96,
+    parquet_thrift.Type.FLOAT: read_plain_float,
+    parquet_thrift.Type.DOUBLE: read_plain_double,
+    parquet_thrift.Type.BYTE_ARRAY: read_plain_byte_array,
+    parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY: read_plain_byte_array_fixed
 }
 
 
 def read_plain(fo, type_, type_length):
     conv = DECODE_PLAIN[type_]
-    if type_ == Type.FIXED_LEN_BYTE_ARRAY:
+    if type_ == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
         return conv(fo, type_length)
     return conv(fo)
 

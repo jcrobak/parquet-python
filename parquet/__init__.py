@@ -1,16 +1,22 @@
 import gzip
 import json
 import logging
+import os
 import struct
 import cStringIO
 import sys
 from collections import defaultdict, OrderedDict
-from ttypes import (FileMetaData, CompressionCodec, Encoding,
-                    FieldRepetitionType, PageHeader, PageType, Type)
-from thrift.protocol import TCompactProtocol
-from thrift.transport import TTransport
+
+import thriftpy
+from thriftpy.protocol.compact import TCompactProtocolFactory
+
+from .thrift_filetransport import TFileTransport
 import encoding
 import schema
+
+THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
+parquet_thrift = thriftpy.load(THRIFT_FILE, module_name="parquet_thrift")
+
 
 
 logger = logging.getLogger("parquet")
@@ -54,18 +60,18 @@ def _read_footer(fo):
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("Footer size in bytes: %s", footer_size)
     fo.seek(-(8 + footer_size), 2)  # seek to beginning of footer
-    tin = TTransport.TFileObjectTransport(fo)
-    pin = TCompactProtocol.TCompactProtocol(tin)
-    fmd = FileMetaData()
+    tin = TFileTransport(fo)
+    pin = TCompactProtocolFactory().get_protocol(tin)
+    fmd = parquet_thrift.FileMetaData()
     fmd.read(pin)
     return fmd
 
 
 def _read_page_header(fo):
     """Reads the page_header from the given fo"""
-    tin = TTransport.TFileObjectTransport(fo)
-    pin = TCompactProtocol.TCompactProtocol(tin)
-    ph = PageHeader()
+    tin = TFileTransport(fo)
+    pin = TCompactProtocolFactory().get_protocol(tin)
+    ph = parquet_thrift.PageHeader()
     ph.read(pin)
     return ph
 
@@ -117,9 +123,9 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
                 "children={num_children}, "
                 "converted_type={converted_type}".format(
                     name=se.name,
-                    type=Type._VALUES_TO_NAMES[se.type] if se.type else None,
+                    type=parquet_thrift.Type._VALUES_TO_NAMES[se.type] if se.type else None,
                     type_length=se.type_length,
-                    repetition_type=_get_name(FieldRepetitionType,
+                    repetition_type=_get_name(parquet_thrift.FieldRepetitionType,
                                               se.repetition_type),
                     num_children=se.num_children,
                     converted_type=se.converted_type))
@@ -141,12 +147,12 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
                         "compressed_bytes={compressed_bytes} "
                         "data_page_offset={data_page_offset} "
                         "dictionary_page_offset={dictionary_page_offset}".format(
-                            type=_get_name(Type, cmd.type),
+                            type=_get_name(parquet_thrift.Type, cmd.type),
                             offset=cg.file_offset,
-                            codec=_get_name(CompressionCodec, cmd.codec),
+                            codec=_get_name(parquet_thrift.CompressionCodec, cmd.codec),
                             encodings=",".join(
                                 [_get_name(
-                                    Encoding, s) for s in cmd.encodings]),
+                                    parquet_thrift.Encoding, s) for s in cmd.encodings]),
                             path_in_schema=cmd.path_in_schema,
                             num_values=cmd.num_values,
                             raw_bytes=cmd.total_uncompressed_size,
@@ -163,13 +169,13 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
                         # seek past current page.
                         fo.seek(ph.compressed_page_size, 1)
                         daph = ph.data_page_header
-                        type_ = _get_name(PageType, ph.type)
+                        type_ = _get_name(parquet_thrift.PageType, ph.type)
                         raw_bytes = ph.uncompressed_page_size
                         num_values = None
-                        if ph.type == PageType.DATA_PAGE:
+                        if ph.type == parquet_thrift.PageType.DATA_PAGE:
                             num_values = daph.num_values
                             values_read += num_values
-                        if ph.type == PageType.DICTIONARY_PAGE:
+                        if ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
                             pass
                             #num_values = diph.num_values
 
@@ -177,11 +183,11 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
                         def_level_encoding = None
                         rep_level_encoding = None
                         if daph:
-                            encoding_type = _get_name(Encoding, daph.encoding)
+                            encoding_type = _get_name(parquet_thrift.Encoding, daph.encoding)
                             def_level_encoding = _get_name(
-                                Encoding, daph.definition_level_encoding)
+                                parquet_thrift.Encoding, daph.definition_level_encoding)
                             rep_level_encoding = _get_name(
-                                Encoding, daph.repetition_level_encoding)
+                                parquet_thrift.Encoding, daph.repetition_level_encoding)
 
                         println("        page header: type={type} "
                                 "uncompressed_size={raw_bytes} "
@@ -201,10 +207,10 @@ def _read_page(fo, page_header, column_metadata):
     and convert it to raw, uncompressed bytes (if necessary)."""
     bytes_from_file = fo.read(page_header.compressed_page_size)
     codec = column_metadata.codec
-    if codec is not None and codec != CompressionCodec.UNCOMPRESSED:
-        if column_metadata.codec == CompressionCodec.SNAPPY:
+    if codec is not None and codec != parquet_thrift.CompressionCodec.UNCOMPRESSED:
+        if column_metadata.codec == parquet_thrift.CompressionCodec.SNAPPY:
             raw_bytes = snappy.decompress(bytes_from_file)
-        elif column_metadata.codec == CompressionCodec.GZIP:
+        elif column_metadata.codec == parquet_thrift.CompressionCodec.GZIP:
             io_obj = cStringIO.StringIO(bytes_from_file)
             with gzip.GzipFile(fileobj=io_obj, mode='rb') as f:
                 raw_bytes = f.read()
@@ -217,7 +223,7 @@ def _read_page(fo, page_header, column_metadata):
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             "Read page with compression type {0}. Bytes {1} -> {2}".format(
-            _get_name(CompressionCodec, codec),
+            _get_name(parquet_thrift.CompressionCodec, codec),
             page_header.compressed_page_size,
             page_header.uncompressed_page_size))
     assert len(raw_bytes) == page_header.uncompressed_page_size, \
@@ -233,7 +239,7 @@ def _read_data(fo, fo_encoding, value_count, bit_width):
     actual values.
     """
     vals = []
-    if fo_encoding == Encoding.RLE:
+    if fo_encoding == parquet_thrift.Encoding.RLE:
         seen = 0
         while seen < value_count:
             values = encoding.read_rle_bit_packed_hybrid(fo, bit_width)
@@ -241,7 +247,7 @@ def _read_data(fo, fo_encoding, value_count, bit_width):
                 break  # EOF was reached.
             vals += values
             seen += len(values)
-    elif fo_encoding == Encoding.BIT_PACKED:
+    elif fo_encoding == parquet_thrift.Encoding.BIT_PACKED:
         raise NotImplementedError("Bit packing not yet supported")
 
     return vals
@@ -261,10 +267,10 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
 
     if debug_logging:
         logger.debug("  definition_level_encoding: %s",
-                     _get_name(Encoding, daph.definition_level_encoding))
+                     _get_name(parquet_thrift.Encoding, daph.definition_level_encoding))
         logger.debug("  repetition_level_encoding: %s",
-                     _get_name(Encoding, daph.repetition_level_encoding))
-        logger.debug("  encoding: %s", _get_name(Encoding, daph.encoding))
+                     _get_name(parquet_thrift.Encoding, daph.repetition_level_encoding))
+        logger.debug("  encoding: %s", _get_name(parquet_thrift.Encoding, daph.encoding))
 
     # definition levels are skipped if data is required.
     if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
@@ -297,13 +303,13 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
 
     # TODO Actually use the definition and repetition levels.
 
-    if daph.encoding == Encoding.PLAIN:
+    if daph.encoding == parquet_thrift.Encoding.PLAIN:
         for i in range(daph.num_values):
             vals.append(
                 encoding.read_plain(io_obj, column_metadata.type, None))
         if debug_logging:
             logger.debug("  Values: %s", len(vals))
-    elif daph.encoding == Encoding.PLAIN_DICTIONARY:
+    elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]
         if debug_logging:
@@ -387,23 +393,23 @@ def reader(fo, columns=None):
             values_seen = 0
             if debug_logging:
                 logger.debug("reading column chunk of type: %s",
-                             _get_name(Type, cmd.type))
+                             _get_name(parquet_thrift.Type, cmd.type))
             while values_seen < row_group_rows:
                 ph = _read_page_header(fo)
                 if debug_logging:
                     logger.debug("Reading page (type=%s, "
                                  "uncompressed=%s bytes, "
                                  "compressed=%s bytes)",
-                                 _get_name(PageType, ph.type),
+                                 _get_name(parquet_thrift.PageType, ph.type),
                                  ph.uncompressed_page_size,
                                  ph.compressed_page_size)
 
-                if ph.type == PageType.DATA_PAGE:
+                if ph.type == parquet_thrift.PageType.DATA_PAGE:
                     values = read_data_page(fo, schema_helper, ph, cmd,
                                             dict_items)
                     res[".".join(cmd.path_in_schema)] += values
                     values_seen += ph.data_page_header.num_values
-                elif ph.type == PageType.DICTIONARY_PAGE:
+                elif ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
                     if debug_logging:
                         logger.debug(ph)
                     assert dict_items == []
@@ -412,7 +418,7 @@ def reader(fo, columns=None):
                         logger.debug("Dictionary: %s", str(dict_items))
                 else:
                     logger.warn("Skipping unknown page type={0}".format(
-                        _get_name(PageType, ph.type)))
+                        _get_name(parquet_thrift.PageType, ph.type)))
 
         for i in range(rg.num_rows):
             yield [res[k][i] for k in keys if res[k]]

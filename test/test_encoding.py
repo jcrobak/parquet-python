@@ -3,8 +3,8 @@ import struct
 import StringIO
 import unittest
 
+from parquet import parquet_thrift
 import parquet.encoding
-from parquet.ttypes import Type
 from nose import SkipTest
 
 
@@ -59,7 +59,7 @@ class TestPlain(unittest.TestCase):
         self.assertEquals(
             data[:3],
             parquet.encoding.read_plain(
-                fo, Type.FIXED_LEN_BYTE_ARRAY, 3))
+                fo, parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, 3))
 
 
 class TestRle(unittest.TestCase):
