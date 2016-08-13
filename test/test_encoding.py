@@ -1,6 +1,6 @@
 import array
 import struct
-import StringIO
+import io
 import unittest
 
 from parquet import parquet_thrift
@@ -14,36 +14,36 @@ class TestPlain(unittest.TestCase):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int32(
-                StringIO.StringIO(struct.pack("<i", 999))))
+                io.BytesIO(struct.pack("<i", 999))))
 
     def test_int64(self):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int64(
-                StringIO.StringIO(struct.pack("<q", 999))))
+                io.BytesIO(struct.pack("<q", 999))))
 
     def test_int96(self):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int96(
-                StringIO.StringIO(struct.pack("<qi", 0, 999))))
+                io.BytesIO(struct.pack("<qi", 0, 999))))
 
     def test_float(self):
         self.assertAlmostEquals(
             9.99,
             parquet.encoding.read_plain_float(
-                StringIO.StringIO(struct.pack("<f", 9.99))),
+                io.BytesIO(struct.pack("<f", 9.99))),
             2)
 
     def test_double(self):
         self.assertEquals(
             9.99,
             parquet.encoding.read_plain_double(
-                StringIO.StringIO(struct.pack("<d", 9.99))))
+                io.BytesIO(struct.pack("<d", 9.99))))
 
     def test_fixed(self):
-        data = "foobar"
-        fo = StringIO.StringIO(data)
+        data = b"foobar"
+        fo = io.BytesIO(data)
         self.assertEquals(
             data[:3],
             parquet.encoding.read_plain_byte_array_fixed(
@@ -54,8 +54,8 @@ class TestPlain(unittest.TestCase):
                 fo, 3))
 
     def test_fixed_read_plain(self):
-        data = "foobar"
-        fo = StringIO.StringIO(data)
+        data = b"foobar"
+        fo = io.BytesIO(data)
         self.assertEquals(
             data[:3],
             parquet.encoding.read_plain(
@@ -65,7 +65,7 @@ class TestPlain(unittest.TestCase):
 class TestRle(unittest.TestCase):
 
     def testFourByteValue(self):
-        fo = StringIO.StringIO(struct.pack("<i", 1 << 30))
+        fo = io.BytesIO(struct.pack("<i", 1 << 30))
         out = parquet.encoding.read_rle(fo, 2 << 1, 30)
         self.assertEquals([1 << 30] * 2, list(out))
 
@@ -73,12 +73,12 @@ class TestRle(unittest.TestCase):
 class TestVarInt(unittest.TestCase):
 
     def testSingleByte(self):
-        fo = StringIO.StringIO(struct.pack("<B", 0x7F))
+        fo = io.BytesIO(struct.pack("<B", 0x7F))
         out = parquet.encoding.read_unsigned_var_int(fo)
         self.assertEquals(0x7F, out)
 
     def testFourByte(self):
-        fo = StringIO.StringIO(struct.pack("<BBBB", 0xFF, 0xFF, 0xFF, 0x7F))
+        fo = io.BytesIO(struct.pack("<BBBB", 0xFF, 0xFF, 0xFF, 0x7F))
         out = parquet.encoding.read_unsigned_var_int(fo)
         self.assertEquals(0x0FFFFFFF, out)
 
@@ -88,10 +88,10 @@ class TestBitPacked(unittest.TestCase):
     def testFromExample(self):
         raw_data_in = [0b10001000, 0b11000110, 0b11111010]
         encoded_bitstring = array.array('B', raw_data_in).tostring()
-        fo = StringIO.StringIO(encoded_bitstring)
+        fo = io.BytesIO(encoded_bitstring)
         count = 3 << 1
         res = parquet.encoding.read_bitpacked(fo, count, 3)
-        self.assertEquals(range(8), res)
+        self.assertEquals(list(range(8)), res)
 
 
 class TestBitPackedDeprecated(unittest.TestCase):
@@ -99,9 +99,9 @@ class TestBitPackedDeprecated(unittest.TestCase):
     def testFromExample(self):
         encoded_bitstring = array.array(
             'B', [0b00000101, 0b00111001, 0b01110111]).tostring()
-        fo = StringIO.StringIO(encoded_bitstring)
+        fo = io.BytesIO(encoded_bitstring)
         res = parquet.encoding.read_bitpacked_deprecated(fo, 3, 8, 3)
-        self.assertEquals(range(8), res)
+        self.assertEquals(list(range(8)), res)
 
 
 class TestWidthFromMaxInt(unittest.TestCase):

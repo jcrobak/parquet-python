@@ -1,9 +1,14 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import gzip
+import io
 import json
 import logging
 import os
 import struct
-import cStringIO
 import sys
 from collections import defaultdict, OrderedDict
 
@@ -11,8 +16,15 @@ import thriftpy
 from thriftpy.protocol.compact import TCompactProtocolFactory
 
 from .thrift_filetransport import TFileTransport
-import encoding
-import schema
+from . import encoding
+from . import schema
+
+PY3 = sys.version_info > (3,)
+
+if PY3:
+    import csv
+else:
+    from backports import csv
 
 THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
 parquet_thrift = thriftpy.load(THRIFT_FILE, module_name="parquet_thrift")
@@ -36,14 +48,14 @@ def _check_header_magic_bytes(fo):
     "Returns true if the file-like obj has the PAR1 magic bytes at the header"
     fo.seek(0, 0)
     magic = fo.read(4)
-    return magic == 'PAR1'
+    return magic == b'PAR1'
 
 
 def _check_footer_magic_bytes(fo):
     "Returns true if the file-like obj has the PAR1 magic bytes at the footer"
     fo.seek(-4, 2)  # seek to four bytes from the end of the file
     magic = fo.read(4)
-    return magic == 'PAR1'
+    return magic == b'PAR1'
 
 
 def _get_footer_size(fo):
@@ -211,7 +223,7 @@ def _read_page(fo, page_header, column_metadata):
         if column_metadata.codec == parquet_thrift.CompressionCodec.SNAPPY:
             raw_bytes = snappy.decompress(bytes_from_file)
         elif column_metadata.codec == parquet_thrift.CompressionCodec.GZIP:
-            io_obj = cStringIO.StringIO(bytes_from_file)
+            io_obj = io.BytesIO(bytes_from_file)
             with gzip.GzipFile(fileobj=io_obj, mode='rb') as f:
                 raw_bytes = f.read()
         else:
@@ -261,7 +273,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     """
     daph = page_header.data_page_header
     raw_bytes = _read_page(fo, page_header, column_metadata)
-    io_obj = cStringIO.StringIO(raw_bytes)
+    io_obj = io.BytesIO(raw_bytes)
     vals = []
     debug_logging = logger.isEnabledFor(logging.DEBUG)
 
@@ -316,7 +328,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
             logger.debug("bit_width: %d", bit_width)
         total_seen = 0
         dict_values_bytes = io_obj.read()
-        dict_values_io_obj = cStringIO.StringIO(dict_values_bytes)
+        dict_values_io_obj = io.BytesIO(dict_values_bytes)
         # TODO jcrobak -- not sure that this loop is needed?
         while total_seen < daph.num_values:
             values = encoding.read_rle_bit_packed_hybrid(
@@ -333,7 +345,7 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
 
 def read_dictionary_page(fo, page_header, column_metadata):
     raw_bytes = _read_page(fo, page_header, column_metadata)
-    io_obj = cStringIO.StringIO(raw_bytes)
+    io_obj = io.BytesIO(raw_bytes)
     dict_items = []
     while io_obj.tell() < len(raw_bytes):
         # TODO - length for fixed byte array
@@ -423,24 +435,39 @@ def reader(fo, columns=None):
         for i in range(rg.num_rows):
             yield [res[k][i] for k in keys if res[k]]
 
-def _dump(fo, options, out=sys.stdout):
-    def println(value):
-        out.write(value + "\n")
+class JsonWriter(object):
+    def __init__(self, out):
+        self._out = out
 
+    def writerow(self, row):
+        json_text = json.dumps(row)
+        if type(json_text) is bytes:
+            json_text = json_text.decode('utf-8')
+        self._out.write(json_text)
+        self._out.write(u'\n')
+
+def _dump(fo, options, out=sys.stdout):
+
+    # writer and keys are lazily loaded. We don't know the keys until we have
+    # the first item. And we need the keys for the csv writer.
     total_count = 0
+    writer = None
     keys = None
     for row in DictReader(fo, options.col):
         if not keys:
             keys = row.keys()
+        if not writer:
+            writer = csv.DictWriter(out, keys, delimiter=u'\t', quotechar=u'\'',
+                quoting=csv.QUOTE_MINIMAL) if options.format == 'csv' \
+                    else JsonWriter(out) if options.format == 'json' \
+                    else None
         if total_count == 0 and options.format == "csv" and not options.no_headers:
-            println("\t".join(keys))
-
+            writer.writeheader()
         if options.limit != -1 and total_count >= options.limit:
             return
-        if options.format == "csv":
-            println("\t".join(str(v) for v in row.values()))
-        elif options.format == "json":
-            println(json.dumps(row))
+        row_unicode = {k: v.decode("utf-8") if type(v) is bytes else v for k, v in row.items()}
+        print(row_unicode)
+        writer.writerow(row_unicode)
         total_count += 1
 
 

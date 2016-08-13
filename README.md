@@ -7,7 +7,7 @@ Not all parts of the parquet-format have been implemented yet or tested e.g. nes
 
 # requirements
 
-parquet-python has been tested on python 2.7. It depends on `thrift` (0.9) and `python-snappy` (for snappy compressed files).
+parquet-python has been tested on python 2.7, 3.4, and 3.5. It depends on `thrift` (0.9) and `python-snappy` (for snappy compressed files).
 
 
 # getting started

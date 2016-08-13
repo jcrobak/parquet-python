@@ -1,8 +1,13 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import array
+import io
 import math
 import os
 import struct
-import cStringIO
 import logging
 
 import thriftpy
@@ -91,7 +96,7 @@ def read_unsigned_var_int(fo):
 
 def byte_width(bit_width):
     "Returns the byte width for the given bit_width"
-    return (bit_width + 7) / 8
+    return (bit_width + 7) // 8
 
 
 def read_rle(fo, header, bit_width):
@@ -102,8 +107,8 @@ def read_rle(fo, header, bit_width):
     value that's repeated. Yields the value repeated count times.
     """
     count = header >> 1
-    zero_data = "\x00\x00\x00\x00"
-    data = ""
+    zero_data = b"\x00\x00\x00\x00"
+    data = b""
     width = byte_width(bit_width)
     if width >= 1:
         data += fo.read(1)
@@ -138,10 +143,10 @@ def read_bitpacked(fo, header, width):
     """
     num_groups = header >> 1
     count = num_groups * 8
-    byte_count = (width * count)/8
+    byte_count = (width * count) // 8
     logger.debug("Reading a bit-packed run with: %s groups, count %s, bytes %s",
         num_groups, count, byte_count)
-    raw_bytes = array.array('B', fo.read(byte_count)).tolist()
+    raw_bytes = array.array(str('B'), fo.read(byte_count)).tolist()
     current_byte = 0
     b = raw_bytes[current_byte]
     mask = _mask_for_bits(width)
@@ -171,7 +176,7 @@ def read_bitpacked(fo, header, width):
 
 
 def read_bitpacked_deprecated(fo, byte_count, count, width):
-    raw_bytes = array.array('B', fo.read(byte_count)).tolist()
+    raw_bytes = array.array(str('B'), fo.read(byte_count)).tolist()
 
     mask = _mask_for_bits(width)
     index = 0
@@ -212,7 +217,7 @@ def read_rle_bit_packed_hybrid(fo, width, length=None):
         raw_bytes = fo.read(length)
         if raw_bytes == '':
             return None
-        io_obj = cStringIO.StringIO(raw_bytes)
+        io_obj = io.BytesIO(raw_bytes)
     res = []
     while io_obj.tell() < length:
         header = read_unsigned_var_int(io_obj)
