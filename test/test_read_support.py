@@ -47,9 +47,7 @@ class TestFileFormat(unittest.TestCase):
             self.assertFalse(parquet._check_footer_magic_bytes(t))
 
 
-#athias this is boken. maybe something with unicode vs. strings?
 class TestMetadata(unittest.TestCase):
-
 
     def test_footer_bytes(self):
         with io.open(TEST_FILE, 'rb') as fo:
@@ -186,3 +184,16 @@ class TestCompatibility(object):
             yield self._test_file_csv, parquet_file, csv_file
             yield self._test_file_json, parquet_file, csv_file
             yield self._test_file_custom, parquet_file, csv_file
+
+
+class TestDefinitionlevel(unittest.TestCase):
+
+    def test_null_int(self):
+        with open(os.path.join(TEST_DATA, "test-null.parquet"), "rb") as parquet_fo:
+            actual_data = list(parquet.DictReader(parquet_fo))
+
+        self.assertListEqual(
+            # this is the contents of test-null.parquet. Two records, one that is null.
+            [{"foo": 1, "bar": 2}, {"foo": 1, "bar": None}],
+            actual_data
+        )
