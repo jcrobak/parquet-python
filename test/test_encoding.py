@@ -74,7 +74,7 @@ class TestRle(unittest.TestCase):
 
     def testFourByteValue(self):
         fo = io.BytesIO(struct.pack("<i", 1 << 30))
-        out = parquet.encoding.read_rle(fo, 2 << 1, 30)
+        out = parquet.encoding.read_rle(fo, 2 << 1, 30, True)
         self.assertEquals([1 << 30] * 2, list(out))
 
 
@@ -98,7 +98,7 @@ class TestBitPacked(unittest.TestCase):
         encoded_bitstring = array.array('B', raw_data_in).tostring()
         fo = io.BytesIO(encoded_bitstring)
         count = 3 << 1
-        res = parquet.encoding.read_bitpacked(fo, count, 3)
+        res = parquet.encoding.read_bitpacked(fo, count, 3, True)
         self.assertEquals(list(range(8)), res)
 
 
@@ -108,7 +108,7 @@ class TestBitPackedDeprecated(unittest.TestCase):
         encoded_bitstring = array.array(
             'B', [0b00000101, 0b00111001, 0b01110111]).tostring()
         fo = io.BytesIO(encoded_bitstring)
-        res = parquet.encoding.read_bitpacked_deprecated(fo, 3, 8, 3)
+        res = parquet.encoding.read_bitpacked_deprecated(fo, 3, 8, 3, True)
         self.assertEquals(list(range(8)), res)
 
 
