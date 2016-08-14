@@ -100,11 +100,6 @@ def read_unsigned_var_int(fo):
     return result
 
 
-def byte_width(bit_width):
-    "Returns the byte width for the given bit_width"
-    return (bit_width + 7) // 8
-
-
 def read_rle(fo, header, bit_width, debug_logging):
     """Read a run-length encoded run from the given fo with the given header
     and bit_width.
@@ -114,16 +109,8 @@ def read_rle(fo, header, bit_width, debug_logging):
     """
     count = header >> 1
     zero_data = b"\x00\x00\x00\x00"
-    data = b""
-    width = byte_width(bit_width)
-    if width >= 1:
-        data += fo.read(1)
-    if width >= 2:
-        data += fo.read(1)
-    if width >= 3:
-        data += fo.read(1)
-    if width == 4:
-        data += fo.read(1)
+    width = (bit_width + 7) // 8
+    data = fo.read(width)
     data = data + zero_data[len(data):]
     value = struct.unpack("<i", data)[0]
     if debug_logging:
