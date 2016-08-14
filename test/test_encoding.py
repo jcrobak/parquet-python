@@ -14,32 +14,32 @@ class TestPlain(unittest.TestCase):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int32(
-                io.BytesIO(struct.pack("<i", 999))))
+                io.BytesIO(struct.pack("<i", 999)), 1)[0])
 
     def test_int64(self):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int64(
-                io.BytesIO(struct.pack("<q", 999))))
+                io.BytesIO(struct.pack("<q", 999)), 1)[0])
 
     def test_int96(self):
         self.assertEquals(
             999,
             parquet.encoding.read_plain_int96(
-                io.BytesIO(struct.pack("<qi", 0, 999))))
+                io.BytesIO(struct.pack("<qi", 0, 999)), 1)[0])
 
     def test_float(self):
         self.assertAlmostEquals(
             9.99,
             parquet.encoding.read_plain_float(
-                io.BytesIO(struct.pack("<f", 9.99))),
+                io.BytesIO(struct.pack("<f", 9.99)), 1)[0],
             2)
 
     def test_double(self):
         self.assertEquals(
             9.99,
             parquet.encoding.read_plain_double(
-                io.BytesIO(struct.pack("<d", 9.99))))
+                io.BytesIO(struct.pack("<d", 9.99)), 1)[0])
 
     def test_fixed(self):
         data = b"foobar"
@@ -60,6 +60,14 @@ class TestPlain(unittest.TestCase):
             data[:3],
             parquet.encoding.read_plain(
                 fo, parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, 3))
+
+    def test_boolean(self):
+        data = 0b1101
+        fo = io.BytesIO(struct.pack("<i", data))
+        self.assertEquals(
+            [True, False, True, True],
+            parquet.encoding.read_plain_boolean(fo, 1)[:4]
+        )
 
 
 class TestRle(unittest.TestCase):
