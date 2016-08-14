@@ -285,6 +285,9 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
         logger.debug("  encoding: %s", _get_name(parquet_thrift.Encoding, daph.encoding))
 
     # definition levels are skipped if data is required.
+    definition_levels = None
+    num_nulls = 0
+    max_definition_level = -1
     if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
         max_definition_level = schema_helper.max_definition_level(
             column_metadata.path_in_schema)
@@ -298,12 +301,15 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
             definition_levels = _read_data(io_obj,
                                            daph.definition_level_encoding,
                                            daph.num_values,
-                                           bit_width)
+                                           bit_width)[:daph.num_values]
 
+        # any thing that isn't at max definition level is a null.
+        num_nulls = len(definition_levels) - definition_levels.count(max_definition_level)
         if debug_logging:
             logger.debug("  Definition levels: %s", len(definition_levels))
 
     # repetition levels are skipped if data is at the first level.
+    repetition_levels = None
     if len(column_metadata.path_in_schema) > 1:
         max_repetition_level = schema_helper.max_repetition_level(
             column_metadata.path_in_schema)
@@ -313,13 +319,17 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
                                        daph.num_values,
                                        bit_width)
 
-    # TODO Actually use the definition and repetition levels.
-
+    # TODO Actually use the repetition levels.
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
-        vals.extend(
-            encoding.read_plain(io_obj, column_metadata.type, daph.num_values))
+        read_values = \
+            encoding.read_plain(io_obj, column_metadata.type, daph.num_values - num_nulls)
+        if definition_levels:
+            it = iter(read_values)
+            vals.extend([next(it) if level == max_definition_level else None for level in definition_levels])
+        else:
+            vals.extend(read_values)
         if debug_logging:
-            logger.debug("  Values: %s", len(vals))
+            logger.debug("  Values: %s, nulls: %s", len(vals), num_nulls)
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]
