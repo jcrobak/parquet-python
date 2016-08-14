@@ -466,7 +466,6 @@ def _dump(fo, options, out=sys.stdout):
         if options.limit != -1 and total_count >= options.limit:
             return
         row_unicode = {k: v.decode("utf-8") if type(v) is bytes else v for k, v in row.items()}
-        print(row_unicode)
         writer.writerow(row_unicode)
         total_count += 1
 
