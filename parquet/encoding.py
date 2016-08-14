@@ -18,50 +18,55 @@ parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=str("parquet_thrift"))
 logger = logging.getLogger("parquet")
 
 
-def read_plain_boolean(fo):
-    """Reads a boolean using the plain encoding"""
-    raise NotImplemented
+def read_plain_boolean(fo, count):
+    """Reads `count` booleans using the plain encoding"""
+    # for bit packed, the count is stored shifted up. But we want to pass in a count,
+    # so we shift up.
+    # bit width is 1 for a single-bit boolean.
+    return read_bitpacked(fo, count << 1, 1)
 
 
-def read_plain_int32(fo):
-    """Reads a 32-bit int using the plain encoding"""
-    tup = struct.unpack("<i", fo.read(4))
-    return tup[0]
+def read_plain_int32(fo, count):
+    """Reads `count` 32-bit ints using the plain encoding"""
+    length = 4 * count
+    data = fo.read(length)
+    if len(data) != length:
+        raise EOFError("Expected {} bytes but got {} bytes".format(length, len(data)))
+    res = struct.unpack("<{}i".format(count), data)
+    return res
 
 
-def read_plain_int64(fo):
-    """Reads a 64-bit int using the plain encoding"""
-    tup = struct.unpack("<q", fo.read(8))
-    return tup[0]
+def read_plain_int64(fo, count):
+    """Reads `count` 64-bit ints using the plain encoding"""
+    return struct.unpack("<{}q".format(count), fo.read(8 * count))
 
 
-def read_plain_int96(fo):
-    """Reads a 96-bit int using the plain encoding"""
-    tup = struct.unpack("<qi", fo.read(12))
-    return tup[0] << 32 | tup[1]
+def read_plain_int96(fo, count):
+    """Reads `count` 96-bit ints using the plain encoding"""
+    items = struct.unpack("<qi" * count, fo.read(12) * count)
+    args = [iter(items)] * 2
+    return [q << 32 | i for (q, i) in zip(*args)]
 
 
-def read_plain_float(fo):
-    """Reads a 32-bit float using the plain encoding"""
-    tup = struct.unpack("<f", fo.read(4))
-    return tup[0]
+def read_plain_float(fo, count):
+    """Reads `count` 32-bit floats using the plain encoding"""
+    return struct.unpack("<{}f".format(count), fo.read(4 * count))
 
 
-def read_plain_double(fo):
-    """Reads a 64-bit float (double) using the plain encoding"""
-    tup = struct.unpack("<d", fo.read(8))
-    return tup[0]
+def read_plain_double(fo, count):
+    """Reads `count` 64-bit float (double) using the plain encoding"""
+    return struct.unpack("<{}d".format(count), fo.read(8 * count))
 
 
-def read_plain_byte_array(fo):
-    """Reads a byte array using the plain encoding"""
-    length = read_plain_int32(fo)
-    return fo.read(length)
+def read_plain_byte_array(fo, count):
+    """Read `count` byte arrays using the plain encoding"""
+    return [fo.read(struct.unpack("<i", fo.read(4))[0]) for i in range(count)]
 
 
 def read_plain_byte_array_fixed(fo, fixed_length):
     """Reads a byte array of the given fixed_length"""
     return fo.read(fixed_length)
+
 
 DECODE_PLAIN = {
     parquet_thrift.Type.BOOLEAN: read_plain_boolean,
@@ -75,11 +80,12 @@ DECODE_PLAIN = {
 }
 
 
-def read_plain(fo, type_, type_length):
+def read_plain(fo, type_, count):
+    """Reads `count` items `type` from the fo using the plain encoding."""
+    if count == 0:
+        return []
     conv = DECODE_PLAIN[type_]
-    if type_ == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
-        return conv(fo, type_length)
-    return conv(fo)
+    return conv(fo, count)
 
 
 def read_unsigned_var_int(fo):
@@ -213,7 +219,7 @@ def read_rle_bit_packed_hybrid(fo, width, length=None):
     """
     io_obj = fo
     if length is None:
-        length = read_plain_int32(fo)
+        length = read_plain_int32(fo, 1)[0]
         raw_bytes = fo.read(length)
         if raw_bytes == b'':
             return None

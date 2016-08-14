@@ -316,9 +316,8 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
     # TODO Actually use the definition and repetition levels.
 
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
-        for i in range(daph.num_values):
-            vals.append(
-                encoding.read_plain(io_obj, column_metadata.type, None))
+        vals.extend(
+            encoding.read_plain(io_obj, column_metadata.type, daph.num_values))
         if debug_logging:
             logger.debug("  Values: %s", len(vals))
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
@@ -346,12 +345,8 @@ def read_data_page(fo, schema_helper, page_header, column_metadata,
 def read_dictionary_page(fo, page_header, column_metadata):
     raw_bytes = _read_page(fo, page_header, column_metadata)
     io_obj = io.BytesIO(raw_bytes)
-    dict_items = []
-    while io_obj.tell() < len(raw_bytes):
-        # TODO - length for fixed byte array
-        dict_items.append(
-            encoding.read_plain(io_obj, column_metadata.type, None))
-    return dict_items
+    return encoding.read_plain(io_obj, column_metadata.type,
+        page_header.dictionary_page_header.num_values)
 
 
 def DictReader(fo, columns=None):
