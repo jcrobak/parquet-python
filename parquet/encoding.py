@@ -215,7 +215,7 @@ def read_rle_bit_packed_hybrid(fo, width, length=None):
     if length is None:
         length = read_plain_int32(fo)
         raw_bytes = fo.read(length)
-        if raw_bytes == '':
+        if raw_bytes == b'':
             return None
         io_obj = io.BytesIO(raw_bytes)
     res = []

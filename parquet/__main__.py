@@ -16,6 +16,7 @@ def setup_logging(options=None):
     console.setLevel(level)
     formatter = logging.Formatter('%(name)s: %(levelname)-8s %(message)s')
     console.setFormatter(formatter)
+    logging.getLogger('parquet').setLevel(level)
     logging.getLogger('parquet').addHandler(console)
 
 
