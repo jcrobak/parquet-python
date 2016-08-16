@@ -3,7 +3,7 @@ parquet-python
 
 parquet-python is a pure-python implementation (currently with only
 read-support) of the `parquet
-format <https://github.com/Parquet/parquet-format>`__. It comes with a
+format <https://github.com/Parquet/parquet-format>`_. It comes with a
 script for reading parquet files and outputting the data to stdout as
 JSON or TSV (without the overhead of JVM startup). Performance has not
 yet been optimized, but it's useful for debugging and quick viewing of
@@ -12,7 +12,7 @@ data in files.
 Not all parts of the parquet-format have been implemented yet or tested
 e.g. nested data—see Todos below for a full list. With that said,
 parquet-python is capable of reading all the data files from the
-`parquet-compatability <https://github.com/Parquet/parquet-compatibility>`__
+`parquet-compatability <https://github.com/Parquet/parquet-compatibility>`_
 project.
 
 requirements
@@ -24,9 +24,9 @@ on ``thrift`` (0.9) and ``python-snappy`` (for snappy compressed files).
 getting started
 ===============
 
-parquet-python is available via PyPi and can be installed using:
- `pip install parquet-python`. The package includes the `parquet`
-command for reading python files, e.g.: `parquet test.parquet`.
+parquet-python is available via PyPi and can be installed using
+`pip install parquet`. The package includes the `parquet`
+command for reading python files, e.g. `parquet test.parquet`.
 See `parquet --help` for full usage.
 
 Example
@@ -80,4 +80,4 @@ Contributing
 ============
 
 Is done via Pull Requests. Please include tests with your changes and
-follow `pep8 <http://www.python.org/dev/peps/pep-0008/>`__.
+follow `pep8 <http://www.python.org/dev/peps/pep-0008/>`_.
