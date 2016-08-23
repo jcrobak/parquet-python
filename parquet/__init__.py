@@ -390,6 +390,8 @@ def reader(fo, columns=None):
     :param columns: the columns to include. If None (default), all columns
                     are included. Nested values are referenced with "." notation
     """
+    if hasattr(fo, 'mode') and 'b' not in fo.mode:
+        logger.error("parquet.reader requires the fileobj to be opened in binary mode!")
     footer = _read_footer(fo)
     schema_helper = schema.SchemaHelper(footer.schema)
     keys = columns if columns else [s.name for s in
