@@ -18,6 +18,7 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 from .thrift_filetransport import TFileTransport
 from . import encoding
 from . import schema
+from .converted_types import convert_column
 
 PY3 = sys.version_info > (3,)
 
@@ -426,7 +427,8 @@ def reader(fo, columns=None):
                 if ph.type == parquet_thrift.PageType.DATA_PAGE:
                     values = read_data_page(fo, schema_helper, ph, cmd,
                                             dict_items)
-                    res[".".join(cmd.path_in_schema)] += values
+                    schema_element = schema_helper.schema_element(cmd.path_in_schema[-1])
+                    res[".".join(cmd.path_in_schema)] += convert_column(values, schema_element) if schema_element.converted_type else values
                     values_seen += ph.data_page_header.num_values
                 elif ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
                     if debug_logging:
