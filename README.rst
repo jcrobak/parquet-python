@@ -1,6 +1,9 @@
 parquet-python
 ==============
 
+.. image:: https://travis-ci.org/jcrobak/parquet-python.svg?branch=master
+    :target: https://travis-ci.org/jcrobak/parquet-python
+
 parquet-python is a pure-python implementation (currently with only
 read-support) of the `parquet
 format <https://github.com/Parquet/parquet-format>`_. It comes with a
