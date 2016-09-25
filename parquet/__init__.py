@@ -334,8 +334,10 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
 
     # NOTE: The repetition levels aren't yet used.
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
-        read_values = \
-            encoding.read_plain(io_obj, column_metadata.type, daph.num_values - num_nulls)
+        read_values = encoding.read_plain(io_obj, column_metadata.type, daph.num_values - num_nulls)
+        schema_element = schema_helper.schema_element(column_metadata.path_in_schema[-1])
+        read_values = convert_column(read_values, schema_element) \
+            if schema_element.converted_type is not None else read_values
         if definition_levels:
             itr = iter(read_values)
             vals.extend([next(itr) if level == max_definition_level else None for level in definition_levels])
@@ -343,39 +345,59 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
             vals.extend(read_values)
         if debug_logging:
             logger.debug("  Values: %s, nulls: %s", len(vals), num_nulls)
+
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = struct.unpack("<B", io_obj.read(1))[0]
         if debug_logging:
             logger.debug("bit_width: %d", bit_width)
-        total_seen = 0
+
         dict_values_bytes = io_obj.read()
         dict_values_io_obj = io.BytesIO(dict_values_bytes)
-        while total_seen < daph.num_values:
-            values = encoding.read_rle_bit_packed_hybrid(
-                dict_values_io_obj, bit_width, len(dict_values_bytes))
-            if len(values) + total_seen > daph.num_values:
-                values = values[0: daph.num_values - total_seen]
-            vals += [dictionary[v] for v in values]
-            total_seen += len(values)
+        # read_values stores the bit-packed values. If there are definition levels and the data contains nulls,
+        # the size of read_values will be less than daph.num_values
+        read_values = []
+        while dict_values_io_obj.tell() < len(dict_values_bytes):
+            read_values.extend(encoding.read_rle_bit_packed_hybrid(
+                dict_values_io_obj, bit_width, len(dict_values_bytes)))
+
+        if definition_levels:
+            itr = iter(read_values)
+            # add the nulls into a new array, values, but using the definition_levels data.
+            values = [dictionary[next(itr)] if level == max_definition_level else None for level in definition_levels]
+        else:
+            values = [dictionary[v] for v in read_values]
+
+        # there can be extra values on the end of the array because the last bit-packed chunk may be zero-filled.
+        if len(values) > daph.num_values:
+            values = values[0: daph.num_values]
+        vals.extend(values)
+
+        if debug_logging:
+            logger.debug("  Read %s values using PLAIN_DICTIONARY encoding and definition levels show %s nulls",
+                         len(vals), num_nulls)
+
     else:
         raise ParquetFormatException("Unsupported encoding: %s",
                                      _get_name(parquet_thrift.Encoding, daph.encoding))
     return vals
 
 
-def _read_dictionary_page(file_obj, page_header, column_metadata):
+def _read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     """Read a page containing dictionary data.
 
     Consumes data using the plain encoding and returns an array of values.
     """
     raw_bytes = _read_page(file_obj, page_header, column_metadata)
     io_obj = io.BytesIO(raw_bytes)
-    return encoding.read_plain(
+    values = encoding.read_plain(
         io_obj,
         column_metadata.type,
         page_header.dictionary_page_header.num_values
     )
+    # convert the values once, if the dictionary is associated with a converted_type.
+    schema_element = schema_helper.schema_element(column_metadata.path_in_schema[-1])
+    return convert_column(values, schema_element) if schema_element.converted_type is not None else values
 
 
 def DictReader(file_obj, columns=None):  # pylint: disable=invalid-name
@@ -446,15 +468,13 @@ def reader(file_obj, columns=None):
                 if page_header.type == parquet_thrift.PageType.DATA_PAGE:
                     values = read_data_page(file_obj, schema_helper, page_header, cmd,
                                             dict_items)
-                    schema_element = schema_helper.schema_element(cmd.path_in_schema[-1])
-                    res[".".join(cmd.path_in_schema)] += convert_column(values, schema_element) \
-                        if schema_element.converted_type else values
+                    res[".".join(cmd.path_in_schema)] += values
                     values_seen += page_header.data_page_header.num_values
                 elif page_header.type == parquet_thrift.PageType.DICTIONARY_PAGE:
                     if debug_logging:
                         logger.debug(page_header)
                     assert dict_items == []
-                    dict_items = _read_dictionary_page(file_obj, page_header, cmd)
+                    dict_items = _read_dictionary_page(file_obj, schema_helper, page_header, cmd)
                     if debug_logging:
                         logger.debug("Dictionary: %s", str(dict_items))
                 else:
