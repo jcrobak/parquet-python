@@ -297,6 +297,19 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
                      _get_name(parquet_thrift.Encoding, daph.repetition_level_encoding))
         logger.debug("  encoding: %s", _get_name(parquet_thrift.Encoding, daph.encoding))
 
+    # repetition levels are skipped if data is at the first level.
+    repetition_levels = None  # pylint: disable=unused-variable
+    if len(column_metadata.path_in_schema) > 1:
+        max_repetition_level = schema_helper.max_repetition_level(
+            column_metadata.path_in_schema)
+        bit_width = encoding.width_from_max_int(max_repetition_level)
+        repetition_levels = _read_data(io_obj,
+                                       daph.repetition_level_encoding,
+                                       daph.num_values,
+                                       bit_width)
+        if debug_logging:
+            logger.debug("  Repetition levels: %s", len(repetition_levels))
+
     # definition levels are skipped if data is required.
     definition_levels = None
     num_nulls = 0
@@ -319,18 +332,7 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
         # any thing that isn't at max definition level is a null.
         num_nulls = len(definition_levels) - definition_levels.count(max_definition_level)
         if debug_logging:
-            logger.debug("  Definition levels: %s", len(definition_levels))
-
-    # repetition levels are skipped if data is at the first level.
-    repetition_levels = None  # pylint: disable=unused-variable
-    if len(column_metadata.path_in_schema) > 1:
-        max_repetition_level = schema_helper.max_repetition_level(
-            column_metadata.path_in_schema)
-        bit_width = encoding.width_from_max_int(max_repetition_level)
-        repetition_levels = _read_data(io_obj,
-                                       daph.repetition_level_encoding,
-                                       daph.num_values,
-                                       bit_width)
+            logger.debug("  Definition levels: %d, nulls: %d", len(definition_levels), num_nulls)
 
     # NOTE: The repetition levels aren't yet used.
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
@@ -344,7 +346,8 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
         else:
             vals.extend(read_values)
         if debug_logging:
-            logger.debug("  Values: %s, nulls: %s", len(vals), num_nulls)
+            logger.debug("  Read %s values using PLAIN encoding and definition levels show %s nulls",
+                         len(vals), num_nulls)
 
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
