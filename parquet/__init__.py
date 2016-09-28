@@ -409,7 +409,7 @@ def DictReader(file_obj, columns=None):  # pylint: disable=invalid-name
     top-level dict and can be referenced with '.' notation (e.g. 'foo' -> 'bar'
     is referenced as 'foo.bar')
 
-    :param fo: the file containing parquet data
+    :param file_obj: the file containing parquet data
     :param columns: the columns to include. If None (default), all columns
                     are included. Nested values are referenced with "." notation
     """
@@ -428,7 +428,7 @@ def reader(file_obj, columns=None):
     This function is a generator returning a list of values for each row
     of data in the parquet file.
 
-    :param fo: the file containing parquet data
+    :param file_obj: the file containing parquet data
     :param columns: the columns to include. If None (default), all columns
                     are included. Nested values are referenced with "." notation
     """
