@@ -53,8 +53,8 @@ def _convert_unsigned(data, fmt):
     """Convert data from signed to unsigned in bulk."""
     num = len(data)
     return struct.unpack(
-        "{}{}".format(num, fmt.upper()),
-        struct.pack("{}{}".format(num, fmt), *data)
+        "{}{}".format(num, fmt.upper()).encode("utf-8"),
+        struct.pack("{}{}".format(num, fmt).encode("utf-8"), *data)
     )
 
 
