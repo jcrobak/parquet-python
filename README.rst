@@ -71,13 +71,11 @@ specified columns.
 Todos
 =====
 
--  Support the deprecated bitpacking
--  Fix handling of repetition-levels and definition-levels
--  Tests for nested schemas, null data
+-  Support for arrays and maps.
+-  Full support of repetition-levels and definition-levels. Some simple
+   cases work, but most complex cases do not.
 -  Support reading of data from HDFS via snakebite and/or webhdfs.
 -  Implement writing
--  performance evaluation and optimization (i.e. how does it compare to
-   the c++, java implementations)
 
 Contributing
 ============

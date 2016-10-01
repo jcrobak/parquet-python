@@ -80,12 +80,13 @@ class TestMetadata(unittest.TestCase):
 class Options(object):
     """Fake Options (a la `__main__.py`)."""
 
-    def __init__(self, col=None, format='csv', no_headers=True, limit=-1):
+    def __init__(self, col=None, format='csv', no_headers=True, limit=-1, flatten=False):
         """Create a fake options."""
         self.col = col
         self.format = format
         self.no_headers = no_headers
         self.limit = limit
+        self.flatten = flatten
 
 
 class TestReadApi(unittest.TestCase):
@@ -238,5 +239,37 @@ class TestDefinitionLevel(unittest.TestCase):
             # this is the contents of test-null-dictionary.parquet. 7 records.
             # The first record is null, and the rest alternate between values of 'bar' and 'baz.'
             [{"foo": None}] + [{"foo": "bar"}, {"foo": "baz"}] * 3,
+            actual_data
+        )
+
+    def test_nested(self):
+        """Test reading data for a nested schema."""
+        with open(os.path.join(TEST_DATA, "test-nested.parquet"), "rb") as parquet_fo:
+            actual_data = list(parquet.DictReader(parquet_fo))
+
+        self.assertListEqual(
+            # this is the contents of test-nested.parquet. 3 records.
+            [
+                {"foo": {"bar": 1}, "baz": None},
+                {"foo": {"bar": None}, "baz": 1},
+                {"foo": {"bar": None}, "baz": None},
+            ],
+            actual_data
+        )
+
+    def test_nested_csv(self):
+        """Test the csv dump function for a nested schema."""
+        actual_raw_data = io.StringIO()
+        parquet.dump(os.path.join(TEST_DATA, "test-nested.parquet"), Options(no_headers=False), out=actual_raw_data)
+        actual_raw_data.seek(0, 0)
+        actual_data = list(csv.reader(actual_raw_data, delimiter=TAB_DELIM))
+
+        self.assertListEqual(
+            [
+                ["foo.bar", "baz"],
+                ["1", ""],
+                ["", "1"],
+                ["", ""],
+            ],
             actual_data
         )
