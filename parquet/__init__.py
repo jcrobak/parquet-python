@@ -64,7 +64,7 @@ def _check_footer_magic_bytes(file_obj):
 def _get_footer_size(file_obj):
     """Read the footer size in bytes, which is serialized as little endian."""
     file_obj.seek(-8, 2)
-    tup = struct.unpack("<i", file_obj.read(4))
+    tup = struct.unpack(b"<i", file_obj.read(4))
     return tup[0]
 
 
@@ -348,7 +348,7 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
 
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
-        bit_width = struct.unpack("<B", io_obj.read(1))[0]
+        bit_width = struct.unpack(b"<B", io_obj.read(1))[0]
         if debug_logging:
             logger.debug("bit_width: %d", bit_width)
 
