@@ -117,9 +117,11 @@ def read_col(column, schema_helper, infile):
     off = min((cmd.dictionary_page_offset or cmd.data_page_offset,
                cmd.data_page_offset))
     if column.file_path:
+        # infile is the metadata part of a multi-file structure
         infile = open(os.path.join(os.path.dirname(os.path.abspath(infile)),
                                    column.file_path), 'rb')
     elif isinstance(infile, str):
+        # explicitly calling some other file with known metadata
         infile = open(infile, 'rb')
 
     infile.seek(off)
@@ -158,6 +160,7 @@ def read_col(column, schema_helper, infile):
         for o in out:
             defi, rep, val, d = o
             if defi is not None:
+                # there are nulls in this page
                 l = len(defi)
                 if all_dict:
                     final[start:start+l][defi == 1] = val
@@ -169,6 +172,7 @@ def read_col(column, schema_helper, infile):
                     final[start:start+l][defi == 1] = val
                     final[start:start+l][defi != 1] = np.nan
             else:
+                # no nulls in this page
                 l = len(val)
                 if d:
                     final[start:start+l] = dic[val]
@@ -177,8 +181,10 @@ def read_col(column, schema_helper, infile):
 
             start += l
     elif all_dict or not any_dict:
+        # either a single int col for categorical, or no cats at all
         final = np.concatenate([_[2] for _ in out])
     else:
+        # *some* dictionary encoding, but not all, and no nulls
         final = np.empty(rows, dtype=dic.dtype)
         start = 0
         for o in out:

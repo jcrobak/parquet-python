@@ -27,6 +27,7 @@ ARRAY_BYTE_STR = u'B' if PY3 else b'B'
 
 def read_plain_boolean(raw_bytes, count):
     """Read `count` booleans using the plain encoding."""
+    # TODO: is this the same as np.unpackbits?
     b = bitarray.bitarray()
     b.frombytes(raw_bytes[:(count+7) // 8])
     b.bytereverse()

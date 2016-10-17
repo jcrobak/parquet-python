@@ -55,6 +55,7 @@ def convert(data, se):
     data: pandas series of primitive type
     se: a schema element.
     """
+    # TODO: if input is categorical, only map on categories
     ctype = se.converted_type
     if ctype == parquet_thrift.ConvertedType.UTF8:
         return data.str.decode('utf8')
