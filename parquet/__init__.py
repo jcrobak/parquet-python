@@ -19,11 +19,11 @@ class ParquetFile(object):
     """For now: metadata representation"""
 
     def __init__(self, fname, verify=True):
-        if os.path.isdir(fname):
-            fname = os.path.join(fname, '_metadata')
         self.fname = fname
         self.verify = verify
         if isinstance(fname, str):
+            if os.path.isdir(fname):
+                fname = os.path.join(fname, '_metadata')
             f = open(fname, 'rb')
         else:
             f = fname

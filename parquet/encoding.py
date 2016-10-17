@@ -74,7 +74,7 @@ def read_unsigned_var_int(file_obj):
     return result
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def read_rle(file_obj, header, bit_width, o):
     """Read a run-length encoded run from the given fo with the given header and bit_width.
 
@@ -90,7 +90,7 @@ def read_rle(file_obj, header, bit_width, o):
     o.write_many(value, count)
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def width_from_max_int(value):
     """Convert the value specified to a bit_width."""
     for i in range(0, 64):
@@ -99,13 +99,13 @@ def width_from_max_int(value):
         value >>= 1
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def _mask_for_bits(i):
     """Generate a mask to grab `i` bits from an int value."""
     return (1 << i) - 1
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def read_bitpacked(file_obj, header, width, o):
     """
     Read values packed into width-bits each )which can be >8)
@@ -139,7 +139,7 @@ def read_bitpacked(file_obj, header, width, o):
             bits_wnd_l += 8
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):
     """Read values from `io_obj` using the rel/bit-packed hybrid encoding.
 
@@ -160,7 +160,7 @@ def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):
     return o.so_far()
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def read_length(file_obj):
     """ Numpy trick to get a 32-bit length from four bytes
 
