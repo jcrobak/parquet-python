@@ -44,10 +44,11 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
         assert (ddf[col] == data[col]).all()
 
 
-@pytest.mark.parametrize('partitions,comp',
-                         product(([0], [0, 500]),
+@pytest.mark.parametrize('scheme,partitions,comp',
+                         product(('simple', 'hive'),
+                                 ([0], [0, 500]),
                                  (None, 'GZIP', 'SNAPPY')))
-def test_roundtrip(tempdir, partitions, comp):
+def test_roundtrip(tempdir, scheme, partitions, comp):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -58,7 +59,7 @@ def test_roundtrip(tempdir, partitions, comp):
     data['hello'] = data.bhello.str.decode('utf8')
     # data['cat'] = data.hello.astype('category')
     fname = os.path.join(tempdir, 'test.parquet')
-    write(fname, data, file_scheme='simple', partitions=partitions,
+    write(fname, data, file_scheme=scheme, partitions=partitions,
           compression=comp)
 
     r = ParquetFile(fname)

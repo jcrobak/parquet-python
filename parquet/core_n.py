@@ -1,5 +1,6 @@
 import io
 import numpy as np
+import os
 import pandas as pd
 import struct
 
@@ -116,8 +117,8 @@ def read_col(column, schema_helper, infile):
     off = min((cmd.dictionary_page_offset or cmd.data_page_offset,
                cmd.data_page_offset))
     if column.file_path:
-        infile = open(os.path.join(os.path.dirname(os.path.abspath(f.name)),
-                                   cmd.file_name), 'rb')
+        infile = open(os.path.join(os.path.dirname(os.path.abspath(infile)),
+                                   column.file_path), 'rb')
     elif isinstance(infile, str):
         infile = open(infile, 'rb')
 
