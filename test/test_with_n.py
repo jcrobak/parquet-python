@@ -1,7 +1,7 @@
 import io
 import numpy as np
 import os
-from parquet import encoding, core, core_n, ParquetFile, schema
+from parquet import encoding, core, ParquetFile, schema
 
 here = os.path.dirname(__file__)
 count = 1000
@@ -61,7 +61,7 @@ def test_read_data():
         for i, l in enumerate(f):
             (data, fo_encoding, value_count, bit_width, res) = eval(l)
             i = encoding.Numpy8(np.frombuffer(memoryview(data), dtype=np.uint8))
-            out = core_n.read_data(i, fo_encoding, value_count,
+            out = core.read_data(i, fo_encoding, value_count,
                                    bit_width)
             for o, r in zip(out, res):
                 # result from old version is sometimes 1 value too long

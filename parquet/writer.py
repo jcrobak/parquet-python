@@ -8,7 +8,9 @@ import shutil
 import struct
 import thriftpy
 
-from .core import TFileTransport, TCompactProtocolFactory, parquet_thrift
+from thriftpy.protocol.compact import TCompactProtocolFactory
+from .thrift_filetransport import TFileTransport
+from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 
 MARKER = b'PAR1'

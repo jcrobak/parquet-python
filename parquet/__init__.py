@@ -11,10 +11,10 @@ import re
 import struct
 import thriftpy
 
-from .core import (parquet_thrift, reader, TFileTransport, TCompactProtocolFactory,
-                   ParquetFormatException, read_thrift)
+from .core import ParquetFormatException, read_thrift
+from .thrift_structures import parquet_thrift
 from .writer import write
-from . import core_n
+from . import core
 
 
 class ParquetFile(object):
@@ -83,7 +83,7 @@ class ParquetFile(object):
                 name = ".".join(col.meta_data.path_in_schema)
                 if name not in cols:
                     continue
-                s = core_n.read_col(col, schema.SchemaHelper(self.schema),
+                s = core.read_col(col, schema.SchemaHelper(self.schema),
                                     self.fname)
                 out[name] = s
 
@@ -103,6 +103,15 @@ class ParquetFile(object):
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
         return pd.concat(tot, ignore_index=True)
+
+    @property
+    def count(self):
+        return sum(rg.num_rows for rg in self.row_groups)
+
+    @property
+    def info(self):
+        return {'name': self.fname, 'columns': self.columns,
+                'categories': list(self.cats), 'rows': self.count}
 
     def __str__(self):
         return "<Parquet File '%s'>" % self.fname
