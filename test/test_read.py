@@ -6,8 +6,11 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import io
+from itertools import product
 import json
+import numpy as np
 import os
+import pandas as pd
 import sys
 import tempfile
 import unittest
@@ -99,3 +102,20 @@ def test_null_plain_dictionary():
             data[col] = data[col].str.decode('utf8')
         assert (data[col] == expected[col])[~expected[col].isnull()].all()
         assert sum(data[col].isnull()) == sum(expected[col].isnull())
+
+
+def test_dir_partition():
+    """Test creation of categories from directory structure"""
+    x = np.arange(2000)
+    df = pd.DataFrame({
+        'num': x,
+        'cat': pd.Series(np.array(['fred', 'freda'])[x%2], dtype='category'),
+        'catnum': pd.Series(np.array([1, 2, 3])[x%3], dtype='category')})
+    pf = parquet.ParquetFile(os.path.join(TEST_DATA, "split"))
+    out = pf.to_pandas()
+    for cat, catnum in product(['fred', 'freda'], [1, 2, 3]):
+        assert (df.num[(df.cat==cat) & (df.catnum==catnum)].tolist()) ==\
+               out.num[(out.cat==cat) & (out.catnum==catnum)].tolist()
+    assert out.cat.dtype == 'category'
+    assert out.catnum.dtype == 'category'
+    assert out.catnum.cat.categories.dtype == 'int64'
