@@ -78,7 +78,7 @@ class ParquetFile(object):
         tot = []
         for rg in self.row_groups:
             # read values
-            out = pd.DataFrame()
+            out = {}
             for col in rg.columns:
                 name = ".".join(col.meta_data.path_in_schema)
                 if name not in cols:
@@ -87,6 +87,7 @@ class ParquetFile(object):
                 s = core.read_col(col, schema.SchemaHelper(self.schema),
                                   self.fname, use_cat=use)
                 out[name] = s
+            out = pd.DataFrame(out)
 
             # apply categories
             for cat in self.cats:

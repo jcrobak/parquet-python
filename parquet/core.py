@@ -67,8 +67,9 @@ def read_def(io_obj, daph, helper, metadata):
         if bit_width:
             definition_levels = read_data(
                     io_obj, daph.definition_level_encoding,
-                    daph.num_values, bit_width)
-        num_nulls = len(definition_levels) - (definition_levels==max_definition_level).sum()
+                    daph.num_values, bit_width)[:daph.num_values]
+        num_nulls = daph.num_values - (definition_levels ==
+                                       max_definition_level).sum()
         if num_nulls == 0:
             definition_levels = None
     return definition_levels, num_nulls
@@ -84,7 +85,8 @@ def read_rep(io_obj, daph, helper, metadata):
             metadata.path_in_schema)
         bit_width = encoding.width_from_max_int(max_repetition_level)
         repetition_levels = read_data(io_obj, daph.repetition_level_encoding,
-                                      daph.num_values, bit_width)
+                                      daph.num_values,
+                                      bit_width)[:daph.num_values]
     return repetition_levels
 
 
@@ -229,7 +231,7 @@ def read_col(column, schema_helper, infile, use_cat=False):
     if all_dict:
         out = pd.Series(pd.Categorical.from_codes(final, dic), name=name)
     else:
-        out = pd.Series(final, name=name)
+        out = final
     se = schema_helper.schema_element(cmd.path_in_schema[-1])
     if se.converted_type is not None:
         out = convert(out, se)
