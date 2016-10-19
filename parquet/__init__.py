@@ -14,7 +14,7 @@ import thriftpy
 from .core import ParquetFormatException, read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
-from . import core
+from . import core, schema
 
 
 class ParquetFile(object):
@@ -72,7 +72,7 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
-    def to_pandas(self, columns=None):
+    def to_pandas(self, columns=None, usecats=None):
         cols = columns or self.columns
         import pandas as pd
         tot = []
@@ -83,8 +83,9 @@ class ParquetFile(object):
                 name = ".".join(col.meta_data.path_in_schema)
                 if name not in cols:
                     continue
+                use = name in usecats if usecats is not None else False
                 s = core.read_col(col, schema.SchemaHelper(self.schema),
-                                    self.fname)
+                                  self.fname, use_cat=use)
                 out[name] = s
 
             # apply categories

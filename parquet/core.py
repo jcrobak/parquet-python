@@ -138,7 +138,7 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     return values
 
 
-def read_col(column, schema_helper, infile):
+def read_col(column, schema_helper, infile, use_cat=False):
     """Using the metadata in infile, read one column in one row-group.
     """
     cmd = column.meta_data
@@ -174,7 +174,7 @@ def read_col(column, schema_helper, infile):
         ph = read_thrift(infile, parquet_thrift.PageHeader)
 
     # TODO: the code below could be separate "assemble" func
-    all_dict = all(_[3] for _ in out)
+    all_dict = use_cat and all(_[3] for _ in out)
     any_dict = any(_[3] for _ in out)
     any_def = any(_[0] is not None for _ in out)
     if any_def:
@@ -204,7 +204,7 @@ def read_col(column, schema_helper, infile):
             else:
                 # no nulls in this page
                 l = len(val)
-                if d:
+                if d and not all_dict:
                     final[start:start+l] = dic[val]
                 else:
                     final[start:start+l] = val
