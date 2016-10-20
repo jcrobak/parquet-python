@@ -105,9 +105,11 @@ def read_data_page(f, helper, header, metadata):
 
     repetition_levels = read_rep(io_obj, daph, helper, metadata)
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
+        width = helper.schema_element(metadata.path_in_schema[-1]).type_length
         values = encoding.read_plain(raw_bytes[io_obj.loc:],
                                      metadata.type,
-                                     int(daph.num_values - num_nulls))
+                                     int(daph.num_values - num_nulls),
+                                     width=width)
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = io_obj.read_byte()

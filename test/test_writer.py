@@ -55,8 +55,8 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
                          'f': np.arange(1000, dtype=np.float64),
                          'bhello': np.random.choice([b'hello', b'you',
                             b'people'], size=1000).astype("O")})
-    # data['a'] = np.array([b'a', b'b', b'c', b'd', b'e']*200, dtype="S1")
-    # data['aa'] = data['a'].map(lambda x: 2*x).astype("S2")
+    data['a'] = np.array([b'a', b'b', b'c', b'd', b'e']*200, dtype="S1")
+    data['aa'] = data['a'].map(lambda x: 2*x).astype("S2")
     data['hello'] = data.bhello.str.decode('utf8')
     # data['cat'] = data.hello.astype('category')
     fname = os.path.join(tempdir, 'test.parquet')

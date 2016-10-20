@@ -77,7 +77,7 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.UINT_64:
         return data.astype(np.uint64)
     elif ctype == parquet_thrift.ConvertedType.JSON:
-        return data.map(lambda s: json.loads(s.decode()))
+        return data.str.decode('utf8').map(json.loads)
     elif ctype == parquet_thrift.ConvertedType.BSON and BSON:
         return data.map(lambda s: BSON(s).decode())
     else:
