@@ -33,6 +33,7 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
                             b'people'], size=1000).astype("O")})
 
     data['hello'] = data.bhello.str.decode('utf8')
+    data['f'].iloc[100] = np.nan
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, partitions=partitions,
@@ -41,7 +42,7 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
     df = sql.read.parquet(fname)
     ddf = df.toPandas()
     for col in data:
-        assert (ddf[col] == data[col]).all()
+        assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
 @pytest.mark.parametrize('scheme,partitions,comp',

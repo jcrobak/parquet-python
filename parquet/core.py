@@ -233,6 +233,7 @@ def read_col(column, schema_helper, infile, use_cat=False):
     else:
         out = final
     se = schema_helper.schema_element(cmd.path_in_schema[-1])
+    out = pd.Series(out)
     if se.converted_type is not None:
         out = convert(out, se)
     return out
