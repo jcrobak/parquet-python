@@ -156,6 +156,62 @@ def encode_plain(data, se):
     return b''.join(data.map(lambda x: struct.pack('<l', len(x)) + x))
 
 
+def bitrev_map(nbits):
+    """ bit reversal mapping
+    http://stackoverflow.com/questions/5333509/how-do-you-reverse-the-significant-bits-of-an-integer-in-python/5333563#5333563
+
+    >>> bitrev_map(3)
+    array([0, 4, 2, 6, 1, 5, 3, 7], dtype=uint16)
+    >>> import numpy as np
+    >>> np.arange(8)[bitrev_map(3)]
+    array([0, 4, 2, 6, 1, 5, 3, 7])
+    >>> (np.arange(8)[bitrev_map(3)])[bitrev_map(3)]
+    array([0, 1, 2, 3, 4, 5, 6, 7])
+    """
+    assert isinstance(nbits,
+                      int) and nbits > 0, 'bit size must be positive integer'
+    dtype = np.uint32 if nbits > 16 else np.uint16
+    brmap = np.empty(2 ** nbits, dtype=dtype)
+    int_, ifmt, fmtstr = int, int.__format__, ("0%db" % nbits)
+    for i in range(2 ** nbits):
+        brmap[i] = int_(ifmt(i, fmtstr)[::-1], base=2)
+    return brmap
+
+bmap = bitrev_map(8)
+
+
+def encode_unsigned_varint(x, o):
+    while x > 127:
+        o.write_byte((x & 0x7F) | 0x80)
+        x >>= 7
+    o.write_byte(x)
+
+
+# @numba.njit(nogil=True)
+def encode_bitpacked(values, width, o):
+    """
+    Read values packed into width-bits each (which can be >8)
+
+    values is a NumbaIO array (int32)
+    o is a NumbaIO output array (uint8), size=(len(values)*width)/8, rounded up.
+    """
+    bit_packed_count = len(values) // 8 + 1
+    encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
+
+    bit = 0
+    right_byte_mask = 0b11111111
+    bits = 0
+    for v in values:
+        bits |= v << bit
+        bit += width
+        while bit >= 8:
+            o.write_byte(bits & right_byte_mask)
+            bit -= 8
+            bits >>= 8
+    if bit:
+        o.write_byte(bit)
+
+
 def encode_rle(data, width):
     pass
 

@@ -108,7 +108,7 @@ def _mask_for_bits(i):
 @numba.njit(nogil=True)
 def read_bitpacked(file_obj, header, width, o):
     """
-    Read values packed into width-bits each )which can be >8)
+    Read values packed into width-bits each (which can be >8)
 
     file_obj is a NumbaIO array (int8)
     o is an output NumbaIO array (int32)
