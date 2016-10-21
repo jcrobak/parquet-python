@@ -58,7 +58,7 @@ def read_plain(raw_bytes, type_, count, width=0):
                      for _ in range(count)], dtype="O")
 
 
-@numba.jit()
+@numba.jit(nogil=True)
 def read_unsigned_var_int(file_obj):
     """Read a value using the unsigned, variable int encoding.
     file-obj is a NumpyIO of bytes; avoids struct to allow numba-jit
