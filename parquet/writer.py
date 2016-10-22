@@ -8,6 +8,8 @@ import shutil
 import struct
 import thriftpy
 
+import numba
+
 from thriftpy.protocol.compact import TCompactProtocolFactory
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
@@ -180,6 +182,7 @@ def bitrev_map(nbits):
 bmap = bitrev_map(8)
 
 
+@numba.njit(nogil=True)
 def encode_unsigned_varint(x, o):
     while x > 127:
         o.write_byte((x & 0x7F) | 0x80)
@@ -187,7 +190,7 @@ def encode_unsigned_varint(x, o):
     o.write_byte(x)
 
 
-# @numba.njit(nogil=True)
+@numba.njit(nogil=True)
 def encode_bitpacked(values, width, o):
     """
     Read values packed into width-bits each (which can be >8)
@@ -195,7 +198,7 @@ def encode_bitpacked(values, width, o):
     values is a NumbaIO array (int32)
     o is a NumbaIO output array (uint8), size=(len(values)*width)/8, rounded up.
     """
-    bit_packed_count = len(values) // 8 + 1
+    bit_packed_count = (len(values) + 7) // 8
     encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
 
     bit = 0
@@ -209,7 +212,7 @@ def encode_bitpacked(values, width, o):
             bit -= 8
             bits >>= 8
     if bit:
-        o.write_byte(bit)
+        o.write_byte(bits)
 
 
 def encode_rle(data, width):

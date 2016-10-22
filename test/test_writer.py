@@ -16,7 +16,7 @@ sql = pyspark.SQLContext(sc)
 
 def test_uvarint():
     values = np.random.randint(0, 15000, size=100)
-    o = encoding.NumpyIO(np.zeros(30, dtype=np.uint8))
+    o = encoding.Numpy8(np.zeros(30, dtype=np.uint8))
     for v in values:
         o.loc = 0
         writer.encode_unsigned_varint(v, o)
@@ -27,7 +27,8 @@ def test_uvarint():
 
 def test_bitpack():
     for _ in range(10):
-        values = np.random.randint(0, 15000, size=100, dtype=np.int32)
+        values = np.random.randint(0, 15000, size=np.random.randint(10, 100),
+                                   dtype=np.int32)
         width = encoding.width_from_max_int(values.max())
         o = encoding.Numpy8(np.zeros(900, dtype=np.uint8))
         writer.encode_bitpacked(values, width, o)
@@ -36,7 +37,7 @@ def test_bitpack():
         out = encoding.Numpy32(np.zeros(300, dtype=np.int32))
         encoding.read_bitpacked(o, head, width, out)
         assert (values == out.so_far()[:len(values)]).all()
-        assert out.so_far()[len(values):].sum() == 0 # zero padding
+        assert out.so_far()[len(values):].sum() == 0  # zero padding
         assert out.loc - len(values) < 8
 
 
