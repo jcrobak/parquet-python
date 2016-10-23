@@ -1,6 +1,8 @@
-## Parquet 2.0
+Parquet 2.0
+===========
 
-### Introduction
+Introduction
+------------
 
 Since the second week of October, this fork of parquet-python has been
 undergoing considerable redevelopment. The aim is to have a small and simple
@@ -15,45 +17,46 @@ more use cases the better.
 
 For the time being, this code should be considered extreme beta.
 
-### Requirements
+Requirements
+------------
 
 (all development is against recent versions in the default anaconda channels)
 
 Required:
+
 - numba
 - numpy
 - pandas
 
-Optional:
+Optional (compression algorithms; gzip is always available):
+
 - snappy
 - lzo
 - brotli
 
-### Installation
+Installation
+------------
 
-```
-> pip install git+https://github.com/martindurant/parquet-python@fast_writer
-```
+    > pip install git+https://github.com/martindurant/parquet-python@fast_writer
 
 or clone this repo, checkout the fast_writer branch and run
 
-```
-> python setup.py develop
-```
+    > python setup.py develop
 
 (NB: the final branch and repo are not yet decided, the above information is
 expected to be out of date soon - at which point this README will be edited)
 
-### Usage
+Usage
+-----
 
 *Reading*
 
-```
-import parquet
-pf = parquet.ParquetFile('myfile.parq')
-df = pf.to_pandas()
-df2 = pf.to_pandas(['col1', 'col2'], usecats=['col1'])
-```
+.. code-block:: python
+
+    import parquet
+    pf = parquet.ParquetFile('myfile.parq')
+    df = pf.to_pandas()
+    df2 = pf.to_pandas(['col1', 'col2'], usecats=['col1'])
 
 You may specify which columns to load, which of those to keep as categoricals
 (if the data uses dictionary encoding). The file-path can be a single file,
@@ -61,12 +64,13 @@ a metadata file pointing to other data files, or a directory (tree) containing
 data files. The latter is what is typically output by hive/spark.
 
 *Writing*
-```
-import parquet
-parquet.write('outfile.parq', df)
-parquet.write('outfile2.parq', df, partitions=[0, 10000, 20000],
-              compression='GZIP', file_scheme='hive')
-```
+
+.. code-block:: python
+
+    import parquet
+    parquet.write('outfile.parq', df)
+    parquet.write('outfile2.parq', df, partitions=[0, 10000, 20000],
+                  compression='GZIP', file_scheme='hive')
 
 The default is to produce a single output file with a single row-group
 (i.e., logical segment) and no compression. At the moment, only simple
