@@ -1,6 +1,7 @@
 Parquet 2.0
 ===========
 
+
 Introduction
 ------------
 
@@ -17,7 +18,7 @@ Please feel free to comment on that list as to missing items and priorities.
 In the meantime, the more eyes on this code, the more example files and the
 more use cases the better.
 
-For the time being, this code should be considered extreme beta.
+For the time being, this code should be considered extreme alpha.
 
 Requirements
 ------------
@@ -41,7 +42,7 @@ Installation
 
     > pip install git+https://github.com/martindurant/parquet-python@fast_writer
 
-or clone this repo, checkout the fast_writer branch and run
+or clone this repo, checkout the *fast_writer* branch and run
 
     > python setup.py develop
 
