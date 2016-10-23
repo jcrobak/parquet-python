@@ -9,7 +9,7 @@ undergoing considerable redevelopment. The aim is to have a small and simple
 and performant library for reading and writing the parquet format from python.
 
 A list of expected features and their status in this branch can be found in
-(this issue)[https://github.com/martindurant/parquet-python/issues/1].
+`this issue<https://github.com/martindurant/parquet-python/issues/1>`_.
 Please feel free to comment on that list as to missing items and priorities.
 
 In the meantime, the more eyes on this code, the more example files and the
@@ -75,4 +75,4 @@ data files. The latter is what is typically output by hive/spark.
 The default is to produce a single output file with a single row-group
 (i.e., logical segment) and no compression. At the moment, only simple
 data-types and plain encoding are supported, so expect performance to be
-similar to `numpy.savez`.
+similar to *numpy.savez*.
