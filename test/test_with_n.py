@@ -72,4 +72,4 @@ def test_to_pandas():
     fname = '/Users/mdurant/Downloads/parquet-python/test-data/airlines_parquet/4345e5eef217aa1b-c8f16177f35fd983_1150363067_data.1.parq'
     pf = ParquetFile(fname)
     out = pf.to_pandas()
-    print(out.head())
+    assert len(out.columns) == 29

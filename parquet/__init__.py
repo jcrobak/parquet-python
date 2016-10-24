@@ -20,14 +20,25 @@ from . import core, schema
 class ParquetFile(object):
     """For now: metadata representation"""
 
-    def __init__(self, fname, verify=True):
+    def __init__(self, fname, verify=False, use_dask=False, **kwargs):
         self.verify = verify
+
         if isinstance(fname, str):
-            if os.path.isdir(fname):
+            if use_dask:
+                import dask.bytes.core as dbc
+                # even with dask we must first read the metadata
+                o = lambda f: dbc.open_files(f, **kwargs)[0].compute()
+            else:
+                o = lambda f: open(f, mode='rb')
+            try:
+                # backend may not have something equivalent to `isdir()`
+                f = o(fname)
+            except (IOError, OSError):
                 fname = os.path.join(fname, '_metadata')
-            f = open(fname, 'rb')
+                f = o(fname)
         else:
             f = fname
+        self.use_dask = use_dask
         self.fname = fname
         self._parse_header(f, verify)
         self._read_partitions()
@@ -57,6 +68,10 @@ class ParquetFile(object):
         self.row_groups = fmd.row_groups
         self.key_value_metadata = fmd.key_value_metadata
         self.created_by = fmd.created_by
+        self.group_files = {}
+        for i, rg in enumerate(self.row_groups):
+            for chunk in rg.columns:
+                self.group_files.setdefault(i, set()).add(chunk.file_path)
 
     @property
     def columns(self):
@@ -72,35 +87,55 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
+    def to_dask(self, columns=None, usecats=None, **kwargs):
+        import dask.dataframe as dd
+        cols = columns or self.columns
+        tot = [self.read_row_group_delayed(rg, cols, usecats, **kwargs)
+               for rg in self.row_groups]
+
+        # TODO: if categories vary from one rg to next, need to cope
+        return dd.from_delayed(tot)
+
+    def read_row_group_delayed(self, rg, cols, usecats, **kwargs):
+        from dask import delayed
+        import dask.bytes.core as dbc
+        infile = (self.fname if rg.columns[0].file_path is None else
+                  os.path.join(os.path.dirname(self.fname),
+                               rg.columns[0].file_path))
+        o = dbc.open_files(infile, **kwargs)[0]
+        return delayed(self.read_row_group)(rg, cols, usecats, open_file=o)
+
+    def read_row_group(self, rg, cols, usecats, open_file=None):
+        out = {}
+        for col in rg.columns:
+            name = ".".join(col.meta_data.path_in_schema)
+
+            if name not in cols:
+                continue
+            use = name in usecats if usecats is not None else False
+            f = open_file if open_file is not None else self.fname
+            s = core.read_col(col, schema.SchemaHelper(self.schema),
+                              f, use_cat=use, follow_relpath=open_file is None)
+            out[name] = s
+        out = pd.DataFrame(out)
+
+        # apply categories
+        for cat in self.cats:
+            # *Hard assumption*: all chunks in a row group have the
+            # same partition (correct for spark/hive)
+            partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
+                                    rg.columns[0].file_path)
+            val = [p[1] for p in partitions if p[0] == cat][0]
+            codes = np.empty(rg.num_rows, dtype=np.int16)
+            codes[:] = self.cats[cat].index(val)
+            out[cat] = pd.Categorical.from_codes(
+                    codes, [val_to_num(c) for c in self.cats[cat]])
+        return out
+
     def to_pandas(self, columns=None, usecats=None):
         cols = columns or self.columns
-        import pandas as pd
-        tot = []
-        for rg in self.row_groups:
-            # read values
-            out = {}
-            for col in rg.columns:
-                name = ".".join(col.meta_data.path_in_schema)
-                if name not in cols:
-                    continue
-                use = name in usecats if usecats is not None else False
-                s = core.read_col(col, schema.SchemaHelper(self.schema),
-                                  self.fname, use_cat=use)
-                out[name] = s
-            out = pd.DataFrame(out)
-
-            # apply categories
-            for cat in self.cats:
-                # *Hard assumption*: all chunks in a row group have the
-                # same partition (correct for spark/hive)
-                partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
-                                        rg.columns[0].file_path)
-                val = [p[1] for p in partitions if p[0] == cat][0]
-                codes = np.empty(rg.num_rows, dtype=np.int16)
-                codes[:] = self.cats[cat].index(val)
-                out[cat] = pd.Categorical.from_codes(
-                        codes, [val_to_num(c) for c in self.cats[cat]])
-            tot.append(out)
+        tot = [self.read_row_group(rg, cols, usecats) for rg in
+               self.row_groups]
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals

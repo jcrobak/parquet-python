@@ -46,6 +46,15 @@ cols = ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 expected = pd.read_csv(csvfile, delimiter="|", index_col=0, names=cols)
 
 
+def test_read_dask():
+    dask = pytest.importorskip('dask')
+    pf = parquet.ParquetFile('s3://MDtemp/split/_metadata', use_dask=True)
+    df = pf.to_dask()
+    out = df.compute()
+    assert out.shape == (1000, 3)
+    assert (df.cat.value_counts() == [1000, 1000]).all()
+
+
 @pytest.mark.parametrize("parquet_file", files)
 def test_file_csv(parquet_file):
     """Test the various file times
