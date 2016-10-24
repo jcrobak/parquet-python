@@ -41,6 +41,34 @@ def test_bitpack():
         assert out.loc - len(values) < 8
 
 
+def test_length():
+    lengths = np.random.randint(0, 15000, size=100)
+    o = encoding.Numpy8(np.zeros(900, dtype=np.uint8))
+    for l in lengths:
+        o.loc = 0
+        writer.write_length(l, o)
+        o.loc = 0
+        out = encoding.read_length(o)
+        assert l == out
+
+
+def test_rle_bp():
+    for _ in range(10):
+        values = np.random.randint(0, 15000, size=np.random.randint(10, 100),
+                                   dtype=np.int32)
+        out = encoding.Numpy32(np.empty(len(values) + 5, dtype=np.int32))
+        o = encoding.Numpy8(np.zeros(900, dtype=np.uint8))
+        width = encoding.width_from_max_int(values.max())
+
+        # without length
+        writer.encode_rle_bp(values, width, o)
+        l = o.loc
+        o.loc = 0
+
+        encoding.read_rle_bit_packed_hybrid(o, width, length=l, o=out)
+        assert (out.so_far()[:len(values)] == values).all()
+
+
 @pytest.yield_fixture()
 def tempdir():
     d = tempfile.mkdtemp()
@@ -62,6 +90,8 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
 
     data['hello'] = data.bhello.str.decode('utf8')
     data['f'].iloc[100] = np.nan
+    data['bcat'] = data.bhello.astype('category')
+    data['cat'] = data.hello.astype('category')
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, partitions=partitions,
@@ -86,13 +116,14 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
     data['a'] = np.array([b'a', b'b', b'c', b'd', b'e']*200, dtype="S1")
     data['aa'] = data['a'].map(lambda x: 2*x).astype("S2")
     data['hello'] = data.bhello.str.decode('utf8')
-    # data['cat'] = data.bhello.astype('category')
+    data['bcat'] = data.bhello.astype('category')
+    data['cat'] = data.hello.astype('category')
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, partitions=partitions,
           compression=comp)
 
     r = ParquetFile(fname)
 
-    df = r.to_pandas()
+    df = r.to_pandas(usecats=['cat'])
     for col in r.columns:
         assert (df[col] == data[col]).all()

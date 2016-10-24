@@ -14,6 +14,7 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
+from . import encoding
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -215,19 +216,50 @@ def encode_bitpacked(values, width, o):
         o.write_byte(bits)
 
 
-def encode_rle(data, width):
-    pass
+def write_length(l, o):
+    """ Put a 32-bit length into four bytes in o
+
+    Equivalent to struct.pack('<i', l), but suitable for numba-jit
+    """
+    right_byte_mask = 0b11111111
+    for _ in range(4):
+        o.write_byte(l & right_byte_mask)
+        l >>= 8
 
 
-def encode_dict(data):
-    width = int(math.ceil(math.log(data.max() + 1, 2)))
-    head = struct.pack(b"<B", width)
-    return head + encode_rle(data, width)
+def encode_rle_bp(data, width, o, withlength=False):
+    """Write data into o using RLE/bitpacked hybrid
+
+    Uses bitpacking alone for now
+    """
+    if withlength:
+        start = o.loc
+        o.loc = o.loc + 4
+    if True:
+        # I don't know how one would choose between RLE and bitpack
+        encode_bitpacked(data, width, o)
+    if withlength:
+        end = o.loc
+        o.loc = start
+        write_length(wnd - start, o)
+        o.loc = end
+
+
+def encode_dict(data, se):
+    """ The data part of dictionary encoding is always int32s, with RLE/bitpack
+    """
+    width = encoding.width_from_max_int(data.max())
+    ldata = ((len(data) + 7) // 8) * width + 11
+    i = data.values.astype(np.int32)
+    out = encoding.Numpy8(np.empty(ldata, dtype=np.uint8))
+    out.write_byte(width)
+    encode_rle_bp(i, width, out)
+    return out.so_far().tostring()
 
 encode = {
     'PLAIN': encode_plain,
-    'RLE': encode_rle,
-    'RLE_DICTIONARY': encode_dict
+    'RLE': encode_rle_bp,
+    'PLAIN_DICTIONARY': encode_dict
 }
 
 
@@ -266,11 +298,16 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         dph = parquet_thrift.DictionaryPageHeader(
                 num_values=len(data.cat.categories),
                 encoding=parquet_thrift.Encoding.PLAIN)
-        bdata = encode['PLAIN'](pd.Series(data.cat.categories), None)
-        l = len(bdata)
+        bdata = encode['PLAIN'](pd.Series(data.cat.categories), selement)
+        l0 = len(bdata)
+        if compression:
+            bdata = compress_data(bdata, compression)
+            l1 = len(bdata)
+        else:
+            l1 = l0
         ph = parquet_thrift.PageHeader(
                 type=parquet_thrift.PageType.DICTIONARY_PAGE,
-                uncompressed_page_size=l, compressed_page_size=l,
+                uncompressed_page_size=l0, compressed_page_size=l1,
                 dictionary_page_header=dph, crc=None)
 
         dict_start = f.tell()
@@ -332,7 +369,6 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
             total_uncompressed_size=uncompressed_size,
             total_compressed_size=compressed_size)
     if cats:
-        print("Cats for column", name)
         p.append(parquet_thrift.PageEncodingStats(
                 page_type=parquet_thrift.PageType.DICTIONARY_PAGE,
                 encoding=parquet_thrift.Encoding.PLAIN, count=1))
