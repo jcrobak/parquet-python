@@ -53,7 +53,9 @@ def test_file_csv(parquet_file):
     p = parquet.ParquetFile(parquet_file)
     data = p.to_pandas()
     if 'comment_col' in data.columns:
-        data.columns = ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
+        mapping = {'comment_col': "n_comment", 'name': 'n_name',
+                   'nation_key': 'n_nationkey', 'region_key': 'n_regionkey'}
+        data.columns = [mapping[k] for k in data.columns]
     data.set_index('n_nationkey', inplace=True)
 
     # FIXME: in future, reader will return UTF8 strings
