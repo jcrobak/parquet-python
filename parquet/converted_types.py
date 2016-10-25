@@ -47,6 +47,39 @@ DAYS_TO_MILLIS = 86400000000000
 """Number of millis in a day. Used to convert a Date to a date"""
 
 
+def typemap(se):
+    """Get the final (pandas) dtype - no actual conversion"""
+    if se.converted_type is None:
+        tconv =  {parquet_thrift.Type.INT32: np.int32,
+                  parquet_thrift.Type.INT64: np.int64,
+                  parquet_thrift.Type.FLOAT: np.float32,
+                  parquet_thrift.Type.DOUBLE: np.float64,
+                  parquet_thrift.Type.BOOLEAN: np.bool_,
+                  parquet_thrift.Type.INT96: np.dtype('S12'),
+                  parquet_thrift.Type.BYTE_ARRAY: np.dtype("O")}
+        if se.type in tconv:
+            return tconv[se.type]
+        else:
+            return np.dtype("S%i" % se.type_length)
+    tconv = {parquet_thrift.ConvertedType.UTF8: np.dtype("O"),
+             parquet_thrift.ConvertedType.DECIMAL: np.float64,
+             parquet_thrift.ConvertedType.UINT_8: np.uint8,
+             parquet_thrift.ConvertedType.UINT_16: np.uint16,
+             parquet_thrift.ConvertedType.UINT_32: np.uint32,
+             parquet_thrift.ConvertedType.UINT_64: np.uint64,
+             parquet_thrift.ConvertedType.INT_8: np.int8,
+             parquet_thrift.ConvertedType.INT_16: np.int16,
+             parquet_thrift.ConvertedType.INT_32: np.int32,
+             parquet_thrift.ConvertedType.INT_64: np.int64,
+             parquet_thrift.ConvertedType.TIME_MILLIS: np.dtype('<m8[ns]'),
+             parquet_thrift.ConvertedType.DATE: np.dtype('<M8[ns]'),
+             parquet_thrift.ConvertedType.TIMESTAMP_MILLIS: np.dtype('<M8[ns]')
+             }
+    if se.converted_type in tconv:
+        return tconv[se.converted_type]
+    return np.dtype("O")
+
+
 def convert(data, se):
     """Convert known types from primitive to rich.
 
@@ -63,7 +96,7 @@ def convert(data, se):
         scale_factor = 10**-se.scale
         return data * scale_factor
     elif ctype == parquet_thrift.ConvertedType.DATE:
-        return data.map(datetime.date.fromordinal)
+        return pd.to_datetime(data.map(datetime.date.fromordinal))
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
         return pd.to_timedelta(data, unit='ms')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:

@@ -14,7 +14,7 @@ import thriftpy
 from .core import ParquetFormatException, read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
-from . import core, schema
+from . import core, schema, converted_types
 
 
 class ParquetFile(object):
@@ -89,12 +89,13 @@ class ParquetFile(object):
 
     def to_dask(self, columns=None, usecats=None, **kwargs):
         import dask.dataframe as dd
-        cols = columns or self.columns
+        cols = columns or (self.columns + list(self.cats))
         tot = [self.read_row_group_delayed(rg, cols, usecats, **kwargs)
                for rg in self.row_groups]
+        dtypes = {k: v for k, v in self.dtypes.items() if k in cols}
 
         # TODO: if categories vary from one rg to next, need to cope
-        return dd.from_delayed(tot)
+        return dd.from_delayed(tot, metadata=dtypes, divisions=self.divisions)
 
     def read_row_group_delayed(self, rg, cols, usecats, **kwargs):
         from dask import delayed
@@ -149,6 +150,18 @@ class ParquetFile(object):
     def info(self):
         return {'name': self.fname, 'columns': self.columns,
                 'categories': list(self.cats), 'rows': self.count}
+
+    @property
+    def dtypes(self):
+        dtype = {f.name: converted_types.typemap(f)
+                 for f in self.schema if f.num_children is None}
+        for cat in self.cats:
+            dtype[cat] = pd.Series(self.cats[cat]).map(val_to_num).dtype
+        return dtype
+
+    @property
+    def divisions(self):
+        return np.cumsum([0] + [rg.num_rows for rg in self.row_groups])
 
     def __str__(self):
         return "<Parquet File '%s'>" % self.fname
