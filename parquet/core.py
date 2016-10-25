@@ -142,8 +142,7 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     return values
 
 
-def read_col(column, schema_helper, infile, use_cat=False,
-             follow_relpath=True):
+def read_col(column, schema_helper, infile, use_cat=False):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -157,23 +156,12 @@ def read_col(column, schema_helper, infile, use_cat=False,
     use_cat: bool (False)
         If this column is encoded throughout with dict encoding, give back
         a pandas categorical column; otherwise, decode to values
-    follow_relpath: bool(True)
-        If the column specifies a path to another file, open it; this is NOT
-        what we want if the file is not on the local filesystem - then we must
-        pass in infile as an already opened file object
     """
     cmd = column.meta_data
     name = ".".join(cmd.path_in_schema)
     rows = cmd.num_values
     off = min((cmd.dictionary_page_offset or cmd.data_page_offset,
                cmd.data_page_offset))
-    if column.file_path and follow_relpath:
-        # infile is the metadata part of a multi-file structure
-        infile = open(os.path.join(os.path.dirname(os.path.abspath(infile)),
-                                   column.file_path), 'rb')
-    elif isinstance(infile, str):
-        # explicitly calling some other file with known metadata
-        infile = open(infile, 'rb')
 
     infile.seek(off)
     ph = read_thrift(infile, parquet_thrift.PageHeader)

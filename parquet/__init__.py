@@ -17,29 +17,34 @@ from .writer import write
 from . import core, schema, converted_types
 
 
+def def_open(f):
+    return open(f, 'rb')
+
+
 class ParquetFile(object):
-    """For now: metadata representation"""
+    """For now: metadata representation
 
-    def __init__(self, fname, verify=False, use_dask=False, **kwargs):
-        self.verify = verify
+    Parameters
+    ----------
+    fname: path/URL string
+    verify: test file start/end bytes
+    open_with: function returning an open file
+    """
 
+    def __init__(self, fname, verify=False, open_with=def_open):
         if isinstance(fname, str):
-            if use_dask:
-                import dask.bytes.core as dbc
-                # even with dask we must first read the metadata
-                o = lambda f: dbc.open_files(f, **kwargs)[0].compute()
-            else:
-                o = lambda f: open(f, mode='rb')
             try:
                 # backend may not have something equivalent to `isdir()`
-                f = o(fname)
+                f = open_with(fname)
             except (IOError, OSError):
                 fname = os.path.join(fname, '_metadata')
-                f = o(fname)
+                f = open_with(fname)
         else:
             f = fname
-        self.use_dask = use_dask
+            self.fname = str(fname)
+        self.open = open_with
         self.fname = fname
+        self.f = f
         self._parse_header(f, verify)
         self._read_partitions()
 
@@ -97,26 +102,34 @@ class ParquetFile(object):
         # TODO: if categories vary from one rg to next, need to cope
         return dd.from_delayed(tot, metadata=dtypes, divisions=self.divisions)
 
-    def read_row_group_delayed(self, rg, cols, usecats, **kwargs):
+    def read_row_group_delayed(self, rg, cols, usecats):
         from dask import delayed
-        import dask.bytes.core as dbc
-        infile = (self.fname if rg.columns[0].file_path is None else
-                  os.path.join(os.path.dirname(self.fname),
-                               rg.columns[0].file_path))
-        o = dbc.open_files(infile, **kwargs)[0]
-        return delayed(self.read_row_group)(rg, cols, usecats, open_file=o)
+        return delayed(self.read_row_group)(rg, cols, usecats)
 
-    def read_row_group(self, rg, cols, usecats, open_file=None):
+    def read_row_group(self, rg, cols, usecats):
         out = {}
+        fname = self.fname
+
         for col in rg.columns:
             name = ".".join(col.meta_data.path_in_schema)
-
             if name not in cols:
                 continue
+
+            if col.file_path is None:
+                # continue reading from the same base file
+                infile = self.f
+            else:
+                # relative file
+                ofname = os.path.join(os.path.dirname(self.fname),
+                                      col.file_path)
+                if ofname != fname:
+                    # open relative file, if not the current one
+                    infile = self.open(ofname)
+                    fname = ofname
+
             use = name in usecats if usecats is not None else False
-            f = open_file if open_file is not None else self.fname
             s = core.read_col(col, schema.SchemaHelper(self.schema),
-                              f, use_cat=use, follow_relpath=open_file is None)
+                              infile, use_cat=use)
             out[name] = s
         out = pd.DataFrame(out)
 

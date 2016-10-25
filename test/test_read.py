@@ -46,9 +46,23 @@ cols = ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 expected = pd.read_csv(csvfile, delimiter="|", index_col=0, names=cols)
 
 
+def test_read_s3():
+    dask = pytest.importorskip('dask')
+    s3fs = pytest.importorskip('s3fs')
+    s3 = s3fs.S3FileSystem()
+    myopen = s3.open
+    pf = parquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
+    df = pf.to_pandas()
+    assert df.shape == (2000, 3)
+    assert (df.cat.value_counts() == [1000, 1000]).all()
+
+
 def test_read_dask():
     dask = pytest.importorskip('dask')
-    pf = parquet.ParquetFile('s3://MDtemp/split/_metadata', use_dask=True)
+    s3fs = pytest.importorskip('s3fs')
+    s3 = s3fs.S3FileSystem()
+    myopen = s3.open
+    pf = parquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
     df = pf.to_dask()
     out = df.compute()
     assert out.shape == (2000, 3)
