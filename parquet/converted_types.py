@@ -96,11 +96,15 @@ def convert(data, se):
         scale_factor = 10**-se.scale
         return data * scale_factor
     elif ctype == parquet_thrift.ConvertedType.DATE:
-        return pd.to_datetime(data.map(datetime.date.fromordinal))
+        return pd.to_datetime(data.map(datetime.date.fromordinal), box=False)
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
-        return pd.to_timedelta(data, unit='ms')
+        return pd.to_timedelta(data, unit='ms', box=False)
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
-        return pd.to_datetime(data, unit='ms')
+        return pd.to_datetime(data, unit='ms', box=False)
+    elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
+        return pd.to_timedelta(data, unit='us', box=False)
+    elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
+        return pd.to_datetime(data, unit='us', box=False)
     elif ctype == parquet_thrift.ConvertedType.UINT_8:
         return data.astype(np.uint8)
     elif ctype == parquet_thrift.ConvertedType.UINT_16:

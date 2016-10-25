@@ -161,3 +161,23 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
     df = r.to_pandas()
     for col in r.columns:
         assert (df[col] == data[col]).all()
+
+
+@pytest.mark.parametrize('scheme', ('simple', 'hive'))
+def test_roundtrip_complex(tempdir, scheme,):
+    import datetime
+    data = pd.DataFrame({'ui32': np.arange(1000, dtype=np.uint32),
+                         'i16': np.arange(1000, dtype=np.int16),
+                         'f16': np.arange(1000, dtype=np.float16),
+                         'dicts': [{'oi': 'you'}] * 1000,
+                         't': [datetime.datetime.now()] * 1000,
+                         'td': [datetime.timedelta(seconds=1)] * 1000
+                         })
+    fname = os.path.join(tempdir, 'test.parquet')
+    write(fname, data, file_scheme=scheme)
+
+    r = ParquetFile(fname)
+
+    df = r.to_pandas()
+    for col in r.columns:
+        assert (df[col] == data[col]).all()

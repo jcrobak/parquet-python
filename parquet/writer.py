@@ -19,20 +19,26 @@ from . import encoding
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
 
-typemap = {  # primitive type, converted type, bit width (if not standard)
+typemap = {  # primitive type, converted type, bit width
     'bool': (parquet_thrift.Type.BOOLEAN, None, 1),
     'int32': (parquet_thrift.Type.INT32, None, 32),
     'int64': (parquet_thrift.Type.INT64, None, 64),
     'int8': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.INT_8, 8),
-    'int16': (parquet_thrift.Type.INT64, parquet_thrift.ConvertedType.INT_16, 16),
+    'int16': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.INT_16, 16),
     'uint8': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_8, 8),
-    'uint16': (parquet_thrift.Type.INT64, parquet_thrift.ConvertedType.UINT_16, 16),
+    'uint16': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_16, 16),
+    'uint32': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_32, 32),
     'float32': (parquet_thrift.Type.FLOAT, None, 32),
     'float64': (parquet_thrift.Type.DOUBLE, None, 64),
     'float16': (parquet_thrift.Type.FLOAT, None, 16),
 }
 
-def find_type(data):
+revmap = {parquet_thrift.Type.INT32: np.int32,
+          parquet_thrift.Type.INT64: np.int64,
+          parquet_thrift.Type.FLOAT: np.float32}
+
+
+def find_type(data, convert=False):
     """ Get appropriate typecodes for column dtype
 
     Data conversion does not happen here, only at write time.
@@ -67,40 +73,54 @@ def find_type(data):
     - a thrift typecode to be passed to the column chunk writer
 
     """
-    if str(data.dtype) == 'category':
-        dtype = data.cat.categories.dtype
-    else:
-        dtype = data.dtype
+    out = None
+    dtype = data.dtype
     if dtype.name in typemap:
         type, converted_type, width = typemap[dtype.name]
+        if type in revmap and convert:
+            out = data.values.astype(revmap[type])
+        elif convert:
+            out = data.values
     elif "S" in str(dtype) or "U" in str(dtype):
         # TODO: check effect of unicode
         type, converted_type, width = (parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY,
                                        None, dtype.itemsize)
+        if convert:
+            out = data.values
     elif dtype == "O":
         if all(isinstance(i, str) for i in data[:10]):
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.UTF8, None)
+            if convert:
+                out = data.str.encode('utf8').values
         elif all(isinstance(i, bytes) for i in data[:10]):
             type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
+            if convert:
+                out = data.values
         elif all(isinstance(i, list) for i in data[:10]) or all(isinstance(i, dict) for i in data[:10]):
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.JSON, None)
+            if convert:
+                out = data.map(json.dumps).str.encode('utf8').values
         else:
             raise ValueError("Data type conversion unknown: %s" % dtype)
     elif str(dtype).startswith("datetime64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
+        if convert:
+            out = data.values.astype('datetime64[us]')
     elif str(dtype).startswith("timedelta64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
+        if convert:
+            out = data.values.astype('timedelta64[us]')
     else:
         raise ValueError("Don't know how to convert data type: %s" % dtype)
     # TODO: pandas has no explicit support for Decimal
     se = parquet_thrift.SchemaElement(name=data.name, type_length=width,
                                       converted_type=converted_type, type=type,
                                       repetition_type=parquet_thrift.FieldRepetitionType.REQUIRED)
-    return se, type
+    return se, type, out
 
 
 def thrift_print(structure, offset=0):
@@ -142,45 +162,11 @@ def write_thrift(fobj, thrift):
 
 def encode_plain(data, se):
     """PLAIN encoding; returns byte representation"""
-    dtype = data.dtype
-    if str(dtype).startswith(('u', 'int', 'float', "S", "|S")):
-        return data.values.tobytes()
-    elif str(dtype).startswith('datetime'):
-        return data.astype('datetime64[ms]').tobytes()
-    elif str(dtype).startswith('timed'):
-        return data.astype('timedelta64[ms]').tobytes()
-    elif se and se.converted_type == parquet_thrift.ConvertedType.UTF8:
-        data = data.str.encode('utf8')
-    elif se and se.converted_type == parquet_thrift.ConvertedType.JSON:
-        data = data.map(json.dumps)
-    if data.dtype != "O":
-        ValueError('Cannot encode data as PLAIN')
-    # encode variable-length byte strings
-    return b''.join(data.map(lambda x: struct.pack('<l', len(x)) + x))
-
-
-def bitrev_map(nbits):
-    """ bit reversal mapping
-    http://stackoverflow.com/questions/5333509/how-do-you-reverse-the-significant-bits-of-an-integer-in-python/5333563#5333563
-
-    >>> bitrev_map(3)
-    array([0, 4, 2, 6, 1, 5, 3, 7], dtype=uint16)
-    >>> import numpy as np
-    >>> np.arange(8)[bitrev_map(3)]
-    array([0, 4, 2, 6, 1, 5, 3, 7])
-    >>> (np.arange(8)[bitrev_map(3)])[bitrev_map(3)]
-    array([0, 1, 2, 3, 4, 5, 6, 7])
-    """
-    assert isinstance(nbits,
-                      int) and nbits > 0, 'bit size must be positive integer'
-    dtype = np.uint32 if nbits > 16 else np.uint16
-    brmap = np.empty(2 ** nbits, dtype=dtype)
-    int_, ifmt, fmtstr = int, int.__format__, ("0%db" % nbits)
-    for i in range(2 ** nbits):
-        brmap[i] = int_(ifmt(i, fmtstr)[::-1], base=2)
-    return brmap
-
-bmap = bitrev_map(8)
+    se, type, out = find_type(data, True)
+    if data.dtype == "O":
+        return b''.join([struct.pack('<l', len(x)) + x for x in out])
+    else:
+        return out.tobytes()
 
 
 @numba.njit(nogil=True)
@@ -456,7 +442,11 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
                                           row_groups=[])
 
         for col in data.columns:
-            se, type = find_type(data[col])
+            if str(data[col].dtype) == 'category':
+                se, type, _ = find_type(data[col].cat.categories)
+                se.name = col
+            else:
+                se, type, _ = find_type(data[col])
             fmd.schema.append(se)
             root.num_children += 1
 
