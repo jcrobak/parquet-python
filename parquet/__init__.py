@@ -65,7 +65,7 @@ class ParquetFile(object):
         self.head_size = head_size
         self.version = fmd.version
         self.schema = fmd.schema
-        self.row_groups = fmd.row_groups
+        self.row_groups = fmd.row_groups or []
         self.key_value_metadata = fmd.key_value_metadata
         self.created_by = fmd.created_by
         self.group_files = {}

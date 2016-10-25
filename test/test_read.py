@@ -27,7 +27,7 @@ def test_header_magic_bytes():
     """Test reading the header magic bytes."""
     f = io.BytesIO(b"PAR1_some_bogus_data")
     with pytest.raises(parquet.ParquetFormatException):
-        p = parquet.ParquetFile(f)
+        p = parquet.ParquetFile(f, verify=True)
 
 
 def test_read_footer():
@@ -51,8 +51,8 @@ def test_read_dask():
     pf = parquet.ParquetFile('s3://MDtemp/split/_metadata', use_dask=True)
     df = pf.to_dask()
     out = df.compute()
-    assert out.shape == (1000, 3)
-    assert (df.cat.value_counts() == [1000, 1000]).all()
+    assert out.shape == (2000, 3)
+    assert (out.cat.value_counts() == [1000, 1000]).all()
 
 
 @pytest.mark.parametrize("parquet_file", files)

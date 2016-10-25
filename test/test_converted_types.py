@@ -33,7 +33,8 @@ def test_date():
         name="test",
         converted_type=pt.ConvertedType.DATE,
     )
-    assert convert(pd.Series([731888]), schema)[0] == datetime.date(2004, 11, 3)
+    assert (convert(pd.Series([731888]), schema)[0] ==
+            pd.to_datetime([datetime.date(2004, 11, 3)]))
 
 
 def test_time_millis():
