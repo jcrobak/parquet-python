@@ -89,7 +89,7 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
                             b'people'], size=1000).astype("O")})
 
     data['hello'] = data.bhello.str.decode('utf8')
-    data['f'].iloc[100] = np.nan
+    data.loc[100, 'f'] = np.nan
     data['bcat'] = data.bhello.astype('category')
     data['cat'] = data.hello.astype('category')
 
@@ -101,6 +101,40 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
     ddf = df.toPandas()
     for col in data:
         assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
+
+
+def test_roundtrip_s3():
+    s3fs = pytest.importorskip('s3fs')
+    s3 = s3fs.S3FileSystem()
+    data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                         'i64': np.arange(1000, dtype=np.int64),
+                         'f': np.arange(1000, dtype=np.float64),
+                         'bhello': np.random.choice([b'hello', b'you',
+                            b'people'], size=1000).astype("O")})
+    data['hello'] = data.bhello.str.decode('utf8')
+    data['bcat'] = data.bhello.astype('category')
+    data.loc[100, 'f'] = np.nan
+    data['cat'] = data.hello.astype('category')
+    noop = lambda x: True
+    myopen = lambda f: s3.open(f, 'wb')
+    write('MDtemp/temp_parq', data, file_scheme='hive', partitions=[0, 500],
+          open_with=myopen, mkdirs=noop)
+    myopen = s3.open
+    pf = ParquetFile('MDtemp/temp_parq', open_with=myopen)
+    df = pf.to_pandas(usecats=['cat', 'bcat'])
+    for col in data:
+        assert (df[col] == data[col])[~df[col].isnull()].all()
+
+    # for line in open('/Users/mdurant/.aws/credentials'):
+    #     if line.startswith('aws_access'):
+    #         key = line.split('=')[1][:-1]
+    #     if line.startswith('aws_secret'):
+    #         secret = line.split('=')[1][:-1]
+    #
+    # df = sql.read.parquet('s3a://{}:{}@MDtemp/temp_parq'.format(key, secret))
+    # ddf = df.toPandas()
+    # for col in data:
+    #     assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
 @pytest.mark.parametrize('scheme,partitions,comp',
@@ -124,6 +158,6 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
 
     r = ParquetFile(fname)
 
-    df = r.to_pandas(usecats=['cat'])
+    df = r.to_pandas()
     for col in r.columns:
         assert (df[col] == data[col]).all()

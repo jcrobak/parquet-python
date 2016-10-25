@@ -47,7 +47,6 @@ expected = pd.read_csv(csvfile, delimiter="|", index_col=0, names=cols)
 
 
 def test_read_s3():
-    dask = pytest.importorskip('dask')
     s3fs = pytest.importorskip('s3fs')
     s3 = s3fs.S3FileSystem()
     myopen = s3.open
@@ -58,7 +57,7 @@ def test_read_s3():
 
 
 def test_read_dask():
-    dask = pytest.importorskip('dask')
+    pytest.importorskip('dask')
     s3fs = pytest.importorskip('s3fs')
     s3 = s3fs.S3FileSystem()
     myopen = s3.open

@@ -394,25 +394,31 @@ def make_row_group(f, data, schema, file_path=None, compression=None):
     return rg
 
 
-def make_part_file(partname, data, schema, compression=None):
-    with open(partname, 'wb') as f:
-        f.write(MARKER)
-        rg = make_row_group(f, data, schema, compression=compression)
-        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                          schema=schema,
-                                          version=1,
-                                          created_by='parquet-python',
-                                          row_groups=[rg])
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(MARKER)
-    for chunk in rg.columns:
-        chunk.file_path = os.path.abspath(partname)
+def make_part_file(f, data, schema, compression=None):
+    f.write(MARKER)
+    rg = make_row_group(f, data, schema, compression=compression)
+    fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                      schema=schema,
+                                      version=1,
+                                      created_by='parquet-python',
+                                      row_groups=[rg])
+    foot_size = write_thrift(f, fmd)
+    f.write(struct.pack(b"<i", foot_size))
+    f.write(MARKER)
     return rg
 
 
+def def_open(f):
+    return open(f, 'wb')
+
+
+def def_mkdirs(f):
+    os.makedirs(f, exist_ok=True)
+
+
 def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.PLAIN,
-          compression=None, file_scheme='simple'):
+          compression=None, file_scheme='simple', open_with=def_open,
+          mkdirs=def_mkdirs):
     """ data is a 1d int array for starters
 
     Provisional parameters
@@ -431,49 +437,56 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
         If simple: all goes in a single file
         If hive: each row group is in a separate file, and filename contains
         only the metadata
+    open_with: function
+        When called with a path/URL, returns an open file-like object
     """
     if file_scheme == 'simple':
-        f = open(filename, 'wb')
+        fname = filename
     else:
-        os.makedirs(filename, exist_ok=True)
-        f = open(os.path.join(filename, '_metadata'), 'wb')
-    f.write(MARKER)
-    root = parquet_thrift.SchemaElement(name='schema',
-                                        num_children=0)
-    fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                      schema=[root],
-                                      version=1,
-                                      created_by='parquet-python',
-                                      row_groups=[])
-
-    for col in data.columns:
-        se, type = find_type(data[col])
-        fmd.schema.append(se)
-        root.num_children += 1
-
-    for i, start in enumerate(partitions):
-        end = partitions[i+1] if i < (len(partitions) - 1) else None
-        if file_scheme == 'simple':
-            rg = make_row_group(f, data[start:end], fmd.schema,
-                                compression=compression)
-        else:
-            partname = os.path.join(filename, 'part.%i.parquet'%i)
-            rg = make_part_file(partname, data[start:end], fmd.schema,
-                                compression=compression)
-        fmd.row_groups.append(rg)
-
-    foot_size = write_thrift(f, fmd)
-    f.write(struct.pack(b"<i", foot_size))
-    f.write(MARKER)
-    f.close()
-    if file_scheme != 'simple':
-        f = open(os.path.join(filename, '_common_metadata'), 'wb')
+        def_mkdirs(filename)
+        fname = os.path.join(filename, '_metadata')
+    with open_with(fname) as f:
         f.write(MARKER)
-        fmd.row_groups = []
+        root = parquet_thrift.SchemaElement(name='schema',
+                                            num_children=0)
+        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                          schema=[root],
+                                          version=1,
+                                          created_by='parquet-python',
+                                          row_groups=[])
+
+        for col in data.columns:
+            se, type = find_type(data[col])
+            fmd.schema.append(se)
+            root.num_children += 1
+
+        for i, start in enumerate(partitions):
+            end = partitions[i+1] if i < (len(partitions) - 1) else None
+            if file_scheme == 'simple':
+                rg = make_row_group(f, data[start:end], fmd.schema,
+                                    compression=compression)
+            else:
+                part = 'part.%i.parquet' % i
+                partname = os.path.join(filename, part)
+                with open_with(partname) as f2:
+                    rg = make_part_file(f2, data[start:end], fmd.schema,
+                                        compression=compression)
+                for chunk in rg.columns:
+                    chunk.file_path = part
+
+            fmd.row_groups.append(rg)
+
         foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
         f.write(MARKER)
-        f.close()
+
+    if file_scheme != 'simple':
+        with open_with(os.path.join(filename, '_common_metadata')) as f:
+            f.write(MARKER)
+            fmd.row_groups = []
+            foot_size = write_thrift(f, fmd)
+            f.write(struct.pack(b"<i", foot_size))
+            f.write(MARKER)
 
 
 def make_unsigned_var_int(result):

@@ -169,7 +169,8 @@ class ParquetFile(object):
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None}
         for cat in self.cats:
-            dtype[cat] = pd.Series(self.cats[cat]).map(val_to_num).dtype
+            dtype[cat] = "category"
+            # pd.Series(self.cats[cat]).map(val_to_num).dtype
         return dtype
 
     @property
