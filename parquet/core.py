@@ -12,7 +12,7 @@ from .thrift_structures import parquet_thrift
 from .compression import decompress_data
 
 
-class ParquetFormatException(Exception):
+class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
      reading parquet file."""
     pass

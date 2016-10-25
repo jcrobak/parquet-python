@@ -91,7 +91,7 @@ def convert(data, se):
     # TODO: if input is categorical, only map on categories
     ctype = se.converted_type
     if ctype == parquet_thrift.ConvertedType.UTF8:
-        return data.str.decode('utf8')
+        return data.astype("O").str.decode('utf8')
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale
         return data * scale_factor
@@ -110,7 +110,7 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.UINT_64:
         return data.astype(np.uint64)
     elif ctype == parquet_thrift.ConvertedType.JSON:
-        return data.str.decode('utf8').map(json.loads)
+        return data.astype('O').str.decode('utf8').map(json.loads)
     elif ctype == parquet_thrift.ConvertedType.BSON and BSON:
         return data.map(lambda s: BSON(s).decode())
     else:

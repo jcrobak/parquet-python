@@ -26,7 +26,7 @@ TEST_DATA = "test-data"
 def test_header_magic_bytes():
     """Test reading the header magic bytes."""
     f = io.BytesIO(b"PAR1_some_bogus_data")
-    with pytest.raises(parquet.ParquetFormatException):
+    with pytest.raises(parquet.ParquetException):
         p = parquet.ParquetFile(f, verify=True)
 
 
