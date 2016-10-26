@@ -115,6 +115,8 @@ class ParquetFile(object):
         helper = schema.SchemaHelper(self.schema)
         if filters and filter_out_stats(rg, filters, helper):
             return pd.DataFrame()
+        if filters and self.cats and filter_out_cats(rg, filters):
+            return pd.DataFrame()
 
         for col in rg.columns:
             name = ".".join(col.meta_data.path_in_schema)
@@ -193,13 +195,12 @@ class ParquetFile(object):
 
 def filter_out_stats(rg, filters, helper):
     """Based on filters, should this row_group be avoided"""
-    vmax, vmin = None, None
     for col in rg.columns:
+        vmax, vmin = None, None
         name = ".".join(col.meta_data.path_in_schema)
         app_filters = [f[1:] for f in filters if f[0] == name]
         for op, val in app_filters:
             se = helper.schema_element(name)
-
             if col.meta_data.statistics is not None:
                 s = col.meta_data.statistics
                 if s.max is not None:
@@ -208,30 +209,53 @@ def filter_out_stats(rg, filters, helper):
                     vmax = encoding.read_plain(b, col.meta_data.type, 1)
                     if se.converted_type:
                         vmax = converted_types.convert(vmax, se)
-                    if op in ['==', '>='] and val > vmax:
-                        return True
-                    if op == '>' and val >= vmax:
-                        return True
-                    if op == 'in' and min(val) > vmax:
-                        return True
                 if s.min is not None:
                     b = s.min if isinstance(s.min, bytes) else bytes(
                             s.min, 'ascii')
                     vmin = encoding.read_plain(b, col.meta_data.type, 1)
                     if se.converted_type:
                         vmin = converted_types.convert(vmin, se)
-                    if op in ['==', '<='] and val < vmin:
-                        return True
-                    if op == '<' and val <= vmin:
-                        return True
-                    if op == 'in' and max(val) < vmin:
-                        return True
-                if (op == '!=' and vmax is not None and vmin is not None and
-                        vmax == vmin and val != vmax):
+                out = filter_val(op, val, vmin, vmax)
+                if out is True:
                     return True
-                if (op == 'not in' and vmax is not None and vmin is not None and
-                        vmax == vmin and vmax in val):
-                    return True
+    return False
+
+
+def filter_out_cats(rg, filters):
+    partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
+                            rg.columns[0].file_path)
+    pairs = [(p[0], val_to_num(p[1])) for p in partitions]
+    for cat, v in pairs:
+
+        app_filters = [f[1:] for f in filters if f[0] == cat]
+        for op, val in app_filters:
+            out = filter_val(op, val, v, v)
+            if out is True:
+                return True
+    return False
+
+
+def filter_val(op, val, vmin=None, vmax=None):
+    if vmin is not None:
+        if op in ['==', '>='] and val > vmax:
+            return True
+        if op == '>' and val >= vmax:
+            return True
+        if op == 'in' and min(val) > vmax:
+            return True
+    if vmax is not None:
+        if op in ['==', '<='] and val < vmin:
+            return True
+        if op == '<' and val <= vmin:
+            return True
+        if op == 'in' and max(val) < vmin:
+            return True
+    if (op == '!=' and vmax is not None and vmin is not None and
+            vmax == vmin and val == vmax):
+        return True
+    if (op == 'not in' and vmax is not None and vmin is not None and
+            vmax == vmin and vmax in val):
+        return True
 
     # keep this row_group
     return False

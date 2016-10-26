@@ -187,3 +187,41 @@ def test_stat_filters():
     filters = [('num', 'in', [-1, 2000])]
     assert len(pf.to_pandas(filters=filters)) == base_shape
 
+
+def test_cat_filters():
+    path = os.path.join(TEST_DATA, 'split')
+    pf = parquet.ParquetFile(path)
+    base_shape = len(pf.to_pandas())
+
+    filters = [('cat', '==', 'freda')]
+    assert len(pf.to_pandas(filters=filters)) == 1000
+
+    filters = [('cat', '!=', 'freda')]
+    assert len(pf.to_pandas(filters=filters)) == 1000
+
+    filters = [('cat', 'in', ['fred', 'freda'])]
+    assert 0 < len(pf.to_pandas(filters=filters)) == 2000
+
+    filters = [('cat', 'not in', ['fred', 'frederick'])]
+    assert 0 < len(pf.to_pandas(filters=filters)) == 1000
+
+    filters = [('catnum', '==', 2000)]
+    assert len(pf.to_pandas(filters=filters)) == 0
+
+    filters = [('catnum', '>=', 2)]
+    assert 0 < len(pf.to_pandas(filters=filters)) == 1333
+
+    filters = [('catnum', '>=', 1)]
+    assert len(pf.to_pandas(filters=filters)) == base_shape
+
+    filters = [('catnum', 'in', [0, 1])]
+    assert len(pf.to_pandas(filters=filters)) == 667
+
+    filters = [('catnum', 'not in', [1, 2, 3])]
+    assert len(pf.to_pandas(filters=filters)) == 0
+
+    filters = [('cat', '==', 'freda'), ('catnum', '>=', 2.5)]
+    assert len(pf.to_pandas(filters=filters)) == 333
+
+    filters = [('cat', '==', 'freda'), ('catnum', '!=', 2.5)]
+    assert len(pf.to_pandas(filters=filters)) == 1000
