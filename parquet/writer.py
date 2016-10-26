@@ -270,7 +270,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         if not None, must be one of the keys in ``compression.compress``
     """
 
-    # no NULL handling (but NaNs are allowed)
+    # no NULL handling (but NaNs, NaTs are allowed)
     definition_data = b""
 
     # No nested field handling (encode those as J/BSON)
@@ -305,6 +305,12 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
 
     start = f.tell()
     bdata = encode[encoding](data, selement)
+    try:
+        mm = data.groupby(lambda x: 0).agg(['max', 'min'])
+        max = encode[encoding](mm.loc[0, 'max':'max'], selement)
+        min = encode[encoding](mm.loc[0, 'min':'min'], selement)
+    except TypeError as e:
+        max, min = None, None
 
     dph = parquet_thrift.DataPageHeader(
             num_values=rows,
@@ -331,13 +337,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     uncompressed_size = compressed_size  # why doesn't this matter?
 
     offset = f.tell()
-    try:
-        # TODO: these need to be encoded the same as the data
-        max, min = data.max(), data.min()
-        s = parquet_thrift.Statistics(max=max.tostring(), min=min.tostring(),
-                                      null_count=0)
-    except:
-        s = parquet_thrift.Statistics(max=None, min=None, null_count=0)
+    s = parquet_thrift.Statistics(max=max, min=min, null_count=0)
 
     p = [parquet_thrift.PageEncodingStats(
             page_type=parquet_thrift.PageType.DATA_PAGE,

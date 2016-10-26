@@ -143,3 +143,47 @@ def test_dir_partition():
     assert out.cat.dtype == 'category'
     assert out.catnum.dtype == 'category'
     assert out.catnum.cat.categories.dtype == 'int64'
+
+
+def test_stat_filters():
+    path = os.path.join(TEST_DATA, 'split')
+    pf = parquet.ParquetFile(path)
+    base_shape = len(pf.to_pandas())
+
+    filters = [('num', '>', 0)]
+    assert len(pf.to_pandas(filters=filters)) == base_shape
+
+    filters = [('num', '<', 0)]
+    assert len(pf.to_pandas(filters=filters)) == 0
+
+    filters = [('num', '>', 500)]
+    assert 0 < len(pf.to_pandas(filters=filters)) < base_shape
+
+    filters = [('num', '>', 1500)]
+    assert 0 < len(pf.to_pandas(filters=filters)) < base_shape
+
+    filters = [('num', '>', 2000)]
+    assert len(pf.to_pandas(filters=filters)) == 0
+
+    filters = [('num', '>=', 1999)]
+    assert 0 < len(pf.to_pandas(filters=filters)) < base_shape
+
+    filters = [('num', '!=', 1000)]
+    assert len(pf.to_pandas(filters=filters)) == base_shape
+
+    filters = [('num', 'in', [-1, -2])]
+    assert len(pf.to_pandas(filters=filters)) == 0
+
+    filters = [('num', 'not in', [-1, -2])]
+    assert len(pf.to_pandas(filters=filters)) == base_shape
+
+    filters = [('num', 'in', [0])]
+    l = len(pf.to_pandas(filters=filters))
+    assert 0 < l < base_shape
+
+    filters = [('num', 'in', [0, 1500])]
+    assert l < len(pf.to_pandas(filters=filters)) < base_shape
+
+    filters = [('num', 'in', [-1, 2000])]
+    assert len(pf.to_pandas(filters=filters)) == base_shape
+

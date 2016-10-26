@@ -14,7 +14,7 @@ import thriftpy
 from .core import ParquetException, read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
-from . import core, schema, converted_types
+from . import core, schema, converted_types, encoding
 
 
 def def_open(f):
@@ -102,18 +102,26 @@ class ParquetFile(object):
         # TODO: if categories vary from one rg to next, need to cope
         return dd.from_delayed(tot, metadata=dtypes, divisions=self.divisions)
 
-    def read_row_group_delayed(self, rg, cols, usecats):
+    def read_row_group_delayed(self, rg, cols, usecats, filters={}):
         from dask import delayed
-        return delayed(self.read_row_group)(rg, cols, usecats)
+        return delayed(self.read_row_group)(rg, cols, usecats, filters=filters)
 
-    def read_row_group(self, rg, cols, usecats):
+    def read_row_group(self, rg, cols, usecats, filters={}):
+        """Filter syntax: [(column, op, val), ...],
+        where op is [==, >, >=, <, <=, !=, in, not in]
+        """
         out = {}
         fname = self.fname
+        helper = schema.SchemaHelper(self.schema)
+        if filters and filter_out_stats(rg, filters, helper):
+            return pd.DataFrame()
 
         for col in rg.columns:
             name = ".".join(col.meta_data.path_in_schema)
+            se = helper.schema_element(name)
             if name not in cols:
                 continue
+
 
             if col.file_path is None:
                 # continue reading from the same base file
@@ -128,8 +136,7 @@ class ParquetFile(object):
                     fname = ofname
 
             use = name in usecats if usecats is not None else False
-            s = core.read_col(col, schema.SchemaHelper(self.schema),
-                              infile, use_cat=use)
+            s = core.read_col(col, helper, infile, use_cat=use)
             out[name] = s
         out = pd.DataFrame(out)
 
@@ -146,10 +153,11 @@ class ParquetFile(object):
                     codes, [val_to_num(c) for c in self.cats[cat]])
         return out
 
-    def to_pandas(self, columns=None, usecats=None):
+    def to_pandas(self, columns=None, usecats=None, filters={}):
         cols = columns or self.columns
-        tot = [self.read_row_group(rg, cols, usecats) for rg in
+        tot = [self.read_row_group(rg, cols, usecats, filters=filters) for rg in
                self.row_groups]
+        tot = [t for t in tot if len(tot)]
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
@@ -181,6 +189,52 @@ class ParquetFile(object):
         return "<Parquet File '%s'>" % self.fname
 
     __repr__ = __str__
+
+
+def filter_out_stats(rg, filters, helper):
+    """Based on filters, should this row_group be avoided"""
+    vmax, vmin = None, None
+    for col in rg.columns:
+        name = ".".join(col.meta_data.path_in_schema)
+        app_filters = [f[1:] for f in filters if f[0] == name]
+        for op, val in app_filters:
+            se = helper.schema_element(name)
+
+            if col.meta_data.statistics is not None:
+                s = col.meta_data.statistics
+                if s.max is not None:
+                    b = s.max if isinstance(s.max, bytes) else bytes(
+                            s.max, 'ascii')
+                    vmax = encoding.read_plain(b, col.meta_data.type, 1)
+                    if se.converted_type:
+                        vmax = converted_types.convert(vmax, se)
+                    if op in ['==', '>='] and val > vmax:
+                        return True
+                    if op == '>' and val >= vmax:
+                        return True
+                    if op == 'in' and min(val) > vmax:
+                        return True
+                if s.min is not None:
+                    b = s.min if isinstance(s.min, bytes) else bytes(
+                            s.min, 'ascii')
+                    vmin = encoding.read_plain(b, col.meta_data.type, 1)
+                    if se.converted_type:
+                        vmin = converted_types.convert(vmin, se)
+                    if op in ['==', '<='] and val < vmin:
+                        return True
+                    if op == '<' and val <= vmin:
+                        return True
+                    if op == 'in' and max(val) < vmin:
+                        return True
+                if (op == '!=' and vmax is not None and vmin is not None and
+                        vmax == vmin and val != vmax):
+                    return True
+                if (op == 'not in' and vmax is not None and vmin is not None and
+                        vmax == vmin and vmax in val):
+                    return True
+
+    # keep this row_group
+    return False
 
 
 def val_to_num(x):
