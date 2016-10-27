@@ -171,7 +171,8 @@ def test_roundtrip_complex(tempdir, scheme,):
                          'f16': np.arange(1000, dtype=np.float16),
                          'dicts': [{'oi': 'you'}] * 1000,
                          't': [datetime.datetime.now()] * 1000,
-                         'td': [datetime.timedelta(seconds=1)] * 1000
+                         'td': [datetime.timedelta(seconds=1)] * 1000,
+                         'bool': np.random.choice([True, False], size=1000)
                          })
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme)

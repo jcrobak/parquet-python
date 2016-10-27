@@ -1,4 +1,5 @@
 
+import bitarray
 import io
 import json
 import numpy as np
@@ -79,6 +80,10 @@ def find_type(data, convert=False):
         type, converted_type, width = typemap[dtype.name]
         if type in revmap and convert:
             out = data.values.astype(revmap[type])
+        elif type == parquet_thrift.Type.BOOLEAN and convert:
+            padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
+                                'constant', constant_values=(0, 0))
+            out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
         elif convert:
             out = data.values
     elif "S" in str(dtype) or "U" in str(dtype):

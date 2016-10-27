@@ -27,12 +27,8 @@ ARRAY_BYTE_STR = u'B' if PY3 else b'B'
 
 def read_plain_boolean(raw_bytes, count):
     """Read `count` booleans using the plain encoding."""
-    # TODO: is this the same as np.unpackbits?
-    b = bitarray.bitarray()
-    b.frombytes(raw_bytes[:(count+7) // 8])
-    b.bytereverse()
-    return np.array(b[:count], dtype=bool)
-
+    return np.unpackbits(np.fromstring(raw_bytes, dtype=np.uint8)).reshape(
+            (-1, 8))[:, ::-1].ravel().astype(bool)[:count]
 
 DECODE_TYPEMAP = {
     parquet_thrift.Type.INT32: np.int32,
