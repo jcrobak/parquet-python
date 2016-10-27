@@ -311,9 +311,9 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     start = f.tell()
     bdata = encode[encoding](data, selement)
     try:
-        mm = data.groupby(lambda x: 0).agg(['max', 'min'])
-        max = encode[encoding](mm.loc[0, 'max':'max'], selement)
-        min = encode[encoding](mm.loc[0, 'min':'min'], selement)
+        max, min = data.max(), data.min()
+        max = encode[encoding](pd.Series([max], dtype=data.dtype), selement)
+        min = encode[encoding](pd.Series([min], dtype=data.dtype), selement)
     except TypeError as e:
         max, min = None, None
 

@@ -3,6 +3,7 @@ import gzip
 from .thrift_structures import parquet_thrift
 # TODO: use stream/direct-to-buffer conversions instead of memcopy
 
+# TODO: enable ability to pass kwargs to compressor
 
 compress = {'GZIP': gzip.compress, 'UNCOMPRESSED': lambda x: x}
 decompress = {'GZIP': gzip.decompress, 'UNCOMPRESSED': lambda x: x}

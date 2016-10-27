@@ -235,12 +235,13 @@ def read_col(column, schema_helper, infile, use_cat=False):
                 final[start:start+l] = val
             start += l
 
+    se = schema_helper.schema_element(cmd.path_in_schema[-1])
     if all_dict:
+        if se.converted_type is not None:
+            dic = convert(pd.Series(dic), se)
         out = pd.Series(pd.Categorical.from_codes(final, dic), name=name)
     else:
-        out = final
-    se = schema_helper.schema_element(cmd.path_in_schema[-1])
-    out = pd.Series(out)
-    if se.converted_type is not None:
-        out = convert(out, se)
+        out = pd.Series(final)
+        if se.converted_type is not None:
+            out = convert(out, se)
     return out
