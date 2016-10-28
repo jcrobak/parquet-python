@@ -117,6 +117,10 @@ def convert(data, se):
         return data.astype('O').str.decode('utf8').map(json.loads)
     elif ctype == parquet_thrift.ConvertedType.BSON and BSON:
         return data.map(lambda s: BSON(s).decode())
+    elif ctype == parquet_thrift.ConvertedType.INTERVAL:
+        # for those that understand, output is month, day, ms
+        # maybe should convert to timedelta
+        return data.map(lambda x: np.fromstring(x, dtype='<u4'))
     else:
         logger.info("Converted type '%s'' not handled",
                     parquet_thrift.ConvertedType._VALUES_TO_NAMES[ctype])  # pylint:disable=protected-access

@@ -504,12 +504,13 @@ def dask_dataframe_to_parquet(filename, data,
     """Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
+    from dask import delayed, compute
     def_mkdirs(filename)
     fname = os.path.join(filename, '_metadata')
     fmd = make_metadata(data.head(10))
 
-    def mapper(data):
-        part = 'part.%i.parquet' % data.index[0]
+    def mapper(data, i):
+        part = 'part.%i.parquet' % i
         partname = os.path.join(filename, part)
         with open_with(partname) as f2:
             rg = make_part_file(f2, data, fmd.schema, compression=compression)
@@ -517,7 +518,8 @@ def dask_dataframe_to_parquet(filename, data,
             chunk.file_path = part
         return rg
 
-    out = data.map_partitions(mapper).compute()
+    out = compute(*(delayed(mapper)(d, i) for i, d in
+                  enumerate(data.to_delayed())))
     for rg in out:
         fmd.row_groups.append(rg)
 
