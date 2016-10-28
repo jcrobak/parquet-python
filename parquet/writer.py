@@ -284,6 +284,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     rows = len(data)
     cats = False
     name = data.name
+    diff = 0
 
     if str(data.dtype) == 'category':
         dph = parquet_thrift.DictionaryPageHeader(
@@ -296,6 +297,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
             l1 = len(bdata)
         else:
             l1 = l0
+        diff += l0 - l1
         ph = parquet_thrift.PageHeader(
                 type=parquet_thrift.PageType.DICTIONARY_PAGE,
                 uncompressed_page_size=l0, compressed_page_size=l1,
@@ -329,6 +331,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         l1 = len(bdata)
     else:
         l1 = l0
+    diff += l0 - l1
 
     ph = parquet_thrift.PageHeader(type=parquet_thrift.PageType.DATA_PAGE,
                                    uncompressed_page_size=l0,
@@ -339,7 +342,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     f.write(bdata)
 
     compressed_size = f.tell() - start
-    uncompressed_size = compressed_size  # why doesn't this matter?
+    uncompressed_size = compressed_size + diff
 
     offset = f.tell()
     s = parquet_thrift.Statistics(max=max, min=min, null_count=0)
@@ -407,6 +410,26 @@ def def_mkdirs(f):
     os.makedirs(f, exist_ok=True)
 
 
+def make_metadata(data):
+    root = parquet_thrift.SchemaElement(name='schema',
+                                        num_children=0)
+    fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                      schema=[root],
+                                      version=1,
+                                      created_by='parquet-python',
+                                      row_groups=[])
+
+    for col in data.columns:
+        if str(data[col].dtype) == 'category':
+            se, type, _ = find_type(data[col].cat.categories)
+            se.name = col
+        else:
+            se, type, _ = find_type(data[col])
+        fmd.schema.append(se)
+        root.num_children += 1
+    return fmd
+
+
 def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.PLAIN,
           compression=None, file_scheme='simple', open_with=def_open,
           mkdirs=def_mkdirs):
@@ -438,22 +461,7 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
         fname = os.path.join(filename, '_metadata')
     with open_with(fname) as f:
         f.write(MARKER)
-        root = parquet_thrift.SchemaElement(name='schema',
-                                            num_children=0)
-        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                          schema=[root],
-                                          version=1,
-                                          created_by='parquet-python',
-                                          row_groups=[])
-
-        for col in data.columns:
-            if str(data[col].dtype) == 'category':
-                se, type, _ = find_type(data[col].cat.categories)
-                se.name = col
-            else:
-                se, type, _ = find_type(data[col])
-            fmd.schema.append(se)
-            root.num_children += 1
+        fmd = make_metadata(data)
 
         for i, start in enumerate(partitions):
             end = partitions[i+1] if i < (len(partitions) - 1) else None
@@ -476,12 +484,52 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
         f.write(MARKER)
 
     if file_scheme != 'simple':
-        with open_with(os.path.join(filename, '_common_metadata')) as f:
-            f.write(MARKER)
-            fmd.row_groups = []
-            foot_size = write_thrift(f, fmd)
-            f.write(struct.pack(b"<i", foot_size))
-            f.write(MARKER)
+        write_common_metadata(os.path.join(filename, '_common_metadata'), fmd,
+                              open_with)
+
+
+def write_common_metadata(fname, fmd, open_with):
+    """For hive-style parquet, write schema in special shared file"""
+    with open_with(fname) as f:
+        f.write(MARKER)
+        fmd.row_groups = []
+        foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
+
+
+def dask_dataframe_to_parquet(filename, data,
+        encoding=parquet_thrift.Encoding.PLAIN, compression=None,
+        open_with=def_open, mkdirs=def_mkdirs):
+    """Same signature as write, but with file_scheme always hive-like, each
+    data partition becomes a row group in a separate file.
+    """
+    def_mkdirs(filename)
+    fname = os.path.join(filename, '_metadata')
+    fmd = make_metadata(data.get_partition(0).compute())
+
+    def mapper(data):
+        part = 'part.%i.parquet' % data.index[0]
+        partname = os.path.join(filename, part)
+        with open_with(partname) as f2:
+            rg = make_part_file(f2, data, fmd.schema, compression=compression)
+        for chunk in rg.columns:
+            chunk.file_path = part
+        return rg
+
+    out = data.map_partitions(mapper).compute()
+    for rg in out:
+        fmd.row_groups.append(rg)
+
+    with open_with(fname) as f:
+        f.write(MARKER)
+        foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
+
+    write_common_metadata(os.path.join(filename, '_common_metadata'), fmd,
+                          open_with)
+
 
 
 def make_unsigned_var_int(result):
