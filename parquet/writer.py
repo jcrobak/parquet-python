@@ -506,7 +506,7 @@ def dask_dataframe_to_parquet(filename, data,
     """
     def_mkdirs(filename)
     fname = os.path.join(filename, '_metadata')
-    fmd = make_metadata(data.get_partition(0).compute())
+    fmd = make_metadata(data.head(10))
 
     def mapper(data):
         part = 'part.%i.parquet' % data.index[0]
