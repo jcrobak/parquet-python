@@ -3,6 +3,7 @@ import numpy as np
 import os
 from fastparquet import encoding, core, ParquetFile, schema
 
+TEST_DATA = 'test-data'
 here = os.path.dirname(__file__)
 count = 1000
 
@@ -69,7 +70,7 @@ def test_read_data():
 
 
 def test_to_pandas():
-    fname = '/Users/mdurant/Downloads/parquet-python/test-data/airlines_parquet/4345e5eef217aa1b-c8f16177f35fd983_1150363067_data.1.parq'
+    fname = TEST_DATA+'/airlines_parquet/4345e5eef217aa1b-c8f16177f35fd983_1150363067_data.1.parq'
     pf = ParquetFile(fname)
     out = pf.to_pandas()
     assert len(out.columns) == 29

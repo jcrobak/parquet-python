@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 import datetime
 from decimal import Decimal
 import pandas as pd
+import pytest
 
 from fastparquet import parquet_thrift as pt
 from fastparquet.converted_types import convert
@@ -81,6 +82,7 @@ def test_json():
 
 def test_bson():
     """Test bytes representing bson."""
+    bson = pytest.importorskip('bson')
     schema = pt.SchemaElement(
         type=pt.Type.BYTE_ARRAY,
         name="test",
