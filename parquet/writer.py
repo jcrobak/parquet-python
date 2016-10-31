@@ -558,23 +558,3 @@ def dask_dataframe_to_parquet(filename, data,
 
     write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                           open_with)
-
-
-
-def make_unsigned_var_int(result):
-    """Byte representation used for length-of-next-block"""
-    bit = b''
-    while result > 127:
-        bit = bit + ((result & 0x7F) | 0x80).to_bytes(1, 'little')
-        result >>= 7
-    return bit + result.to_bytes(1, 'little')
-
-
-def make_rle_string(count, value):
-    """Byte representation of a single value run: count occurrances of value"""
-    import struct
-    header = (count << 1)
-    header_bytes = make_unsigned_var_int(header)
-    val_part = value.to_bytes(1, 'little')
-    length = struct.pack('<l', len(header_bytes)+1)
-    return length + header_bytes + val_part
