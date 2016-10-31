@@ -11,11 +11,11 @@ import re
 import struct
 import thriftpy
 
-from .core import ParquetException, read_thrift
+from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
 from . import core, schema, converted_types, encoding
-from .util import default_open, sep_from_open
+from .util import default_open, ParquetException, sep_from_open, val_to_num
 
 
 class ParquetFile(object):
@@ -73,6 +73,7 @@ class ParquetFile(object):
         for i, rg in enumerate(self.row_groups):
             for chunk in rg.columns:
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
+        self.helper = schema.SchemaHelper(self.schema)
 
     @property
     def columns(self):
@@ -88,16 +89,22 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
-    def to_dask_dataframe(self, columns=None, categories=None, **kwargs):
+    def to_dask_dataframe(self, columns=None, categories=None,
+                          filters={}, **kwargs):
         import dask.dataframe as dd
         from dask import delayed
         columns = columns or (self.columns + list(self.cats))
+        rgs = [rg for rg in self.row_groups if
+               not(filter_out_stats(rg, filters, self.helper)) and
+               not(filter_out_cats(rg, filters))]
         tot = [delayed(self.read_row_group)(rg, columns, categories, **kwargs)
-               for rg in self.row_groups]
+               for rg in rgs]
+        if len(tot) == 0:
+            raise ValueError("All partitions failed filtering")
         dtypes = {k: v for k, v in self.dtypes.items() if k in columns}
 
         # TODO: if categories vary from one rg to next, need to cope
-        return dd.from_delayed(tot, metadata=dtypes, divisions=self.divisions)
+        return dd.from_delayed(tot, metadata=dtypes)
 
     def read_row_group(self, rg, columns, categories, filters={}):
         """Filter syntax: [(column, op, val), ...],
@@ -105,15 +112,10 @@ class ParquetFile(object):
         """
         out = {}
         fn = self.fn
-        helper = schema.SchemaHelper(self.schema)
-        if filters and filter_out_stats(rg, filters, helper):
-            return pd.DataFrame()
-        if filters and self.cats and filter_out_cats(rg, filters):
-            return pd.DataFrame()
 
         for column in rg.columns:
             name = ".".join(column.meta_data.path_in_schema)
-            se = helper.schema_element(name)
+            se = self.helper.schema_element(name)
             if name not in columns:
                 continue
 
@@ -130,9 +132,9 @@ class ParquetFile(object):
                     fn = ofname
 
             use = name in categories if categories is not None else False
-            s = core.read_col(column, helper, infile, use_cat=use)
+            s = core.read_col(column, self.helper, infile, use_cat=use)
             out[name] = s
-        out = pd.DataFrame(out)
+        out = pd.DataFrame(out, columns=columns)
 
         # apply categories
         for cat in self.cats:
@@ -149,9 +151,13 @@ class ParquetFile(object):
 
     def to_pandas(self, columns=None, categories=None, filters={}):
         columns = columns or self.columns
+        rgs = [rg for rg in self.row_groups if
+               not(filter_out_stats(rg, filters, self.helper)) and
+               not(filter_out_cats(rg, filters))]
         tot = [self.read_row_group(rg, columns, categories, filters=filters)
-               for rg in self.row_groups]
-        tot = [t for t in tot if len(tot)]
+               for rg in rgs]
+        if len(tot) == 0:
+            return pd.DataFrame(columns=columns + list(self.cats))
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
@@ -175,10 +181,6 @@ class ParquetFile(object):
             # pd.Series(self.cats[cat]).map(val_to_num).dtype
         return dtype
 
-    @property
-    def divisions(self):
-        return np.cumsum([0] + [rg.num_rows for rg in self.row_groups])
-
     def __str__(self):
         return "<Parquet File '%s'>" % self.fn
 
@@ -187,6 +189,8 @@ class ParquetFile(object):
 
 def filter_out_stats(rg, filters, helper):
     """Based on filters, should this row_group be avoided"""
+    if len(filters) == 0:
+        return False
     for column in rg.columns:
         vmax, vmin = None, None
         name = ".".join(column.meta_data.path_in_schema)
@@ -214,6 +218,8 @@ def filter_out_stats(rg, filters, helper):
 
 
 def filter_out_cats(rg, filters):
+    if len(filters) == 0:
+        return False
     partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
                             rg.columns[0].file_path)
     pairs = [(p[0], val_to_num(p[1])) for p in partitions]
@@ -251,22 +257,3 @@ def filter_val(op, val, vmin=None, vmax=None):
 
     # keep this row_group
     return False
-
-
-def val_to_num(x):
-    try:
-        return int(x)
-    except ValueError:
-        pass
-    try:
-        return float(x)
-    except ValueError:
-        pass
-    try:
-        return pd.to_datetime(x)
-    except ValueError:
-        pass
-    try:
-        return pd.to_timedelta(x)
-    except:
-        return x

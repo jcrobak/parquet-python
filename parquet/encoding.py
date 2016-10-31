@@ -8,7 +8,6 @@ from __future__ import unicode_literals
 import array
 import bitarray
 import io
-import logging
 import math
 import numba
 import numpy as np
@@ -17,12 +16,6 @@ import struct
 import sys
 
 from .thrift_structures import parquet_thrift
-
-logger = logging.getLogger("parquet")  # pylint: disable=invalid-name
-
-PY3 = sys.version_info.major > 2
-
-ARRAY_BYTE_STR = u'B' if PY3 else b'B'
 
 
 def read_plain_boolean(raw_bytes, count):

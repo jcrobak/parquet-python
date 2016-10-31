@@ -12,12 +12,6 @@ from .thrift_structures import parquet_thrift
 from .compression import decompress_data
 
 
-class ParquetException(Exception):
-    """Generic Exception related to unexpected data format when
-     reading parquet file."""
-    pass
-
-
 def read_thrift(file_obj, ttype):
     """Read a thrift structure from the given fo."""
     tin = TFileTransport(file_obj)
