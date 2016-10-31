@@ -1,81 +1,61 @@
+"""encoding.py - methods for reading parquet encoded data blocks."""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import array
-import math
-import struct
+import bitarray
 import io
-import logging
+import math
+import numba
+import numpy as np
+import os
+import struct
+import sys
 
-from parquet.ttypes import Type
-
-def read_plain_boolean(fo):
-    """Reads a boolean using the plain encoding"""
-    raise NotImplemented
-
-
-def read_plain_int32(fo):
-    """Reads a 32-bit int using the plain encoding"""
-    tup = struct.unpack("<i", fo.read(4))
-    return tup[0]
+from .thrift_structures import parquet_thrift
 
 
-def read_plain_int64(fo):
-    """Reads a 64-bit int using the plain encoding"""
-    tup = struct.unpack("<q", fo.read(8))
-    return tup[0]
+def read_plain_boolean(raw_bytes, count):
+    """Read `count` booleans using the plain encoding."""
+    return np.unpackbits(np.fromstring(raw_bytes, dtype=np.uint8)).reshape(
+            (-1, 8))[:, ::-1].ravel().astype(bool)[:count]
 
-
-def read_plain_int96(fo):
-    """Reads a 96-bit int using the plain encoding"""
-    return read_plain_byte_array_fixed(fo, 12)
-    tup = struct.unpack("<qi", fo.read(12))
-    return tup[0] << 32 | tup[1]
-
-
-def read_plain_float(fo):
-    """Reads a 32-bit float using the plain encoding"""
-    tup = struct.unpack("<f", fo.read(4))
-    return tup[0]
-
-
-def read_plain_double(fo):
-    """Reads a 64-bit float (double) using the plain encoding"""
-    tup = struct.unpack("<d", fo.read(8))
-    return tup[0]
-
-
-def read_plain_byte_array(fo):
-    """Reads a byte array using the plain encoding"""
-    length = read_plain_int32(fo)
-    return fo.read(length)
-
-
-def read_plain_byte_array_fixed(fo, fixed_length):
-    """Reads a byte array of the given fixed_length"""
-    return fo.read(fixed_length)
-
-DECODE_PLAIN = {
-    Type.BOOLEAN: read_plain_boolean,
-    Type.INT32: read_plain_int32,
-    Type.INT64: read_plain_int64,
-    Type.INT96: read_plain_int96,
-    Type.FLOAT: read_plain_float,
-    Type.DOUBLE: read_plain_double,
-    Type.BYTE_ARRAY: read_plain_byte_array,
-    Type.FIXED_LEN_BYTE_ARRAY: read_plain_byte_array_fixed
+DECODE_TYPEMAP = {
+    parquet_thrift.Type.INT32: np.int32,
+    parquet_thrift.Type.INT64: np.int64,
+    parquet_thrift.Type.INT96: np.dtype('S12'),
+    parquet_thrift.Type.FLOAT: np.float32,
+    parquet_thrift.Type.DOUBLE: np.float64,
 }
 
 
-def read_plain(fo, type_, type_length):
-    conv = DECODE_PLAIN[type_]
-    if type_ == Type.FIXED_LEN_BYTE_ARRAY:
-        return conv(fo, type_length)
-    return conv(fo)
+def read_plain(raw_bytes, type_, count, width=0):
+    if type_ in DECODE_TYPEMAP:
+        dtype = DECODE_TYPEMAP[type_]
+        return np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
+    if type_ == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
+        dtype = np.dtype('S%i' % width)
+        return np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
+    if type_ == parquet_thrift.Type.BOOLEAN:
+        return read_plain_boolean(raw_bytes, count)
+    # variable byte arrays (rare)
+    file_obj = io.BytesIO(raw_bytes)
+    return np.array([file_obj.read(struct.unpack('<i', file_obj.read(4))[0])
+                     for _ in range(count)], dtype="O")
 
 
-def read_unsigned_var_int(fo):
+@numba.jit(nogil=True)
+def read_unsigned_var_int(file_obj):
+    """Read a value using the unsigned, variable int encoding.
+    file-obj is a NumpyIO of bytes; avoids struct to allow numba-jit
+    """
     result = 0
     shift = 0
     while True:
-        byte = struct.unpack("<B", fo.read(1))[0]
+        byte = file_obj.read_byte()
         result |= ((byte & 0x7F) << shift)
         if (byte & 0x80) == 0:
             break
@@ -83,121 +63,146 @@ def read_unsigned_var_int(fo):
     return result
 
 
-def byte_width(bit_width):
-    "Returns the byte width for the given bit_width"
-    return (bit_width + 7) / 8
-
-
-def read_rle(fo, header, bit_width):
-    """Read a run-length encoded run from the given fo with the given header
-    and bit_width.
+@numba.njit(nogil=True)
+def read_rle(file_obj, header, bit_width, o):
+    """Read a run-length encoded run from the given fo with the given header and bit_width.
 
     The count is determined from the header and the width is used to grab the
     value that's repeated. Yields the value repeated count times.
     """
     count = header >> 1
-    zero_data = b"\x00\x00\x00\x00"
-    data = b""
-    width = byte_width(bit_width)
-    if width >= 1:
-        data += fo.read(1)
-    if width >= 2:
-        data += fo.read(1)
-    if width >= 3:
-        data += fo.read(1)
-    if width == 4:
-        data += fo.read(1)
-    data = data + zero_data[len(data):]
-    value = struct.unpack("<i", data)[0]
-    for i in range(count):
-        yield value
+    width = (bit_width + 7) // 8
+    zero = np.zeros(4, dtype=np.int8)
+    data = file_obj.read(width)
+    zero[:len(data)] = data
+    value = zero.view(np.int32)
+    o.write_many(value, count)
 
 
+@numba.njit(nogil=True)
 def width_from_max_int(value):
-    """Converts the value specified to a bit_width."""
-    return int(math.ceil(math.log(value + 1, 2)))
+    """Convert the value specified to a bit_width."""
+    for i in range(0, 64):
+        if value == 0:
+            return i
+        value >>= 1
 
 
+@numba.njit(nogil=True)
 def _mask_for_bits(i):
-    """Helper function for read_bitpacked to generage a mask to grab i bits."""
+    """Generate a mask to grab `i` bits from an int value."""
     return (1 << i) - 1
 
 
-def read_bitpacked(fo, header, width):
-    """Reads a bitpacked run of the rle/bitpack hybrid.
+@numba.njit(nogil=True)
+def read_bitpacked(file_obj, header, width, o):
+    """
+    Read values packed into width-bits each (which can be >8)
 
-    Supports width >8 (crossing bytes).
+    file_obj is a NumbaIO array (int8)
+    o is an output NumbaIO array (int32)
     """
     num_groups = header >> 1
     count = num_groups * 8
-    byte_count = int((width * count)/8)
-    raw_bytes = array.array('B', fo.read(byte_count)).tolist()
-    current_byte = 0
-    b = raw_bytes[current_byte]
+    byte_count = (width * count) // 8
+    raw_bytes = file_obj.read(byte_count)
     mask = _mask_for_bits(width)
+    current_byte = 0
+    data = raw_bytes[current_byte]
     bits_wnd_l = 8
     bits_wnd_r = 0
-    res = []
-    total = len(raw_bytes)*8
-    while (total >= width):
-        # TODO zero-padding could produce extra zero-values
+    total = byte_count * 8
+    while total >= width:
+        # NOTE zero-padding could produce extra zero-values
         if bits_wnd_r >= 8:
             bits_wnd_r -= 8
             bits_wnd_l -= 8
-            b >>= 8
+            data >>= 8
         elif bits_wnd_l - bits_wnd_r >= width:
-            res.append((b >> bits_wnd_r) & mask)
+            o.write_byte((data >> bits_wnd_r) & mask)
             total -= width
             bits_wnd_r += width
-        elif current_byte + 1 < len(raw_bytes):
+        elif current_byte + 1 < byte_count:
             current_byte += 1
-            b |= (raw_bytes[current_byte] << bits_wnd_l)
+            data |= (raw_bytes[current_byte] << bits_wnd_l)
             bits_wnd_l += 8
-    return res
 
 
-def read_bitpacked_deprecated(fo, byte_count, count, width):
-    raw_bytes = array.array('B', fo.read(byte_count)).tolist()
-
-    mask = _mask_for_bits(width)
-    index = 0
-    res = []
-    word = 0
-    bits_in_word = 0
-    while len(res) < count and index <= len(raw_bytes):
-        if bits_in_word >= width:
-            # how many bits over the value is stored
-            offset = (bits_in_word - width)
-            # figure out the value
-            value = (word & (mask << offset)) >> offset
-            res.append(value)
-
-            bits_in_word -= width
-        else:
-            word = (word << 8) | raw_bytes[index]
-            index += 1
-            bits_in_word += 8
-    return res
-
-
-def read_rle_bit_packed_hybrid(fo, width, length=None):
-    """Implemenation of a decoder for the rel/bit-packed hybrid encoding.
+@numba.njit(nogil=True)
+def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):
+    """Read values from `io_obj` using the rel/bit-packed hybrid encoding.
 
     If length is not specified, then a 32-bit int is read first to grab the
     length of the encoded data.
+
+    file-obj is a NumpyIO of bytes; o if an output NumpyIO of int32
     """
-    io_obj = fo
     if length is None:
-        length = read_plain_int32(fo)
-        raw_bytes = fo.read(length)
-        if raw_bytes == '':
-            return None
-        io_obj = io.BytesIO(raw_bytes)
-    res = []
-    while io_obj.tell() < length:
+        length = read_length(io_obj)
+    start = io_obj.loc
+    while io_obj.loc-start < length and o.loc < o.len:
         header = read_unsigned_var_int(io_obj)
         if header & 1 == 0:
-            res += read_rle(io_obj, header, width)
+            read_rle(io_obj, header, width, o)
         else:
-            res += read_bitpacked(io_obj, header, width)
-    return res
+            read_bitpacked(io_obj, header, width, o)
+    return o.so_far()
+
+
+@numba.njit(nogil=True)
+def read_length(file_obj):
+    """ Numpy trick to get a 32-bit length from four bytes
+
+    Equivalent to struct.unpack('<i'), but suitable for numba-jit
+    """
+    sub = file_obj.read(4)
+    return sub[0] + sub[1]*256 + sub[2]*256*256 + sub[3]*256*256*256
+
+
+class NumpyIO(object):
+    """
+    Read or write from a numpy arra like a file object
+
+    This class is numba-jit-able (for specific dtypes)
+    """
+    def __init__(self, data):
+        self.data = data
+        self.len = data.size
+        self.loc = 0
+
+    def read(self, x):
+        self.loc += x
+        return self.data[self.loc-x:self.loc]
+
+    def read_byte(self):
+        self.loc += 1
+        return self.data[self.loc-1]
+
+    def write(self, d):
+        l = len(d)
+        self.loc += l
+        self.data[self.loc-l:self.loc] = d
+
+    def write_byte(self, b):
+        if self.loc >= self.len:
+            # ignore attempt to write past end of buffer
+            return
+        self.data[self.loc] = b
+        self.loc += 1
+
+    def write_many(self, b, count):
+        self.data[self.loc:self.loc+count] = b
+        self.loc += count
+
+    def tell(self):
+        return self.loc
+
+    def so_far(self):
+        """ In write mode, the data we have gathered until now
+        """
+        return self.data[:self.loc]
+
+spec8 = [('data', numba.uint8[:]), ('loc', numba.int64), ('len', numba.int64)]
+Numpy8 = numba.jitclass(spec8)(NumpyIO)
+spec32 = [('data', numba.uint32[:]), ('loc', numba.int64), ('len', numba.int64)]
+Numpy32 = numba.jitclass(spec32)(NumpyIO)

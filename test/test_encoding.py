@@ -1,127 +1,108 @@
+"""test_encoding.py - tests for deserializing parquet data."""
 import array
+import io
+import numpy as np
 import struct
-import StringIO
-import unittest
 
 import parquet.encoding
-from parquet.ttypes import Type
-from nose import SkipTest
+from parquet import parquet_thrift
 
 
-class TestPlain(unittest.TestCase):
+def test_int32():
+    """Test reading bytes containing int32 data."""
+    assert 999 == parquet.encoding.read_plain(
+             struct.pack(b"<i", 999),
+             parquet_thrift.Type.INT32, 1)
 
-    def test_int32(self):
-        self.assertEquals(
-            999,
-            parquet.encoding.read_plain_int32(
-                StringIO.StringIO(struct.pack("<i", 999))))
+def test_int64():
+    """Test reading bytes containing int64 data."""
+    assert 999 == parquet.encoding.read_plain(
+             struct.pack(b"<q", 999),
+             parquet_thrift.Type.INT64, 1)
 
-    def test_int64(self):
-        self.assertEquals(
-            999,
-            parquet.encoding.read_plain_int64(
-                StringIO.StringIO(struct.pack("<q", 999))))
+def test_int96():
+    """Test reading bytes containing int96 data."""
+    assert b'\x00\x00\x00\x00\x00\x00\x00\x00\xe7\x03\x00\x00' == parquet.encoding.read_plain(
+             struct.pack(b"<qi", 0, 999),
+             parquet_thrift.Type.INT96, 1)
 
-    def test_int96(self):
-        self.assertEquals(
-            999,
-            parquet.encoding.read_plain_int96(
-                StringIO.StringIO(struct.pack("<qi", 0, 999))))
+def test_float():
+    """Test reading bytes containing float data."""
+    assert (9.99 - parquet.encoding.read_plain(
+             struct.pack(b"<f", 9.99),
+             parquet_thrift.Type.FLOAT, 1)) < 0.01
 
-    def test_float(self):
-        self.assertAlmostEquals(
-            9.99,
-            parquet.encoding.read_plain_float(
-                StringIO.StringIO(struct.pack("<f", 9.99))),
-            2)
+def test_double():
+    """Test reading bytes containing double data."""
+    assert (9.99 - parquet.encoding.read_plain(
+             struct.pack(b"<d", 9.99),
+             parquet_thrift.Type.DOUBLE, 1)) < 0.01
 
-    def test_double(self):
-        self.assertEquals(
-            9.99,
-            parquet.encoding.read_plain_double(
-                StringIO.StringIO(struct.pack("<d", 9.99))))
+def test_fixed():
+    """Test reading bytes containing fixed bytes data."""
+    data = b"foobar"
+    assert data[:3] == parquet.encoding.read_plain(
+            data, parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, -1, 3)[0]
+    assert data[3:] == parquet.encoding.read_plain(
+            data, parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, -1, 3)[1]
 
-    def test_fixed(self):
-        data = "foobar"
-        fo = StringIO.StringIO(data)
-        self.assertEquals(
-            data[:3],
-            parquet.encoding.read_plain_byte_array_fixed(
-                fo, 3))
-        self.assertEquals(
-            data[3:],
-            parquet.encoding.read_plain_byte_array_fixed(
-                fo, 3))
-
-    def test_fixed_read_plain(self):
-        data = "foobar"
-        fo = StringIO.StringIO(data)
-        self.assertEquals(
-            data[:3],
-            parquet.encoding.read_plain(
-                fo, Type.FIXED_LEN_BYTE_ARRAY, 3))
+def test_boolean():
+    """Test reading bytes containing boolean data."""
+    data = 0b1101
+    d = struct.pack(b"<i", data)
+    assert ([True, False, True, True] == parquet.encoding.read_plain(
+            d, parquet_thrift.Type.BOOLEAN, 4)).all(0)
 
 
-class TestRle(unittest.TestCase):
-
-    def testFourByteValue(self):
-        fo = StringIO.StringIO(struct.pack("<i", 1 << 30))
-        out = parquet.encoding.read_rle(fo, 2 << 1, 30)
-        self.assertEquals([1 << 30] * 2, list(out))
-
-
-class TestVarInt(unittest.TestCase):
-
-    def testSingleByte(self):
-        fo = StringIO.StringIO(struct.pack("<B", 0x7F))
-        out = parquet.encoding.read_unsigned_var_int(fo)
-        self.assertEquals(0x7F, out)
-
-    def testFourByte(self):
-        fo = StringIO.StringIO(struct.pack("<BBBB", 0xFF, 0xFF, 0xFF, 0x7F))
-        out = parquet.encoding.read_unsigned_var_int(fo)
-        self.assertEquals(0x0FFFFFFF, out)
+def testFourByteValue():
+    """Test reading a run with a single four-byte value."""
+    fo = parquet.encoding.Numpy8(np.fromstring(struct.pack(b"<i", 1 << 30), np.uint8))
+    o = parquet.encoding.Numpy32(np.empty(10, np.uint32))
+    parquet.encoding.read_rle(fo, 2 << 1, 30, o)
+    assert ([1 << 30] * 2 == o.so_far()).all()
 
 
-class TestBitPacked(unittest.TestCase):
+def testSingleByte():
+    """Test reading a single byte value."""
+    fo = parquet.encoding.Numpy8(np.fromstring(struct.pack(b"<i", 0x7F), np.uint8))
+    out = parquet.encoding.read_unsigned_var_int(fo)
+    assert 0x7F == out
 
-    def testFromExample(self):
-        raw_data_in = [0b10001000, 0b11000110, 0b11111010]
-        encoded_bitstring = array.array('B', raw_data_in).tostring()
-        fo = StringIO.StringIO(encoded_bitstring)
-        count = 3 << 1
-        res = parquet.encoding.read_bitpacked(fo, count, 3)
-        self.assertEquals(range(8), res)
-
-
-class TestBitPackedDeprecated(unittest.TestCase):
-
-    def testFromExample(self):
-        encoded_bitstring = array.array(
-            'B', [0b00000101, 0b00111001, 0b01110111]).tostring()
-        fo = StringIO.StringIO(encoded_bitstring)
-        res = parquet.encoding.read_bitpacked_deprecated(fo, 3, 8, 3)
-        self.assertEquals(range(8), res)
+def testFourByte():
+    """Test reading a four byte value."""
+    fo = parquet.encoding.Numpy8(np.fromstring(struct.pack(b"<BBBB", 0xFF, 0xFF, 0xFF, 0x7F), np.uint8))
+    out = parquet.encoding.read_unsigned_var_int(fo)
+    assert 0x0FFFFFFF == out
 
 
-class TestWidthFromMaxInt(unittest.TestCase):
+def testFromExample():
+    """Test a simple example."""
+    raw_data_in = [0b10001000, 0b11000110, 0b11111010]
+    encoded_bitstring = b'\x88\xc6\xfa'
+    fo = parquet.encoding.Numpy8(np.fromstring(encoded_bitstring, np.uint8))
+    count = 8
+    o = parquet.encoding.Numpy32(np.empty(count, np.uint32))
+    parquet.encoding.read_bitpacked(fo, count, 3, o)
+    assert (list(range(8)) == o.so_far()).all()
 
-    def testWidths(self):
-        self.assertEquals(0, parquet.encoding.width_from_max_int(0))
-        self.assertEquals(1, parquet.encoding.width_from_max_int(1))
-        self.assertEquals(2, parquet.encoding.width_from_max_int(2))
-        self.assertEquals(2, parquet.encoding.width_from_max_int(3))
-        self.assertEquals(3, parquet.encoding.width_from_max_int(4))
-        self.assertEquals(3, parquet.encoding.width_from_max_int(5))
-        self.assertEquals(3, parquet.encoding.width_from_max_int(6))
-        self.assertEquals(3, parquet.encoding.width_from_max_int(7))
-        self.assertEquals(4, parquet.encoding.width_from_max_int(8))
-        self.assertEquals(4, parquet.encoding.width_from_max_int(15))
-        self.assertEquals(5, parquet.encoding.width_from_max_int(16))
-        self.assertEquals(5, parquet.encoding.width_from_max_int(31))
-        self.assertEquals(6, parquet.encoding.width_from_max_int(32))
-        self.assertEquals(6, parquet.encoding.width_from_max_int(63))
-        self.assertEquals(7, parquet.encoding.width_from_max_int(64))
-        self.assertEquals(7, parquet.encoding.width_from_max_int(127))
-        self.assertEquals(8, parquet.encoding.width_from_max_int(128))
-        self.assertEquals(8, parquet.encoding.width_from_max_int(255))
+
+def testWidths():
+    """Test all possible widths for a single byte."""
+    assert 0 == parquet.encoding.width_from_max_int(0)
+    assert 1 == parquet.encoding.width_from_max_int(1)
+    assert 2 == parquet.encoding.width_from_max_int(2)
+    assert 2 == parquet.encoding.width_from_max_int(3)
+    assert 3 == parquet.encoding.width_from_max_int(4)
+    assert 3 == parquet.encoding.width_from_max_int(5)
+    assert 3 == parquet.encoding.width_from_max_int(6)
+    assert 3 == parquet.encoding.width_from_max_int(7)
+    assert 4 == parquet.encoding.width_from_max_int(8)
+    assert 4 == parquet.encoding.width_from_max_int(15)
+    assert 5 == parquet.encoding.width_from_max_int(16)
+    assert 5 == parquet.encoding.width_from_max_int(31)
+    assert 6 == parquet.encoding.width_from_max_int(32)
+    assert 6 == parquet.encoding.width_from_max_int(63)
+    assert 7 == parquet.encoding.width_from_max_int(64)
+    assert 7 == parquet.encoding.width_from_max_int(127)
+    assert 8 == parquet.encoding.width_from_max_int(128)
+    assert 8 == parquet.encoding.width_from_max_int(255)
