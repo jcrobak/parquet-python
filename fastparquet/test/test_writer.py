@@ -9,9 +9,18 @@ from fastparquet import writer, encoding
 import pytest
 import shutil
 import tempfile
-pyspark = pytest.importorskip("pyspark")
-sc = pyspark.SparkContext.getOrCreate()
-sql = pyspark.SQLContext(sc)
+
+from fastparquet.test.test_read import s3
+
+TEST_DATA = "test-data"
+
+
+@pytest.fixture()
+def sql():
+    pyspark = pytest.importorskip("pyspark")
+    sc = pyspark.SparkContext.getOrCreate()
+    sql = pyspark.SQLContext(sc)
+    return sql
 
 
 def test_uvarint():
@@ -81,7 +90,7 @@ def tempdir():
                          product(('simple', 'hive'),
                                  ([0], [0, 500]),
                                  (None, 'GZIP', 'SNAPPY')))
-def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
+def test_pyspark_roundtrip(tempdir, scheme, partitions, comp, sql):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -103,9 +112,7 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp):
         assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
-def test_roundtrip_s3():
-    s3fs = pytest.importorskip('s3fs')
-    s3 = s3fs.S3FileSystem()
+def test_roundtrip_s3(s3):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -117,10 +124,10 @@ def test_roundtrip_s3():
     data['cat'] = data.hello.astype('category')
     noop = lambda x: True
     myopen = lambda f: s3.open(f, 'wb')
-    write('MDtemp/temp_parq', data, file_scheme='hive', partitions=[0, 500],
+    write(TEST_DATA+'/temp_parq', data, file_scheme='hive', partitions=[0, 500],
           open_with=myopen, mkdirs=noop)
     myopen = s3.open
-    pf = ParquetFile('MDtemp/temp_parq', open_with=myopen)
+    pf = ParquetFile(TEST_DATA+'/temp_parq', open_with=myopen)
     df = pf.to_pandas(categories=['cat', 'bcat'])
     for col in data:
         assert (df[col] == data[col])[~df[col].isnull()].all()

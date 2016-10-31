@@ -46,22 +46,51 @@ cols = ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 expected = pd.read_csv(csvfile, delimiter="|", index_col=0, names=cols)
 
 
-def test_read_s3():
+@pytest.yield_fixture()
+def s3():
+    s3fs = pytest.importorskip('s3fs')
+    moto = pytest.importorskip('moto')
+    m = moto.mock_s3()
+    m.start()
+    s3 = s3fs.S3FileSystem()
+    s3.mkdir(TEST_DATA)
+    paths = []
+    for cat, catnum in product(('fred', 'freda'), ('1', '2', '3')):
+        path = os.sep.join([TEST_DATA, 'split', 'cat=' + cat,
+                            'catnum=' + catnum])
+        files = os.listdir(path)
+        for fn in files:
+            full_path = os.path.join(path, fn)
+            s3.put(full_path, full_path)
+            paths.append(full_path)
+    path = os.path.join(TEST_DATA, 'split')
+    files = os.listdir(path)
+    for fn in files:
+        full_path = os.path.join(path, fn)
+        if os.path.isdir(full_path):
+            continue
+        s3.put(full_path, full_path)
+        paths.append(full_path)
+    yield s3
+    for path in paths:
+        s3.rm(path)
+
+
+
+def test_read_s3(s3):
     s3fs = pytest.importorskip('s3fs')
     s3 = s3fs.S3FileSystem()
     myopen = s3.open
-    pf = fastparquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
+    pf = fastparquet.ParquetFile(TEST_DATA+'/split/_metadata', open_with=myopen)
     df = pf.to_pandas()
     assert df.shape == (2000, 3)
     assert (df.cat.value_counts() == [1000, 1000]).all()
 
 
-def test_read_dask():
+def test_read_dask(s3):
     pytest.importorskip('dask')
-    s3fs = pytest.importorskip('s3fs')
-    s3 = s3fs.S3FileSystem()
     myopen = s3.open
-    pf = fastparquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
+    pf = fastparquet.ParquetFile(TEST_DATA+'/split/_metadata', open_with=myopen)
     df = pf.to_dask_dataframe()
     out = df.compute()
     assert out.shape == (2000, 3)
