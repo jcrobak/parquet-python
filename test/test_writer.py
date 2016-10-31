@@ -3,9 +3,9 @@ from itertools import product
 import numpy as np
 import os
 import pandas as pd
-from parquet import ParquetFile
-from parquet import write
-from parquet import writer, encoding
+from fastparquet import ParquetFile
+from fastparquet import write
+from fastparquet import writer, encoding
 import pytest
 import shutil
 import tempfile

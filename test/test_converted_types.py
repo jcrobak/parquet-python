@@ -9,8 +9,8 @@ import datetime
 from decimal import Decimal
 import pandas as pd
 
-from parquet import parquet_thrift as pt
-from parquet.converted_types import convert
+from fastparquet import parquet_thrift as pt
+from fastparquet.converted_types import convert
 
 
 def test_int32():

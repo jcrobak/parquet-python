@@ -18,7 +18,7 @@ import unittest
 import pandas as pd
 import pytest
 
-import parquet
+import fastparquet
 
 TEST_DATA = "test-data"
 
@@ -26,13 +26,13 @@ TEST_DATA = "test-data"
 def test_header_magic_bytes():
     """Test reading the header magic bytes."""
     f = io.BytesIO(b"PAR1_some_bogus_data")
-    with pytest.raises(parquet.ParquetException):
-        p = parquet.ParquetFile(f, verify=True)
+    with pytest.raises(fastparquet.ParquetException):
+        p = fastparquet.ParquetFile(f, verify=True)
 
 
 def test_read_footer():
     """Test reading the footer."""
-    p = parquet.ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
+    p = fastparquet.ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
     snames = {"schema", "n_regionkey", "n_name", "n_nationkey", "n_comment"}
     assert {s.name for s in p.schema} == snames
     assert set(p.columns) == snames - {"schema"}
@@ -50,7 +50,7 @@ def test_read_s3():
     s3fs = pytest.importorskip('s3fs')
     s3 = s3fs.S3FileSystem()
     myopen = s3.open
-    pf = parquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
+    pf = fastparquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
     df = pf.to_pandas()
     assert df.shape == (2000, 3)
     assert (df.cat.value_counts() == [1000, 1000]).all()
@@ -61,7 +61,7 @@ def test_read_dask():
     s3fs = pytest.importorskip('s3fs')
     s3 = s3fs.S3FileSystem()
     myopen = s3.open
-    pf = parquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
+    pf = fastparquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
     df = pf.to_dask_dataframe()
     out = df.compute()
     assert out.shape == (2000, 3)
@@ -72,7 +72,7 @@ def test_read_dask():
 def test_file_csv(parquet_file):
     """Test the various file times
     """
-    p = parquet.ParquetFile(parquet_file)
+    p = fastparquet.ParquetFile(parquet_file)
     data = p.to_pandas()
     if 'comment_col' in data.columns:
         mapping = {'comment_col': "n_comment", 'name': 'n_name',
@@ -89,7 +89,7 @@ def test_file_csv(parquet_file):
 
 def test_null_int():
     """Test reading a file that contains null records."""
-    p = parquet.ParquetFile(os.path.join(TEST_DATA, "test-null.parquet"))
+    p = fastparquet.ParquetFile(os.path.join(TEST_DATA, "test-null.parquet"))
     data = p.to_pandas()
     expected = pd.DataFrame([{"foo": 1, "bar": 2}, {"foo": 1, "bar": None}])
     for col in data:
@@ -100,7 +100,7 @@ def test_null_int():
 def test_converted_type_null():
     """Test reading a file that contains null records for a plain column that
      is converted to utf-8."""
-    p = parquet.ParquetFile(os.path.join(TEST_DATA,
+    p = fastparquet.ParquetFile(os.path.join(TEST_DATA,
                                          "test-converted-type-null.parquet"))
     data = p.to_pandas()
     expected = pd.DataFrame([{"foo": "bar"}, {"foo": None}])
@@ -115,7 +115,7 @@ def test_converted_type_null():
 def test_null_plain_dictionary():
     """Test reading a file that contains null records for a plain dictionary
      column."""
-    p = parquet.ParquetFile(os.path.join(TEST_DATA,
+    p = fastparquet.ParquetFile(os.path.join(TEST_DATA,
                                          "test-null-dictionary.parquet"))
     data = p.to_pandas()
     expected = pd.DataFrame([{"foo": None}] + [{"foo": "bar"},
@@ -135,7 +135,7 @@ def test_dir_partition():
         'num': x,
         'cat': pd.Series(np.array(['fred', 'freda'])[x%2], dtype='category'),
         'catnum': pd.Series(np.array([1, 2, 3])[x%3], dtype='category')})
-    pf = parquet.ParquetFile(os.path.join(TEST_DATA, "split"))
+    pf = fastparquet.ParquetFile(os.path.join(TEST_DATA, "split"))
     out = pf.to_pandas()
     for cat, catnum in product(['fred', 'freda'], [1, 2, 3]):
         assert (df.num[(df.cat==cat) & (df.catnum==catnum)].tolist()) ==\
@@ -147,7 +147,7 @@ def test_dir_partition():
 
 def test_stat_filters():
     path = os.path.join(TEST_DATA, 'split')
-    pf = parquet.ParquetFile(path)
+    pf = fastparquet.ParquetFile(path)
     base_shape = len(pf.to_pandas())
 
     filters = [('num', '>', 0)]
@@ -190,7 +190,7 @@ def test_stat_filters():
 
 def test_cat_filters():
     path = os.path.join(TEST_DATA, 'split')
-    pf = parquet.ParquetFile(path)
+    pf = fastparquet.ParquetFile(path)
     base_shape = len(pf.to_pandas())
 
     filters = [('cat', '==', 'freda')]

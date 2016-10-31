@@ -1,7 +1,7 @@
 import io
 import numpy as np
 import os
-from parquet import encoding, core, ParquetFile, schema
+from fastparquet import encoding, core, ParquetFile, schema
 
 here = os.path.dirname(__file__)
 count = 1000
