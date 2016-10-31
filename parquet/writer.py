@@ -16,6 +16,7 @@ from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from . import encoding
+from .util import default_openw, default_mkdirs, sep_from_open
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -42,14 +43,14 @@ revmap = {parquet_thrift.Type.INT32: np.int32,
 def find_type(data, convert=False):
     """ Get appropriate typecodes for column dtype
 
-    Data conversion does not happen here, only at write time.
+    Data conversion may happen here, only at write time.
 
     The user is expected to transform their data into the appropriate dtype
     before saving to parquet, we will not make any assumptions for them.
 
     If the dtype is "object" the first ten items will be examined, and is str
     or bytes, will be stored as variable length byte strings; if dict or list,
-    (nested data) will be stored with BSON encoding.
+    (nested data) will be stored with JSON encoding.
 
     To be stored as fixed-length byte strings, the dtype must be "bytesXX"
     (pandas notation) or "|SXX" (numpy notation)
@@ -58,7 +59,7 @@ def find_type(data, convert=False):
     (codes) will be stored as int. The labels are usually variable length
     strings.
 
-    BOOLs will be bitpacked using bytearray. To instead keep the default numpy
+    BOOLs will be bitpacked using np.packbits. To instead keep the default numpy
     representation of one byte per value, change to int8 or uint8 type
 
     Known types that cannot be represented (must be first converted another
@@ -182,10 +183,33 @@ def encode_unsigned_varint(x, o):
     o.write_byte(x)
 
 
+@numba.jit(nogil=True)
+def zigzag(n):
+    " 32-bit only "
+    return (n << 1) ^ (n >> 31)
+
+
+@numba.njit(nogil=True)
+def encode_bitpacked_inv(values, width, o):
+    bit = 16 - width
+    right_byte_mask = 0b11111111
+    left_byte_mask = right_byte_mask << 8
+    bits = 0
+    for v in values:
+        bits |= v << bit
+        while bit <= 8:
+            o.write_byte((bits & left_byte_mask) >> 8)
+            bit += 8
+            bits = (bits & right_byte_mask) << 8
+        bit -= width
+    if bit:
+        o.write_byte((bits & left_byte_mask) >> 8)
+
+
 @numba.njit(nogil=True)
 def encode_bitpacked(values, width, o):
     """
-    Read values packed into width-bits each (which can be >8)
+    Write values packed into width-bits each (which can be >8)
 
     values is a NumbaIO array (int32)
     o is a NumbaIO output array (uint8), size=(len(values)*width)/8, rounded up.
@@ -250,7 +274,8 @@ def encode_dict(data, se):
 encode = {
     'PLAIN': encode_plain,
     'RLE': encode_rle_bp,
-    'PLAIN_DICTIONARY': encode_dict
+    'PLAIN_DICTIONARY': encode_dict,
+    # 'DELTA_BINARY_PACKED': encode_delta
 }
 
 
@@ -314,9 +339,13 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     bdata = encode[encoding](data, selement)
     try:
         max, min = data.max(), data.min()
-        max = encode[encoding](pd.Series([max], dtype=data.dtype), selement)
-        min = encode[encoding](pd.Series([min], dtype=data.dtype), selement)
-    except TypeError as e:
+        if encoding == "DELTA_BINARY_PACKED":
+            encode2 = "PLAIN"
+        else:
+            encode2 = encoding
+        max = encode[encode2](pd.Series([max], dtype=data.dtype), selement)
+        min = encode[encode2](pd.Series([min], dtype=data.dtype), selement)
+    except TypeError:
         max, min = None, None
 
     dph = parquet_thrift.DataPageHeader(
@@ -373,14 +402,16 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     return chunk
 
 
-def make_row_group(f, data, schema, file_path=None, compression=None):
+def make_row_group(f, data, schema, file_path=None, compression=None,
+                   encoding='PLAIN'):
     rows = len(data)
     rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0,
                                  columns=[])
 
-    for col in schema:
-        if col.type is not None:
-            chunk = write_column(f, data[col.name], col, compression=compression)
+    for column in schema:
+        if column.type is not None:
+            chunk = write_column(f, data[column.name], column,
+                                 compression=compression, encoding=encoding)
             rg.columns.append(chunk)
     rg.total_byte_size = sum([c.meta_data.total_uncompressed_size for c in
                               rg.columns])
@@ -388,9 +419,10 @@ def make_row_group(f, data, schema, file_path=None, compression=None):
     return rg
 
 
-def make_part_file(f, data, schema, compression=None):
+def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
     f.write(MARKER)
-    rg = make_row_group(f, data, schema, compression=compression)
+    rg = make_row_group(f, data, schema, compression=compression,
+                        encoding=encoding)
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                       schema=schema,
                                       version=1,
@@ -402,14 +434,6 @@ def make_part_file(f, data, schema, compression=None):
     return rg
 
 
-def def_open(f):
-    return open(f, 'wb')
-
-
-def def_mkdirs(f):
-    os.makedirs(f, exist_ok=True)
-
-
 def make_metadata(data):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
@@ -419,20 +443,20 @@ def make_metadata(data):
                                       created_by='parquet-python',
                                       row_groups=[])
 
-    for col in data.columns:
-        if str(data[col].dtype) == 'category':
-            se, type, _ = find_type(data[col].cat.categories)
-            se.name = col
+    for column in data.columns:
+        if str(data[column].dtype) == 'category':
+            se, type, _ = find_type(data[column].cat.categories)
+            se.name = column
         else:
-            se, type, _ = find_type(data[col])
+            se, type, _ = find_type(data[column])
         fmd.schema.append(se)
         root.num_children += 1
     return fmd
 
 
-def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.PLAIN,
-          compression=None, file_scheme='simple', open_with=def_open,
-          mkdirs=def_mkdirs):
+def write(filename, data, partitions=[0], encoding="PLAIN",
+          compression=None, file_scheme='simple', open_with=default_openw,
+          mkdirs=default_mkdirs):
     """ data is a 1d int array for starters
 
     Provisional parameters
@@ -454,12 +478,13 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
     open_with: function
         When called with a path/URL, returns an open file-like object
     """
+    sep = sep_from_open(open_with)
     if file_scheme == 'simple':
-        fname = filename
+        fn = filename
     else:
-        def_mkdirs(filename)
-        fname = os.path.join(filename, '_metadata')
-    with open_with(fname) as f:
+        mkdirs(filename)
+        fn = sep.join([filename, '_metadata'])
+    with open_with(fn) as f:
         f.write(MARKER)
         fmd = make_metadata(data)
 
@@ -467,13 +492,14 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
             end = partitions[i+1] if i < (len(partitions) - 1) else None
             if file_scheme == 'simple':
                 rg = make_row_group(f, data[start:end], fmd.schema,
-                                    compression=compression)
+                                    compression=compression, encoding=encoding)
             else:
                 part = 'part.%i.parquet' % i
-                partname = os.path.join(filename, part)
+                partname = sep.join([filename, part])
                 with open_with(partname) as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
-                                        compression=compression)
+                                        compression=compression,
+                                        encoding=encoding)
                 for chunk in rg.columns:
                     chunk.file_path = part
 
@@ -484,13 +510,13 @@ def write(filename, data, partitions=[0, 500], encoding=parquet_thrift.Encoding.
         f.write(MARKER)
 
     if file_scheme != 'simple':
-        write_common_metadata(os.path.join(filename, '_common_metadata'), fmd,
+        write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                               open_with)
 
 
-def write_common_metadata(fname, fmd, open_with):
+def write_common_metadata(fn, fmd, open_with):
     """For hive-style parquet, write schema in special shared file"""
-    with open_with(fname) as f:
+    with open_with(fn) as f:
         f.write(MARKER)
         fmd.row_groups = []
         foot_size = write_thrift(f, fmd)
@@ -500,18 +526,19 @@ def write_common_metadata(fname, fmd, open_with):
 
 def dask_dataframe_to_parquet(filename, data,
         encoding=parquet_thrift.Encoding.PLAIN, compression=None,
-        open_with=def_open, mkdirs=def_mkdirs):
+        open_with=default_openw, mkdirs=default_mkdirs):
     """Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
+    sep = sep_from_open(open_with)
     from dask import delayed, compute
-    def_mkdirs(filename)
-    fname = os.path.join(filename, '_metadata')
+    mkdirs(filename)
+    fn = sep.join([filename, '_metadata'])
     fmd = make_metadata(data.head(10))
 
     def mapper(data, i):
         part = 'part.%i.parquet' % i
-        partname = os.path.join(filename, part)
+        partname = sep.join([filename, part])
         with open_with(partname) as f2:
             rg = make_part_file(f2, data, fmd.schema, compression=compression)
         for chunk in rg.columns:
@@ -523,13 +550,13 @@ def dask_dataframe_to_parquet(filename, data,
     for rg in out:
         fmd.row_groups.append(rg)
 
-    with open_with(fname) as f:
+    with open_with(fn) as f:
         f.write(MARKER)
         foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
         f.write(MARKER)
 
-    write_common_metadata(os.path.join(filename, '_common_metadata'), fmd,
+    write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                           open_with)
 
 

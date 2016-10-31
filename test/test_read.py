@@ -62,7 +62,7 @@ def test_read_dask():
     s3 = s3fs.S3FileSystem()
     myopen = s3.open
     pf = parquet.ParquetFile('MDtemp/split/_metadata', open_with=myopen)
-    df = pf.to_dask()
+    df = pf.to_dask_dataframe()
     out = df.compute()
     assert out.shape == (2000, 3)
     assert (out.cat.value_counts() == [1000, 1000]).all()

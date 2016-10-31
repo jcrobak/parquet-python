@@ -121,20 +121,9 @@ def test_roundtrip_s3():
           open_with=myopen, mkdirs=noop)
     myopen = s3.open
     pf = ParquetFile('MDtemp/temp_parq', open_with=myopen)
-    df = pf.to_pandas(usecats=['cat', 'bcat'])
+    df = pf.to_pandas(categories=['cat', 'bcat'])
     for col in data:
         assert (df[col] == data[col])[~df[col].isnull()].all()
-
-    # for line in open('/Users/mdurant/.aws/credentials'):
-    #     if line.startswith('aws_access'):
-    #         key = line.split('=')[1][:-1]
-    #     if line.startswith('aws_secret'):
-    #         secret = line.split('=')[1][:-1]
-    #
-    # df = sql.read.parquet('s3a://{}:{}@MDtemp/temp_parq'.format(key, secret))
-    # ddf = df.toPandas()
-    # for col in data:
-    #     assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
 @pytest.mark.parametrize('scheme,partitions,comp',
@@ -159,6 +148,9 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
     r = ParquetFile(fname)
 
     df = r.to_pandas()
+
+    assert data.cat.dtype == 'category'
+
     for col in r.columns:
         assert (df[col] == data[col]).all()
 
@@ -174,6 +166,8 @@ def test_roundtrip_complex(tempdir, scheme,):
                          'td': [datetime.timedelta(seconds=1)] * 1000,
                          'bool': np.random.choice([True, False], size=1000)
                          })
+    data.loc[100, 't'] = None
+
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme)
 
@@ -181,7 +175,7 @@ def test_roundtrip_complex(tempdir, scheme,):
 
     df = r.to_pandas()
     for col in r.columns:
-        assert (df[col] == data[col]).all()
+        assert (df[col] == data[col])[~data[col].isnull()].all()
 
 
 def test_write_with_dask(tempdir):
@@ -205,3 +199,32 @@ def test_write_with_dask(tempdir):
     df = r.to_pandas()
     for col in r.columns:
         assert (df[col] == data[col]).all()
+
+
+@pytest.mark.skip()
+def test_nulls_roundtrip(tempdir):
+    fname = os.path.join(tempdir, 'temp.parq')
+    data = pd.DataFrame({'o': np.random.choice(['hello', 'world', None],
+                                               size=1000)})
+    data['cat'] = data['o'].astype('category')
+    writer.write(fname, data)
+
+    r = ParquetFile(fname)
+    df = r.to_pandas()
+    for col in r.columns:
+        assert (df[col] == data[col])[~data[col].isnull()].all()
+        assert (data[col].isnull() == df[col].isnull()).all()
+
+
+@pytest.mark.skip()
+def test_write_delta(tempdir):
+    fname = os.path.join(tempdir, 'temp.parq')
+    data = pd.DataFrame({'i1': np.arange(10, dtype=np.int32) + 2,
+                         'i2': np.cumsum(np.random.randint(
+                                 0, 5, size=10)).astype(np.int32) + 2})
+    writer.write(fname, data, encoding="DELTA_BINARY_PACKED")
+
+    df = sql.read.parquet(fname)
+    ddf = df.toPandas()
+    for col in data:
+        assert (ddf[col] == data[col])[~ddf[col].isnull()].all()

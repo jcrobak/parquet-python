@@ -15,10 +15,7 @@ from .core import ParquetException, read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
 from . import core, schema, converted_types, encoding
-
-
-def def_open(f):
-    return open(f, 'rb')
+from .util import default_open, sep_from_open
 
 
 class ParquetFile(object):
@@ -26,24 +23,23 @@ class ParquetFile(object):
 
     Parameters
     ----------
-    fname: path/URL string
+    fn: path/URL string
     verify: test file start/end bytes
     open_with: function returning an open file
     """
-
-    def __init__(self, fname, verify=False, open_with=def_open):
-        if isinstance(fname, str):
+    def __init__(self, fn, verify=False, open_with=default_open):
+        if isinstance(fn, str):
             try:
-                # backend may not have something equivalent to `isdir()`
-                f = open_with(fname)
+                fn2 = sep_from_open(open_with).join([fn, '_metadata'])
+                f = open_with(fn2)
+                fn = fn2
             except (IOError, OSError):
-                fname = os.path.join(fname, '_metadata')
-                f = open_with(fname)
+                f = open_with(fn)
         else:
-            f = fname
-            self.fname = str(fname)
+            f = fn
+            self.fn = str(fn)
         self.open = open_with
-        self.fname = fname
+        self.fn = fn
         self.f = f
         self._parse_header(f, verify)
         self._read_partitions()
@@ -58,14 +54,14 @@ class ParquetFile(object):
             if verify:
                 assert f.read() == b'PAR1'
         except (AssertionError, struct.error):
-            raise ParquetException('File parse failed: %s' % self.fname)
+            raise ParquetException('File parse failed: %s' % self.fn)
 
         f.seek(-(head_size+8), 2)
         try:
             fmd = read_thrift(f, parquet_thrift.FileMetaData)
         except thriftpy.transport.TTransportException:
             raise ParquetException('Metadata parse failed: %s' %
-                                         self.fname)
+                                         self.fn)
         self.fmd = fmd
         self.head_size = head_size
         self.version = fmd.version
@@ -92,53 +88,49 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
-    def to_dask(self, columns=None, usecats=None, **kwargs):
+    def to_dask_dataframe(self, columns=None, categories=None, **kwargs):
         import dask.dataframe as dd
-        cols = columns or (self.columns + list(self.cats))
-        tot = [self.read_row_group_delayed(rg, cols, usecats, **kwargs)
+        from dask import delayed
+        columns = columns or (self.columns + list(self.cats))
+        tot = [delayed(self.read_row_group)(rg, columns, categories, **kwargs)
                for rg in self.row_groups]
-        dtypes = {k: v for k, v in self.dtypes.items() if k in cols}
+        dtypes = {k: v for k, v in self.dtypes.items() if k in columns}
 
         # TODO: if categories vary from one rg to next, need to cope
         return dd.from_delayed(tot, metadata=dtypes, divisions=self.divisions)
 
-    def read_row_group_delayed(self, rg, cols, usecats, filters={}):
-        from dask import delayed
-        return delayed(self.read_row_group)(rg, cols, usecats, filters=filters)
-
-    def read_row_group(self, rg, cols, usecats, filters={}):
+    def read_row_group(self, rg, columns, categories, filters={}):
         """Filter syntax: [(column, op, val), ...],
         where op is [==, >, >=, <, <=, !=, in, not in]
         """
         out = {}
-        fname = self.fname
+        fn = self.fn
         helper = schema.SchemaHelper(self.schema)
         if filters and filter_out_stats(rg, filters, helper):
             return pd.DataFrame()
         if filters and self.cats and filter_out_cats(rg, filters):
             return pd.DataFrame()
 
-        for col in rg.columns:
-            name = ".".join(col.meta_data.path_in_schema)
+        for column in rg.columns:
+            name = ".".join(column.meta_data.path_in_schema)
             se = helper.schema_element(name)
-            if name not in cols:
+            if name not in columns:
                 continue
 
-
-            if col.file_path is None:
+            if column.file_path is None:
                 # continue reading from the same base file
                 infile = self.f
             else:
                 # relative file
-                ofname = os.path.join(os.path.dirname(self.fname),
-                                      col.file_path)
-                if ofname != fname:
+                ofname = sep_from_open(self.open).join(
+                        [os.path.dirname(self.fn), column.file_path])
+                if ofname != fn:
                     # open relative file, if not the current one
                     infile = self.open(ofname)
-                    fname = ofname
+                    fn = ofname
 
-            use = name in usecats if usecats is not None else False
-            s = core.read_col(col, helper, infile, use_cat=use)
+            use = name in categories if categories is not None else False
+            s = core.read_col(column, helper, infile, use_cat=use)
             out[name] = s
         out = pd.DataFrame(out)
 
@@ -155,10 +147,10 @@ class ParquetFile(object):
                     codes, [val_to_num(c) for c in self.cats[cat]])
         return out
 
-    def to_pandas(self, columns=None, usecats=None, filters={}):
-        cols = columns or self.columns
-        tot = [self.read_row_group(rg, cols, usecats, filters=filters) for rg in
-               self.row_groups]
+    def to_pandas(self, columns=None, categories=None, filters={}):
+        columns = columns or self.columns
+        tot = [self.read_row_group(rg, columns, categories, filters=filters)
+               for rg in self.row_groups]
         tot = [t for t in tot if len(tot)]
 
         # TODO: if categories vary from one rg to next, need
@@ -171,7 +163,7 @@ class ParquetFile(object):
 
     @property
     def info(self):
-        return {'name': self.fname, 'columns': self.columns,
+        return {'name': self.fn, 'columns': self.columns,
                 'categories': list(self.cats), 'rows': self.count}
 
     @property
@@ -188,31 +180,31 @@ class ParquetFile(object):
         return np.cumsum([0] + [rg.num_rows for rg in self.row_groups])
 
     def __str__(self):
-        return "<Parquet File '%s'>" % self.fname
+        return "<Parquet File '%s'>" % self.fn
 
     __repr__ = __str__
 
 
 def filter_out_stats(rg, filters, helper):
     """Based on filters, should this row_group be avoided"""
-    for col in rg.columns:
+    for column in rg.columns:
         vmax, vmin = None, None
-        name = ".".join(col.meta_data.path_in_schema)
+        name = ".".join(column.meta_data.path_in_schema)
         app_filters = [f[1:] for f in filters if f[0] == name]
         for op, val in app_filters:
             se = helper.schema_element(name)
-            if col.meta_data.statistics is not None:
-                s = col.meta_data.statistics
+            if column.meta_data.statistics is not None:
+                s = column.meta_data.statistics
                 if s.max is not None:
                     b = s.max if isinstance(s.max, bytes) else bytes(
                             s.max, 'ascii')
-                    vmax = encoding.read_plain(b, col.meta_data.type, 1)
+                    vmax = encoding.read_plain(b, column.meta_data.type, 1)
                     if se.converted_type:
                         vmax = converted_types.convert(vmax, se)
                 if s.min is not None:
                     b = s.min if isinstance(s.min, bytes) else bytes(
                             s.min, 'ascii')
-                    vmin = encoding.read_plain(b, col.meta_data.type, 1)
+                    vmin = encoding.read_plain(b, column.meta_data.type, 1)
                     if se.converted_type:
                         vmin = converted_types.convert(vmin, se)
                 out = filter_val(op, val, vmin, vmax)

@@ -89,11 +89,10 @@ def read_rle(file_obj, header, bit_width, o):
 @numba.njit(nogil=True)
 def width_from_max_int(value):
     """Convert the value specified to a bit_width."""
-    for i in range(1, 64):
-        value >>= 1
+    for i in range(0, 64):
         if value == 0:
             return i
-    return 1
+        value >>= 1
 
 
 @numba.njit(nogil=True)
