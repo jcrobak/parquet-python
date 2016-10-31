@@ -1,9 +1,27 @@
+sudo: False
+
 language: python
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y libsnappy-dev
-  - pip install python-snappy
+
+matrix:
+  include:
+    - python: 3.5
+
 install:
-  - pip install tox
+  # Install conda
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update conda
+
+  # Install dependencies
+  - conda create -n test python=$TRAVIS_PYTHON_VERSION pytest boto3
+  - source activate test
+  - conda install numpy pandas numba thriftpy
+  - pip install python-snappy
+
 script:
-  - tox
+  - py.test -x --pyargs fastparquet
+
+notifications:
+  email: false
