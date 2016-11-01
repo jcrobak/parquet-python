@@ -8,12 +8,12 @@ except ImportError:
     from distutils.core import setup
 
 setup(
-    name='parquet',
+    name='fastparquet',
     version='2.0',
     description='Python support for Parquet file format',
     author='Joe Crobak, Martin Durant',
     author_email='mdurant@continuum.io',
-    url='https://github.com/martindurant/parquet-python/',
+    url='https://github.com/martindurant/fastparquet/',
     license='Apache License 2.0',
     classifiers=[
         'Development Status :: 3 - Alpha',
@@ -29,10 +29,10 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
     ],
-    packages=['parquet'],
+    packages=['fastparquet'],
     install_requires=[open('requirements.txt').read().strip().split('\n')],
     long_description=(open('README.rst').read() if os.path.exists('README.rst')
                       else ''),
-    package_data={'parquet': ['*.thrift']},
+    package_data={'fastparquet': ['*.thrift']},
     include_package_data=True,
 )
