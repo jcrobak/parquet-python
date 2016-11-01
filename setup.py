@@ -1,7 +1,6 @@
 """setup.py - build script for parquet-python."""
 
 import os
-here = os.path.dirname(os.path.abspath(__file__))
 
 try:
     from setuptools import setup
@@ -10,7 +9,7 @@ except ImportError:
 
 setup(
     name='fastparquet',
-    version='0.0.1',
+    version='0.0.1post1',
     description='Python support for Parquet file format',
     author='Joe Crobak, Martin Durant',
     author_email='mdurant@continuum.io',
@@ -31,8 +30,8 @@ setup(
         'Programming Language :: Python :: Implementation :: PyPy',
     ],
     packages=['fastparquet'],
-    install_requires=[open(os.path.join(here, 'requirements.txt')).read().strip().split('\n')],
-    long_description=(open(os.path.join(here, 'README.rst')).read() if os.path.exists('README.rst')
+    install_requires=[open('requirements.txt').read().strip().split('\n')],
+    long_description=(open('README.rst').read() if os.path.exists('README.rst')
                       else ''),
     package_data={'fastparquet': ['*.thrift']},
     include_package_data=True,
