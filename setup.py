@@ -1,5 +1,7 @@
 """setup.py - build script for parquet-python."""
 
+import os
+
 try:
     from setuptools import setup
 except ImportError:
