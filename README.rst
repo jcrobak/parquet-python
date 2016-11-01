@@ -4,7 +4,7 @@ fastparquet
 .. image:: https://travis-ci.org/jcrobak/parquet-python.svg?branch=master
     :target: https://github.com/martindurant/fastparquet
 
-fast is a python implementation of the `parquet
+fastparquet is a python implementation of the `parquet
 format <https://github.com/Parquet/parquet-format>`_, aiming integrate
 into python-based big data work-flows.
 
@@ -17,11 +17,7 @@ project.
 Introduction
 ------------
 
-Since the second week of October, this fork of `parquet-python`_ has been
-undergoing considerable redevelopment. The aim is to have a small and simple
-and performant library for reading and writing the parquet format from python.
-
-.. _parquet-python: https://github.com/jcrobak/parquet-python
+This software is alpha, expect frequent API changes and breakages.
 
 A list of expected features and their status in this branch can be found in
 `this issue`_.
@@ -31,8 +27,6 @@ Please feel free to comment on that list as to missing items and priorities.
 
 In the meantime, the more eyes on this code, the more example files and the
 more use cases the better.
-
-For the time being, this code should be considered extreme alpha.
 
 Requirements
 ------------
@@ -54,7 +48,9 @@ Optional (compression algorithms; gzip is always available):
 Installation
 ------------
 
-    > pip install git+https://github.com/martindurant/fastparquet
+Install from github::
+
+   > pip install git+https://github.com/martindurant/fastparquet
 
 Assuming the requirements have been met. Numba should be installed using conda,
 and a conda package of this package will be forthcoming.
@@ -66,8 +62,8 @@ Usage
 
 .. code-block:: python
 
-    import fastparquet
-    pf = fastparquet.ParquetFile('myfile.parq')
+    from fastparquet import ParquetFile
+    pf = ParquetFile('myfile.parq')
     df = pf.to_pandas()
     df2 = pf.to_pandas(['col1', 'col2'], categories=['col1'])
 
@@ -80,12 +76,22 @@ data files. The latter is what is typically output by hive/spark.
 
 .. code-block:: python
 
-    import fastparquet
-    fastparquet.write('outfile.parq', df)
-    fastparquet.write('outfile2.parq', df, partitions=[0, 10000, 20000],
-                      compression='GZIP', file_scheme='hive')
+    from fastparquet import write
+    write('outfile.parq', df)
+    write('outfile2.parq', df, partitions=[0, 10000, 20000],
+          compression='GZIP', file_scheme='hive')
 
 The default is to produce a single output file with a single row-group
 (i.e., logical segment) and no compression. At the moment, only simple
 data-types and plain encoding are supported, so expect performance to be
 similar to *numpy.savez*.
+
+History
+-------
+
+Since the second week of October, this fork of `parquet-python`_ has been
+undergoing considerable redevelopment. The aim is to have a small and simple
+and performant library for reading and writing the parquet format from python.
+
+.. _parquet-python: https://github.com/jcrobak/parquet-python
+
