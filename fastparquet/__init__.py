@@ -11,8 +11,8 @@ import re
 import struct
 import thriftpy
 
-from .core import read_thrift
 from .thrift_structures import parquet_thrift
+from .core import read_thrift
 from .writer import write
 from . import core, schema, converted_types, api
 from .api import ParquetFile
