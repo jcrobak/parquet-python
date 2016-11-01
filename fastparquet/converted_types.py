@@ -27,21 +27,14 @@ logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
 try:
     from bson import BSON
+    unbson = lambda s: BSON(s).decode()
 except ImportError:
-    def BSON(x):
-        raise ImportError("BSON not found")
-
-PY3 = sys.version_info.major > 2
-
-# define bytes->int for non 2, 4, 8 byte ints
-if PY3:
-    def intbig(data):
-        """Convert big ints using python 3's built-in support."""
-        return int.from_bytes(data, 'big', signed=True)
-else:
-    def intbig(data):
-        """Convert big ints using a hack of encoding bytes as hex and decoding to int."""
-        return int(codecs.encode(data, 'hex'), 16)
+    try:
+        import bson
+        unbson = bson.loads
+    except:
+        def BSON(x):
+            raise ImportError("BSON not found")
 
 DAYS_TO_MILLIS = 86400000000000
 """Number of millis in a day. Used to convert a Date to a date"""
@@ -117,8 +110,8 @@ def convert(data, se):
         return data.astype(np.uint64)
     elif ctype == parquet_thrift.ConvertedType.JSON:
         return data.astype('O').str.decode('utf8').map(json.loads)
-    elif ctype == parquet_thrift.ConvertedType.BSON and BSON:
-        return data.map(lambda s: BSON(s).decode())
+    elif ctype == parquet_thrift.ConvertedType.BSON:
+        return data.map(unbson)
     elif ctype == parquet_thrift.ConvertedType.INTERVAL:
         # for those that understand, output is month, day, ms
         # maybe should convert to timedelta

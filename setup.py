@@ -1,17 +1,19 @@
 """setup.py - build script for parquet-python."""
 
+import os
+
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
 setup(
-    name='parquet',
-    version='1.1',
+    name='fastparquet',
+    version='0.0.1',
     description='Python support for Parquet file format',
-    author='Joe Crobak',
-    author_email='joecrow@gmail.com',
-    url='https://github.com/jcrobak/parquet-python',
+    author='Joe Crobak, Martin Durant',
+    author_email='mdurant@continuum.io',
+    url='https://github.com/martindurant/fastparquet/',
     license='Apache License 2.0',
     classifiers=[
         'Development Status :: 3 - Alpha',
@@ -27,21 +29,10 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
     ],
-    packages=['parquet'],
-    install_requires=[
-        'python-snappy',
-        'thriftpy>=0.3.6',
-    ],
-    extras_require={
-        ':python_version=="2.7"': [
-            "backports.csv",
-        ],
-    },
-    entry_points={
-        'console_scripts': [
-            'parquet = parquet.__main__:main',
-        ]
-    },
-    package_data={'parquet': ['*.thrift']},
+    packages=['fastparquet'],
+    install_requires=[open('requirements.txt').read().strip().split('\n')],
+    long_description=(open('README.rst').read() if os.path.exists('README.rst')
+                      else ''),
+    package_data={'fastparquet': ['*.thrift']},
     include_package_data=True,
 )

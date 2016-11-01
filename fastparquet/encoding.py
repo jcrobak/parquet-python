@@ -6,7 +6,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import array
-import bitarray
 import io
 import math
 import numba

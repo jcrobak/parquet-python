@@ -1,86 +1,97 @@
-parquet-python
-==============
+fastparquet
+===========
 
 .. image:: https://travis-ci.org/jcrobak/parquet-python.svg?branch=master
-    :target: https://travis-ci.org/jcrobak/parquet-python
+    :target: https://github.com/martindurant/fastparquet
 
-parquet-python is a pure-python implementation (currently with only
-read-support) of the `parquet
-format <https://github.com/Parquet/parquet-format>`_. It comes with a
-script for reading parquet files and outputting the data to stdout as
-JSON or TSV (without the overhead of JVM startup). Performance has not
-yet been optimized, but it's useful for debugging and quick viewing of
-data in files.
+fastparquet is a python implementation of the `parquet
+format <https://github.com/Parquet/parquet-format>`_, aiming integrate
+into python-based big data work-flows.
 
 Not all parts of the parquet-format have been implemented yet or tested
-e.g. nested data—see Todos below for a full list. With that said,
-parquet-python is capable of reading all the data files from the
+e.g. see the Todos linked below. With that said,
+fastparquet is capable of reading all the data files from the
 `parquet-compatability <https://github.com/Parquet/parquet-compatibility>`_
 project.
 
-requirements
-============
+Introduction
+------------
 
-parquet-python has been tested on python 2.7, 3.4, and 3.5. It depends
-on ``thrift`` (0.9) and ``python-snappy`` (for snappy compressed files).
+This software is alpha, expect frequent API changes and breakages.
 
-getting started
-===============
+A list of expected features and their status in this branch can be found in
+`this issue`_.
+Please feel free to comment on that list as to missing items and priorities.
 
-parquet-python is available via PyPi and can be installed using
-`pip install parquet`. The package includes the `parquet`
-command for reading python files, e.g. `parquet test.parquet`.
-See `parquet --help` for full usage.
+.. _this issue: https://github.com/martindurant/fastparquet/issues/1
 
-Example
+In the meantime, the more eyes on this code, the more example files and the
+more use cases the better.
+
+Requirements
+------------
+
+(all development is against recent versions in the default anaconda channels)
+
+Required:
+
+- numba
+- numpy
+- pandas
+
+Optional (compression algorithms; gzip is always available):
+
+- snappy
+- lzo
+- brotli
+
+Installation
+------------
+
+Install from github::
+
+   > pip install git+https://github.com/martindurant/fastparquet
+
+Assuming the requirements have been met. Numba should be installed using conda,
+and a conda package of this package will be forthcoming.
+
+Usage
+-----
+
+*Reading*
+
+.. code-block:: python
+
+    from fastparquet import ParquetFile
+    pf = ParquetFile('myfile.parq')
+    df = pf.to_pandas()
+    df2 = pf.to_pandas(['col1', 'col2'], categories=['col1'])
+
+You may specify which columns to load, which of those to keep as categoricals
+(if the data uses dictionary encoding). The file-path can be a single file,
+a metadata file pointing to other data files, or a directory (tree) containing
+data files. The latter is what is typically output by hive/spark.
+
+*Writing*
+
+.. code-block:: python
+
+    from fastparquet import write
+    write('outfile.parq', df)
+    write('outfile2.parq', df, partitions=[0, 10000, 20000],
+          compression='GZIP', file_scheme='hive')
+
+The default is to produce a single output file with a single row-group
+(i.e., logical segment) and no compression. At the moment, only simple
+data-types and plain encoding are supported, so expect performance to be
+similar to *numpy.savez*.
+
+History
 -------
 
-parquet-python currently has two programatic interfaces with similar
-functionality to Python's csv reader. First, it supports a DictReader
-which returns a dictionary per row. Second, it has a reader which
-returns a list of values for each row. Both function require a file-like
-object and support an optional ``columns`` field to only read the
-specified columns.
+Since the second week of October, this fork of `parquet-python`_ has been
+undergoing considerable redevelopment. The aim is to have a small and simple
+and performant library for reading and writing the parquet format from python.
 
-.. code:: python
+.. _parquet-python: https://github.com/jcrobak/parquet-python
 
-
-    import parquet
-    import json
-
-    ## assuming parquet file with two rows and three columns:
-    ## foo bar baz
-    ## 1   2   3
-    ## 4   5   6
-
-    with open("test.parquet") as fo:
-       # prints:
-       # {"foo": 1, "bar": 2}
-       # {"foo": 4, "bar": 5}
-       for row in parquet.DictReader(fo, columns=['foo', 'bar']):
-           print(json.dumps(row))
-
-
-    with open("test.parquet") as fo:
-       # prints:
-       # 1,2
-       # 4,5
-       for row in parquet.reader(fo, columns=['foo', 'bar]):
-           print(",".join([str(r) for r in row]))
-
-Todos
-=====
-
--  Support the deprecated bitpacking
--  Fix handling of repetition-levels and definition-levels
--  Tests for nested schemas, null data
--  Support reading of data from HDFS via snakebite and/or webhdfs.
--  Implement writing
--  performance evaluation and optimization (i.e. how does it compare to
-   the c++, java implementations)
-
-Contributing
-============
-
-Is done via Pull Requests. Please include tests with your changes and
-follow `pep8 <http://www.python.org/dev/peps/pep-0008/>`_.
