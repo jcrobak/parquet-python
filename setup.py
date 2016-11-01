@@ -9,7 +9,7 @@ except ImportError:
 
 setup(
     name='fastparquet',
-    version='2.0',
+    version='0.0.1',
     description='Python support for Parquet file format',
     author='Joe Crobak, Martin Durant',
     author_email='mdurant@continuum.io',
