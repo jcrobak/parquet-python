@@ -104,14 +104,15 @@ class ParquetFile(object):
         dtypes = {k: v for k, v in self.dtypes.items() if k in columns}
 
         # TODO: if categories vary from one rg to next, need to cope
-        return dd.from_delayed(tot, metadata=dtypes)
+        return dd.from_delayed(tot, meta=dtypes)
 
-    def read_row_group(self, rg, columns, categories, filters={}):
+    def read_row_group(self, rg, columns, categories, filters={},
+                       infile=None):
         """Filter syntax: [(column, op, val), ...],
         where op is [==, >, >=, <, <=, !=, in, not in]
         """
         out = {}
-        fn = self.fn
+        fn = infile or self.fn
 
         for column in rg.columns:
             name = ".".join(column.meta_data.path_in_schema)
@@ -122,7 +123,7 @@ class ParquetFile(object):
             if column.file_path is None:
                 # continue reading from the same base file
                 infile = self.f
-            else:
+            elif infile is None:
                 # relative file
                 ofname = sep_from_open(self.open).join(
                         [os.path.dirname(self.fn), column.file_path])

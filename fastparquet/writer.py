@@ -430,6 +430,7 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
     foot_size = write_thrift(f, fmd)
     f.write(struct.pack(b"<i", foot_size))
     f.write(MARKER)
+    f.close()
     return rg
 
 
@@ -513,14 +514,20 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
                               open_with)
 
 
-def write_common_metadata(fn, fmd, open_with):
+def write_common_metadata(fn, fmd, open_with=default_openw):
     """For hive-style parquet, write schema in special shared file"""
-    with open_with(fn) as f:
+    try:
+        if isinstance(fn, str):
+            f = open_with(fn)
+        else:
+            f = fn
         f.write(MARKER)
         fmd.row_groups = []
         foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
         f.write(MARKER)
+    finally:
+        fn.close()
 
 
 def dask_dataframe_to_parquet(filename, data,
