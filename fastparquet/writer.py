@@ -103,7 +103,7 @@ def find_type(data, convert=False):
             type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
             if convert:
                 out = data.values
-        elif all(isinstance(i, [list, dict]) for i in head):
+        elif all(isinstance(i, (list, dict)) for i in head):
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.JSON, None)
             if convert:
@@ -327,11 +327,12 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     compression: str or None
         if not None, must be one of the keys in ``compression.compress``
     """
-    has_nulls = selement.FieldRepetitionType = parquet_thrift.FieldRepetitionType.OPTIONAL
+    has_nulls = selement.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     tot_rows = len(data)
 
     # no NULL handling (but NaNs, NaTs are allowed)
     if has_nulls:
+        print('has nulls!')
         definition_data, data = make_definitions(data)
     else:
         definition_data = b""

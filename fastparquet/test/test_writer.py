@@ -228,8 +228,8 @@ def test_make_definitions_with_nulls():
         o = encoding.Numpy32(out)
         data = pd.Series(np.random.choice([True, None],
                                           size=np.random.randint(1, 1000)))
-        out = writer.make_definitions(data)
-        i = encoding.Numpy8(np.frombuffer(out, dtype=np.uint8))
+        out, d2 = writer.make_definitions(data)
+        i = encoding.Numpy8(np.fromstring(out, dtype=np.uint8))
         encoding.read_rle_bit_packed_hybrid(i, 1, length=None, o=o)
         out = o.so_far()[:len(data)]
         assert (out == ~data.isnull()).sum()
@@ -240,7 +240,7 @@ def test_make_definitions_without_nulls():
         out = np.empty(10000, dtype=np.int32)
         o = encoding.Numpy32(out)
         data = pd.Series([True] * np.random.randint(1, 10000))
-        out = writer.make_definitions(data)
+        out, d2 = writer.make_definitions(data)
 
         l = len(data) << 1
         p = 1
@@ -249,7 +249,7 @@ def test_make_definitions_without_nulls():
             p += 1
         assert len(out) == 4 + p + 1  # "length", num_count, value
 
-        i = encoding.Numpy8(np.frombuffer(out, dtype=np.uint8))
+        i = encoding.Numpy8(np.fromstring(out, dtype=np.uint8))
         encoding.read_rle_bit_packed_hybrid(i, 1, length=None, o=o)
         out = o.so_far()
         assert (out == ~data.isnull()).sum()
