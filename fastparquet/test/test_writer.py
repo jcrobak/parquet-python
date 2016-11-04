@@ -208,19 +208,60 @@ def test_write_with_dask(tempdir):
         assert (df[col] == data[col]).all()
 
 
-@pytest.mark.skip()
 def test_nulls_roundtrip(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
     data = pd.DataFrame({'o': np.random.choice(['hello', 'world', None],
                                                size=1000)})
     data['cat'] = data['o'].astype('category')
-    writer.write(fname, data)
+    writer.write(fname, data, has_nulls=['o', 'cat'])
 
     r = ParquetFile(fname)
     df = r.to_pandas()
     for col in r.columns:
         assert (df[col] == data[col])[~data[col].isnull()].all()
         assert (data[col].isnull() == df[col].isnull()).all()
+
+
+def test_make_definitions_with_nulls():
+    for _ in range(10):
+        out = np.empty(1000, dtype=np.int32)
+        o = encoding.Numpy32(out)
+        data = pd.Series(np.random.choice([True, None],
+                                          size=np.random.randint(1, 1000)))
+        out, d2 = writer.make_definitions(data)
+        i = encoding.Numpy8(np.fromstring(out, dtype=np.uint8))
+        encoding.read_rle_bit_packed_hybrid(i, 1, length=None, o=o)
+        out = o.so_far()[:len(data)]
+        assert (out == ~data.isnull()).sum()
+
+
+def test_make_definitions_without_nulls():
+    for _ in range(100):
+        out = np.empty(10000, dtype=np.int32)
+        o = encoding.Numpy32(out)
+        data = pd.Series([True] * np.random.randint(1, 10000))
+        out, d2 = writer.make_definitions(data)
+
+        l = len(data) << 1
+        p = 1
+        while l > 127:
+            l >>= 7
+            p += 1
+        assert len(out) == 4 + p + 1  # "length", num_count, value
+
+        i = encoding.Numpy8(np.fromstring(out, dtype=np.uint8))
+        encoding.read_rle_bit_packed_hybrid(i, 1, length=None, o=o)
+        out = o.so_far()
+        assert (out == ~data.isnull()).sum()
+
+    # class mock:
+    #     def is_required(self, *args):
+    #         return False
+    #     def max_definition_level(self, *args):
+    #         return 1
+    #     def __getattr__(self, item):
+    #         return None
+    # halper, metadata = mock(), mock()
 
 
 @pytest.mark.skip()

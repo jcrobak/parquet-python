@@ -93,16 +93,17 @@ def find_type(data, convert=False):
         if convert:
             out = data.values
     elif dtype == "O":
-        if all(isinstance(i, str) for i in data[:10]):
+        head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
+        if all(isinstance(i, str) for i in head):
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.UTF8, None)
             if convert:
                 out = data.str.encode('utf8').values
-        elif all(isinstance(i, bytes) for i in data[:10]):
+        elif all(isinstance(i, bytes) for i in head):
             type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
             if convert:
                 out = data.values
-        elif all(isinstance(i, list) for i in data[:10]) or all(isinstance(i, dict) for i in data[:10]):
+        elif all(isinstance(i, (list, dict)) for i in head):
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.JSON, None)
             if convert:
@@ -244,7 +245,11 @@ def write_length(l, o):
 def encode_rle_bp(data, width, o, withlength=False):
     """Write data into o using RLE/bitpacked hybrid
 
-    Uses bitpacking alone for now
+    data : values to encode (int32)
+    width : bits-per-value, set by max(data)
+    o : output encoding.Numpy8
+    withlength : bool
+        If definitions/repetitions, length of data must be pre-written
     """
     if withlength:
         start = o.loc
@@ -278,6 +283,30 @@ encode = {
 }
 
 
+def make_definitions(data):
+    """For data that can contain NULLs, produce definition levels binary
+    data: either bitpacked bools, or (if number of nulls == 0), single RLE
+    block."""
+    valid = ~data.isnull()
+    temp = encoding.Numpy8(np.empty(10, dtype=np.uint8))
+
+    if valid.all():
+        # no nulls at all
+        l = len(valid)
+        encode_unsigned_varint(l << 1, temp)
+        temp.write_byte(1)
+        block = struct.pack('<i', temp.loc) + temp.so_far().tostring()
+    else:
+        # bitpack bools
+        out = encode_plain(valid, None)
+
+        encode_unsigned_varint(len(out) << 1 | 1, temp)
+        head = temp.so_far().tostring()
+
+        block = struct.pack('<i', len(head + out)) + head + out
+    return block, data.valid()
+
+
 def write_column(f, data, selement, encoding='PLAIN', compression=None):
     """
     If f is a filename, opens data-only file to write to
@@ -298,9 +327,15 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     compression: str or None
         if not None, must be one of the keys in ``compression.compress``
     """
+    has_nulls = selement.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    tot_rows = len(data)
 
     # no NULL handling (but NaNs, NaTs are allowed)
-    definition_data = b""
+    if has_nulls:
+        print('has nulls!')
+        definition_data, data = make_definitions(data)
+    else:
+        definition_data = b""
 
     # No nested field handling (encode those as J/BSON)
     repetition_data = b""
@@ -335,7 +370,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         encoding = "PLAIN_DICTIONARY"
 
     start = f.tell()
-    bdata = encode[encoding](data, selement)
+    bdata = definition_data + repetition_data + encode[encoding](data, selement)
     try:
         max, min = data.max(), data.min()
         if encoding == "DELTA_BINARY_PACKED":
@@ -348,7 +383,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         max, min = None, None
 
     dph = parquet_thrift.DataPageHeader(
-            num_values=rows,
+            num_values=tot_rows,
             encoding=getattr(parquet_thrift.Encoding, encoding),
             definition_level_encoding=parquet_thrift.Encoding.RLE,
             repetition_level_encoding=parquet_thrift.Encoding.BIT_PACKED)
@@ -385,7 +420,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
                        parquet_thrift.Encoding.BIT_PACKED,
                        parquet_thrift.Encoding.PLAIN],
             codec=getattr(parquet_thrift.CompressionCodec, compression) if compression else 0,
-            num_values=rows, statistics=s,
+            num_values=tot_rows, statistics=s,
             data_page_offset=start, encoding_stats=p,
             key_value_metadata=[],
             total_uncompressed_size=uncompressed_size,
@@ -430,10 +465,11 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
     foot_size = write_thrift(f, fmd)
     f.write(struct.pack(b"<i", foot_size))
     f.write(MARKER)
+    f.close()
     return rg
 
 
-def make_metadata(data):
+def make_metadata(data, has_nulls=[]):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
@@ -448,6 +484,8 @@ def make_metadata(data):
             se.name = column
         else:
             se, type, _ = find_type(data[column])
+        if column in has_nulls and str(data[column].dtype) in ['category', 'object']:
+            se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
     return fmd
@@ -455,7 +493,7 @@ def make_metadata(data):
 
 def write(filename, data, partitions=[0], encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
-          mkdirs=default_mkdirs):
+          mkdirs=default_mkdirs, has_nulls=[]):
     """ data is a 1d int array for starters
 
     Provisional parameters
@@ -463,9 +501,7 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
     filename: string
         File contains everything (if file_scheme='same'), else contains the
         metadata only
-    data: pandas-like dataframe
-        simply could be dict of numpy arrays (in which case not sure if
-        partitions should be allowed)
+    data: pandas dataframe
     partitions: list of row index values to start new row groups
     encoding: single value from parquet_thrift.Encoding, if applied to all
         columns, or dict of name:parquet_thrift.Encoding for a different
@@ -476,6 +512,10 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
         only the metadata
     open_with: function
         When called with a path/URL, returns an open file-like object
+    has_nulls: list of strings
+        The named columns can have nulls. Only applies to Object and Category
+        columns, as pandas ints can't have NULLs, and NaN/NaT is equivalent
+        to NULL in float and time-like columns.
     """
     sep = sep_from_open(open_with)
     if file_scheme == 'simple':
@@ -485,7 +525,7 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
         fn = sep.join([filename, '_metadata'])
     with open_with(fn) as f:
         f.write(MARKER)
-        fmd = make_metadata(data)
+        fmd = make_metadata(data, has_nulls=has_nulls)
 
         for i, start in enumerate(partitions):
             end = partitions[i+1] if i < (len(partitions) - 1) else None
@@ -513,14 +553,18 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
                               open_with)
 
 
-def write_common_metadata(fn, fmd, open_with):
+def write_common_metadata(fn, fmd, open_with=default_openw):
     """For hive-style parquet, write schema in special shared file"""
-    with open_with(fn) as f:
-        f.write(MARKER)
-        fmd.row_groups = []
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(MARKER)
+    if isinstance(fn, str):
+        f = open_with(fn)
+    else:
+        f = fn
+    f.write(MARKER)
+    fmd.row_groups = []
+    foot_size = write_thrift(f, fmd)
+    f.write(struct.pack(b"<i", foot_size))
+    f.write(MARKER)
+    f.close()
 
 
 def dask_dataframe_to_parquet(filename, data,
