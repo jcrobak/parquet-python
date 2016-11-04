@@ -183,7 +183,7 @@ class ParquetFile(object):
         return dtype
 
     def __str__(self):
-        return "<Parquet File '%s'>" % self.fn
+        return "<Parquet File: %s>" % self.info
 
     __repr__ = __str__
 
