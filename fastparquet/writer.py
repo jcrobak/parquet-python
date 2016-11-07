@@ -496,53 +496,87 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
           mkdirs=default_mkdirs, has_nulls=[]):
     """ data is a 1d int array for starters
 
-    Provisional parameters
-    ----------------------
+    Parameters
+    ----------
+
     filename: string
         File contains everything (if file_scheme='same'), else contains the
         metadata only
-    data: pandas dataframe
+    data: pandas dataframe or groupby
+        If a dataframe, will create one file per partition; if a groupby,
+        will create partitioned directory tree and one or more files in
+        each location - the file_scheme will then be hive. Note that for
+        groupby objects, null values in the original grouping columns will
+        be silently dropped.
     partitions: list of row index values to start new row groups
     encoding: single value from parquet_thrift.Encoding, if applied to all
         columns, or dict of name:parquet_thrift.Encoding for a different
         encoding per column.
+    compression: str, dict
+        compression to apply to each column, e.g. GZIP or SNAPPY
     file_scheme: 'simple'|'hive'
         If simple: all goes in a single file
         If hive: each row group is in a separate file, and filename contains
         only the metadata
     open_with: function
         When called with a path/URL, returns an open file-like object
+    mkdirs: function
+        When called with a path/URL, creates any necessary dictionaries to
+        make that location writable, e.g., ``os.makedirs``. This is not
+        necessary if using the simple file scheme
     has_nulls: list of strings
         The named columns can have nulls. Only applies to Object and Category
         columns, as pandas ints can't have NULLs, and NaN/NaT is equivalent
         to NULL in float and time-like columns.
     """
     sep = sep_from_open(open_with)
-    if file_scheme == 'simple':
-        fn = filename
-    else:
+    if file_scheme != 'simple' or isinstance(data, pd.core.groupby.DataFrameGroupBy):
         mkdirs(filename)
         fn = sep.join([filename, '_metadata'])
+    else:
+        fn = filename
     with open_with(fn) as f:
         f.write(MARKER)
-        fmd = make_metadata(data, has_nulls=has_nulls)
 
-        for i, start in enumerate(partitions):
-            end = partitions[i+1] if i < (len(partitions) - 1) else None
-            if file_scheme == 'simple':
-                rg = make_row_group(f, data[start:end], fmd.schema,
-                                    compression=compression, encoding=encoding)
-            else:
-                part = 'part.%i.parquet' % i
-                partname = sep.join([filename, part])
-                with open_with(partname) as f2:
-                    rg = make_part_file(f2, data[start:end], fmd.schema,
-                                        compression=compression,
-                                        encoding=encoding)
-                for chunk in rg.columns:
-                    chunk.file_path = part
+        if isinstance(data, pd.core.groupby.DataFrameGroupBy):
+            fmd = False
+            names = list(data.dtypes.index.names)
+            for key in data.indices:
+                df = data.get_group(key)
+                fmd = fmd or make_metadata(df, has_nulls=has_nulls)
+                path = sep.join(["%s=%s" % (name, val) for name, val in zip(names, key)])
+                mkdirs(filename+sep+path)
+                for i, start in enumerate(partitions):
+                    end = partitions[i+1] if i < (len(partitions) - 1) else None
+                    part = 'part.%i.parquet' % i
+                    partname = sep.join([filename, path, part])
+                    with open_with(partname) as f2:
+                        rg = make_part_file(f2, df[start:end], fmd.schema,
+                                            compression=compression,
+                                            encoding=encoding)
+                    for chunk in rg.columns:
+                        chunk.file_path = sep.join([path, part])
 
-            fmd.row_groups.append(rg)
+                    fmd.row_groups.append(rg)
+            fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
+        else:
+            fmd = make_metadata(data, has_nulls=has_nulls)
+            for i, start in enumerate(partitions):
+                end = partitions[i+1] if i < (len(partitions) - 1) else None
+                if file_scheme == 'simple':
+                    rg = make_row_group(f, data[start:end], fmd.schema,
+                                        compression=compression, encoding=encoding)
+                else:
+                    part = 'part.%i.parquet' % i
+                    partname = sep.join([filename, part])
+                    with open_with(partname) as f2:
+                        rg = make_part_file(f2, data[start:end], fmd.schema,
+                                            compression=compression,
+                                            encoding=encoding)
+                    for chunk in rg.columns:
+                        chunk.file_path = part
+
+                fmd.row_groups.append(rg)
 
         foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))

@@ -276,3 +276,28 @@ def test_write_delta(tempdir):
     ddf = df.toPandas()
     for col in data:
         assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
+
+
+def test_groups_roundtrip(tempdir):
+    df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
+                       'b': np.random.randint(0, 64000, size=1000),
+                       'c': np.random.choice([True, False], size=1000)})
+    gb = df.groupby(['a', 'c'])
+    writer.write(tempdir, gb)
+
+    r = ParquetFile(tempdir)
+    assert r.columns == ['b']
+    out = r.to_pandas()
+
+    for i, row in out.iterrows():
+        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
+    writer.write(tempdir, gb, partitions=[0, 50])
+
+    r = ParquetFile(tempdir)
+    assert r.count == sum(~df.a.isnull())
+    assert len(r.row_groups) == 8
+    out = r.to_pandas()
+
+    for i, row in out.iterrows():
+        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)

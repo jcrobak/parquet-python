@@ -1,3 +1,4 @@
+import ast
 import os
 import pandas as pd
 
@@ -30,11 +31,7 @@ def default_open(f):
 def val_to_num(x):
     # What about ast.literal_eval?
     try:
-        return int(x)
-    except ValueError:
-        pass
-    try:
-        return float(x)
+        return ast.literal_eval(x)
     except ValueError:
         pass
     try:
