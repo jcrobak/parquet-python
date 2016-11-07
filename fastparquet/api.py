@@ -27,20 +27,22 @@ class ParquetFile(object):
     verify: test file start/end bytes
     open_with: function returning an open file
     """
-    def __init__(self, fn, verify=False, open_with=default_open):
+    def __init__(self, fn, verify=False, open_with=default_open,
+                 sep=os.sep):
         if isinstance(fn, str):
             try:
-                fn2 = sep_from_open(open_with).join([fn, '_metadata'])
-                f = open_with(fn2)
+                fn2 = sep.join([fn, '_metadata'])
+                f = open_with(fn2, 'rb')
                 fn = fn2
             except (IOError, OSError):
-                f = open_with(fn)
+                f = open_with(fn, 'rb')
         else:
             f = fn
             self.fn = str(fn)
         self.open = open_with
         self.fn = fn
         self.f = f
+        self.sep = sep
         self._parse_header(f, verify)
         self._read_partitions()
 
@@ -125,11 +127,11 @@ class ParquetFile(object):
                 infile = self.f
             elif infile is None:
                 # relative file
-                ofname = sep_from_open(self.open).join(
+                ofname = self.sep.join(
                         [os.path.dirname(self.fn), column.file_path])
                 if ofname != fn:
                     # open relative file, if not the current one
-                    infile = self.open(ofname)
+                    infile = self.open(ofname, 'rb')
                     fn = ofname
 
             use = name in categories if categories is not None else False
