@@ -185,29 +185,6 @@ def test_roundtrip_complex(tempdir, scheme,):
         assert (df[col] == data[col])[~data[col].isnull()].all()
 
 
-def test_write_with_dask(tempdir):
-    dd = pytest.importorskip('dask.dataframe')
-    data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                         'i64': np.arange(1000, dtype=np.int64),
-                         'f': np.arange(1000, dtype=np.float64),
-                         'bhello': np.random.choice([b'hello', b'you',
-                            b'people'], size=1000).astype("O")})
-    data['a'] = np.array([b'a', b'b', b'c', b'd', b'e']*200, dtype="S1")
-    data['aa'] = data['a'].map(lambda x: 2*x).astype("S2")
-    data['hello'] = data.bhello.str.decode('utf8')
-    data['bcat'] = data.bhello.astype('category')
-    data['cat'] = data.hello.astype('category')
-
-    df = dd.from_pandas(data, chunksize=200)
-    writer.dask_dataframe_to_parquet(tempdir, df)
-
-    r = ParquetFile(tempdir)
-
-    df = r.to_pandas()
-    for col in r.columns:
-        assert (df[col] == data[col]).all()
-
-
 def test_nulls_roundtrip(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
     data = pd.DataFrame({'o': np.random.choice(['hello', 'world', None],

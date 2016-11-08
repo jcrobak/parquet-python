@@ -454,18 +454,18 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
 
 
 def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
-    f.write(MARKER)
-    rg = make_row_group(f, data, schema, compression=compression,
-                        encoding=encoding)
-    fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                      schema=schema,
-                                      version=1,
-                                      created_by='parquet-python',
-                                      row_groups=[rg])
-    foot_size = write_thrift(f, fmd)
-    f.write(struct.pack(b"<i", foot_size))
-    f.write(MARKER)
-    f.close()
+    with f as f:
+        f.write(MARKER)
+        rg = make_row_group(f, data, schema, compression=compression,
+                            encoding=encoding)
+        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                          schema=schema,
+                                          version=1,
+                                          created_by='parquet-python',
+                                          row_groups=[rg])
+        foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
     return rg
 
 
@@ -599,39 +599,3 @@ def write_common_metadata(fn, fmd, open_with=default_openw):
     f.write(struct.pack(b"<i", foot_size))
     f.write(MARKER)
     f.close()
-
-
-def dask_dataframe_to_parquet(filename, data,
-        encoding=parquet_thrift.Encoding.PLAIN, compression=None,
-        open_with=default_openw, mkdirs=default_mkdirs):
-    """Same signature as write, but with file_scheme always hive-like, each
-    data partition becomes a row group in a separate file.
-    """
-    sep = sep_from_open(open_with)
-    from dask import delayed, compute
-    mkdirs(filename)
-    fn = sep.join([filename, '_metadata'])
-    fmd = make_metadata(data.head(10))
-
-    def mapper(data, i):
-        part = 'part.%i.parquet' % i
-        partname = sep.join([filename, part])
-        with open_with(partname) as f2:
-            rg = make_part_file(f2, data, fmd.schema, compression=compression)
-        for chunk in rg.columns:
-            chunk.file_path = part
-        return rg
-
-    out = compute(*(delayed(mapper)(d, i) for i, d in
-                  enumerate(data.to_delayed())))
-    for rg in out:
-        fmd.row_groups.append(rg)
-
-    with open_with(fn) as f:
-        f.write(MARKER)
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(MARKER)
-
-    write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
-                          open_with)

@@ -11,6 +11,7 @@ import json
 import numpy as np
 import os
 import pandas as pd
+import shutil
 import sys
 import tempfile
 import unittest
@@ -23,11 +24,21 @@ import fastparquet
 TEST_DATA = "test-data"
 
 
-def test_header_magic_bytes():
+@pytest.yield_fixture()
+def tempdir():
+    d = tempfile.mkdtemp()
+    yield d
+    if os.path.exists(d):
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_header_magic_bytes(tempdir):
     """Test reading the header magic bytes."""
-    f = io.BytesIO(b"PAR1_some_bogus_data")
+    fn = os.path.join(tempdir, 'temp.parq')
+    with open(fn, 'wb') as f:
+        f.write(b"PAR1_some_bogus_data")
     with pytest.raises(fastparquet.ParquetException):
-        p = fastparquet.ParquetFile(f, verify=True)
+        p = fastparquet.ParquetFile(fn, verify=True)
 
 
 def test_read_footer():
@@ -85,16 +96,6 @@ def test_read_s3(s3):
     df = pf.to_pandas()
     assert df.shape == (2000, 3)
     assert (df.cat.value_counts() == [1000, 1000]).all()
-
-
-def test_read_dask(s3):
-    pytest.importorskip('dask')
-    myopen = s3.open
-    pf = fastparquet.ParquetFile(TEST_DATA+'/split/_metadata', open_with=myopen)
-    df = pf.to_dask_dataframe()
-    out = df.compute()
-    assert out.shape == (2000, 3)
-    assert (out.cat.value_counts() == [1000, 1000]).all()
 
 
 @pytest.mark.parametrize("parquet_file", files)

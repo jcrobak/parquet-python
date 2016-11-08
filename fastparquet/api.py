@@ -29,21 +29,17 @@ class ParquetFile(object):
     """
     def __init__(self, fn, verify=False, open_with=default_open,
                  sep=os.sep):
-        if isinstance(fn, str):
-            try:
-                fn2 = sep.join([fn, '_metadata'])
-                f = open_with(fn2, 'rb')
-                fn = fn2
-            except (IOError, OSError):
-                f = open_with(fn, 'rb')
-        else:
-            f = fn
-            self.fn = str(fn)
+        try:
+            fn2 = sep.join([fn, '_metadata'])
+            f = open_with(fn2, 'rb')
+            fn = fn2
+        except (IOError, OSError):
+            f = open_with(fn, 'rb')
         self.open = open_with
         self.fn = fn
-        self.f = f
         self.sep = sep
-        self._parse_header(f, verify)
+        with f as f:
+            self._parse_header(f, verify)
         self._read_partitions()
 
     def _parse_header(self, f, verify=True):
@@ -91,22 +87,12 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
-    def to_dask_dataframe(self, columns=None, categories=None,
-                          filters={}, **kwargs):
-        import dask.dataframe as dd
-        from dask import delayed
-        columns = columns or (self.columns + list(self.cats))
-        rgs = [rg for rg in self.row_groups if
-               not(filter_out_stats(rg, filters, self.helper)) and
-               not(filter_out_cats(rg, filters))]
-        tot = [delayed(self.read_row_group)(rg, columns, categories, **kwargs)
-               for rg in rgs]
-        if len(tot) == 0:
-            raise ValueError("All partitions failed filtering")
-        dtypes = {k: v for k, v in self.dtypes.items() if k in columns}
-
-        # TODO: if categories vary from one rg to next, need to cope
-        return dd.from_delayed(tot, meta=dtypes)
+    def read_row_group_file(self, rg, columns, categories, filters={}):
+        ofname = self.sep.join([os.path.dirname(self.fn),
+                                rg.columns[0].file_path])
+        with self.open(ofname, 'rb') as f:
+            return self.read_row_group(rg, columns, categories,
+                                       filters={}, infile=f)
 
     def read_row_group(self, rg, columns, categories, filters={},
                        infile=None):
@@ -114,25 +100,13 @@ class ParquetFile(object):
         where op is [==, >, >=, <, <=, !=, in, not in]
         """
         out = {}
-        fn = infile or self.fn
 
         for column in rg.columns:
             name = ".".join(column.meta_data.path_in_schema)
             se = self.helper.schema_element(name)
+            use = name in categories if categories is not None else False
             if name not in columns:
                 continue
-
-            if column.file_path is None:
-                # continue reading from the same base file
-                infile = self.f
-            elif infile is None:
-                # relative file
-                ofname = self.sep.join(
-                        [os.path.dirname(self.fn), column.file_path])
-                if ofname != fn:
-                    # open relative file, if not the current one
-                    infile = self.open(ofname, 'rb')
-                    fn = ofname
 
             use = name in categories if categories is not None else False
             s = core.read_col(column, self.helper, infile, use_cat=use)
@@ -157,8 +131,17 @@ class ParquetFile(object):
         rgs = [rg for rg in self.row_groups if
                not(filter_out_stats(rg, filters, self.helper)) and
                not(filter_out_cats(rg, filters))]
-        tot = [self.read_row_group(rg, columns, categories, filters=filters)
-               for rg in rgs]
+        if all(column.file_path is None for rg in self.row_groups
+               for column in rg.columns):
+            with self.open(self.fn) as f:
+                tot = [self.read_row_group(rg, columns, categories,
+                                           filters=filters, infile=f)
+                       for rg in rgs]
+        else:
+            tot = [self.read_row_group_file(rg, columns, categories,
+                                            filters=filters)
+                   for rg in rgs]
+
         if len(tot) == 0:
             return pd.DataFrame(columns=columns + list(self.cats))
 

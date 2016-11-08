@@ -24,8 +24,8 @@ def default_mkdirs(f):
     os.makedirs(f, exist_ok=True)
 
 
-def default_open(f):
-    return open(f, 'rb')
+def default_open(f, mode='rb'):
+    return open(f, mode)
 
 
 def val_to_num(x):
