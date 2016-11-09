@@ -309,11 +309,9 @@ def make_definitions(data):
 
 def write_column(f, data, selement, encoding='PLAIN', compression=None):
     """
-    If f is a filename, opens data-only file to write to
+    Write a single column of data to an open Parquet file
 
-    Returns ColumnChunk structure
-
-    **NULL values are not yet handled**
+    TODO: NULL values are not yet handled
 
     Parameters
     ----------
@@ -326,6 +324,11 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         automatically used
     compression: str or None
         if not None, must be one of the keys in ``compression.compress``
+
+    Returns
+    -------
+    chunk: ColumnChunk structure
+
     """
     has_nulls = selement.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     tot_rows = len(data)
@@ -420,8 +423,10 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
                        parquet_thrift.Encoding.BIT_PACKED,
                        parquet_thrift.Encoding.PLAIN],
             codec=getattr(parquet_thrift.CompressionCodec, compression.upper()) if compression else 0,
-            num_values=tot_rows, statistics=s,
-            data_page_offset=start, encoding_stats=p,
+            num_values=tot_rows,
+            statistics=s,
+            data_page_offset=start,
+            encoding_stats=p,
             key_value_metadata=[],
             total_uncompressed_size=uncompressed_size,
             total_compressed_size=compressed_size)
@@ -438,9 +443,9 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
 
 def make_row_group(f, data, schema, file_path=None, compression=None,
                    encoding='PLAIN'):
+    """ Make a single row group of a Parquet file """
     rows = len(data)
-    rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0,
-                                 columns=[])
+    rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0, columns=[])
 
     for column in schema:
         if column.type is not None:
@@ -476,10 +481,11 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
 def make_metadata(data, has_nulls=[]):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
+
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                       schema=[root],
                                       version=1,
-                                      created_by='parquet-python',
+                                      created_by='fastparquet-python',
                                       row_groups=[])
 
     for column in data.columns:
@@ -498,11 +504,10 @@ def make_metadata(data, has_nulls=[]):
 def write(filename, data, partitions=[0], encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
           mkdirs=default_mkdirs, has_nulls=[]):
-    """ data is a 1d int array for starters
+    """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
     ----------
-
     filename: string
         File contains everything (if file_scheme='same'), else contains the
         metadata only
@@ -532,6 +537,10 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
         The named columns can have nulls. Only applies to Object and Category
         columns, as pandas ints can't have NULLs, and NaN/NaT is equivalent
         to NULL in float and time-like columns.
+
+    Examples
+    --------
+    >>> fastparquet.write('myfile.parquet', df)  # doctest: +SKIP
     """
     sep = sep_from_open(open_with)
     if file_scheme != 'simple' or isinstance(data, pd.core.groupby.DataFrameGroupBy):
