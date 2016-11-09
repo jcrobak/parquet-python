@@ -1,13 +1,14 @@
-from fastparquet.compression import compress_data, decompress_data, compress, decompress
+from fastparquet.compression import (compress_data, decompress_data,
+        compressions, decompressions)
 
 import pytest
 
 
-@pytest.mark.parametrize('fmt', compress)
+@pytest.mark.parametrize('fmt', compressions)
 def test_compress_decompress_roundtrip(fmt):
     data = b'123' * 1000
     compressed = compress_data(data, algorithm=fmt)
-    if fmt == 'uncompressed':
+    if fmt.lower() == 'uncompressed':
         assert compressed is data
     else:
         assert len(compressed) < len(data)
