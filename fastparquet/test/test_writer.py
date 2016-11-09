@@ -286,3 +286,18 @@ def test_write_compression_dict(tempdir, compression):
     df2 = r.to_pandas()
 
     tm.assert_frame_equal(df, df2)
+
+
+def test_write_compression_schema(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3],
+                       'y': [1., 2., 3.]})
+    fn = os.path.join(tempdir, 'tmp.parq')
+    writer.write(fn, df, compression={'x': 'gzip'})
+    r = ParquetFile(fn)
+
+    assert all(c.meta_data.codec for row in r.row_groups
+                                 for c in row.columns
+                                 if c.meta_data.path_in_schema == ['x'])
+    assert not any(c.meta_data.codec for row in r.row_groups
+                                 for c in row.columns
+                                 if c.meta_data.path_in_schema == ['y'])

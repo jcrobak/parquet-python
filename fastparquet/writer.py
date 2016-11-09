@@ -311,8 +311,6 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     """
     Write a single column of data to an open Parquet file
 
-    TODO: NULL values are not yet handled
-
     Parameters
     ----------
     f: open binary file
