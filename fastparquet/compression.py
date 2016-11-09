@@ -1,17 +1,14 @@
 
 import gzip
-import zlib
 from .thrift_structures import parquet_thrift
 # TODO: use stream/direct-to-buffer conversions instead of memcopy
 
 # TODO: enable ability to pass kwargs to compressor
 
 compressions = {'GZIP': gzip.compress,
-                'zlib': zlib.compress,
                 'UNCOMPRESSED': lambda x: x}
 
 decompressions = {'GZIP': gzip.decompress,
-                  'zlib': zlib.decompress,
                   'UNCOMPRESSED': lambda x: x}
 try:
     import snappy
