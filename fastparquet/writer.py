@@ -419,7 +419,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
             encodings=[parquet_thrift.Encoding.RLE,
                        parquet_thrift.Encoding.BIT_PACKED,
                        parquet_thrift.Encoding.PLAIN],
-            codec=getattr(parquet_thrift.CompressionCodec, compression) if compression else 0,
+            codec=getattr(parquet_thrift.CompressionCodec, compression.upper()) if compression else 0,
             num_values=tot_rows, statistics=s,
             data_page_offset=start, encoding_stats=p,
             key_value_metadata=[],

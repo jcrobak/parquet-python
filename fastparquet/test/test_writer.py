@@ -279,7 +279,11 @@ def test_groups_roundtrip(tempdir):
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
 
-@pytest.mark.parametrize('compression', ['GZIP', None, {'x': 'GZIP', 'y': None}])
+@pytest.mark.parametrize('compression', ['GZIP',
+                                         'gzip',
+                                         None,
+                                         {'x': 'GZIP'},
+                                         {'y': 'gzip', 'x': None}])
 def test_write_compression_dict(tempdir, compression):
     df = pd.DataFrame({'x': [1, 2, 3],
                        'y': [1., 2., 3.]})
