@@ -209,6 +209,8 @@ def statistics(obj):
         md = obj.meta_data
         s = obj.meta_data.statistics
         rv = {}
+        if not s:
+            return rv
         if s.max is not None:
             rv['max'] = encoding.read_plain(ensure_bytes(s.max), md.type, 1)[0]
         if s.min is not None:
