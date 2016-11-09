@@ -15,7 +15,8 @@ from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from .writer import write
 from . import core, schema, converted_types, encoding
-from .util import default_open, ParquetException, sep_from_open, val_to_num
+from .util import (default_open, ParquetException, sep_from_open, val_to_num,
+        ensure_bytes)
 
 
 class ParquetFile(object):
@@ -201,6 +202,34 @@ def filter_out_stats(rg, filters, helper):
                 if out is True:
                     return True
     return False
+
+
+def statistics(obj):
+    if isinstance(obj, parquet_thrift.ColumnChunk):
+        md = obj.meta_data
+        s = obj.meta_data.statistics
+        rv = {}
+        if s.max is not None:
+            rv['max'] = encoding.read_plain(ensure_bytes(s.max), md.type, 1)[0]
+        if s.min is not None:
+            rv['min'] = encoding.read_plain(ensure_bytes(s.min), md.type, 1)[0]
+        if s.null_count is not None:
+            rv['null_count'] = s.null_count
+        if s.distinct_count is not None:
+            rv['distinct_count'] = s.distinct_count
+        return rv
+
+    if isinstance(obj, parquet_thrift.RowGroup):
+        return {'/'.join(c.meta_data.path_in_schema): statistics(c)
+                for c in obj.columns}
+
+    if isinstance(obj, ParquetFile):
+        L = list(map(statistics, obj.row_groups))
+        names = obj.columns
+        d = {n: {col: [item[col].get(n, None) for item in L]
+                 for col in obj.columns}
+             for n in ['min', 'max', 'null_count', 'distinct_count']}
+        return d
 
 
 def filter_out_cats(rg, filters):

@@ -1,6 +1,10 @@
 import ast
 import os
+import shutil
+import tempfile
+
 import pandas as pd
+import pytest
 
 
 class ParquetException(Exception):
@@ -42,3 +46,18 @@ def val_to_num(x):
         return pd.to_timedelta(x)
     except:
         return x
+
+
+@pytest.yield_fixture()
+def tempdir():
+    d = tempfile.mkdtemp()
+    yield d
+    if os.path.exists(d):
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def ensure_bytes(s):
+    if hasattr(s, 'encode'):
+        return s.encode()
+    else:
+        return s

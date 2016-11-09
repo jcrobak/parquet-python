@@ -10,6 +10,7 @@ import pytest
 import shutil
 import tempfile
 
+from fastparquet.util import tempdir
 from fastparquet.test.test_read import s3
 from fastparquet.compression import compressions
 
@@ -77,14 +78,6 @@ def test_rle_bp():
 
         encoding.read_rle_bit_packed_hybrid(o, width, length=l, o=out)
         assert (out.so_far()[:len(values)] == values).all()
-
-
-@pytest.yield_fixture()
-def tempdir():
-    d = tempfile.mkdtemp()
-    yield d
-    if os.path.exists(d):
-        shutil.rmtree(d, ignore_errors=True)
 
 
 @pytest.mark.parametrize('scheme', ['simple', 'hive'])
