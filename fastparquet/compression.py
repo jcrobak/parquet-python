@@ -20,12 +20,6 @@ try:
 except ImportError:
     pass
 try:
-    import lz4
-    compressions['lz4'] = lz4.compress
-    decompressions['lz4'] =lz4.decompress
-except ImportError:
-    pass
-try:
     import lzo
     compressions['LZO'] = lzo.compress
     decompressions['LZO'] =lzo.decompress
