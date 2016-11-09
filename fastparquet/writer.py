@@ -444,8 +444,12 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
 
     for column in schema:
         if column.type is not None:
+            if isinstance(compression, dict):
+                comp = compression.get(column.name, None)
+            else:
+                comp = compression
             chunk = write_column(f, data[column.name], column,
-                                 compression=compression, encoding=encoding)
+                                 compression=comp, encoding=encoding)
             rg.columns.append(chunk)
     rg.total_byte_size = sum([c.meta_data.total_uncompressed_size for c in
                               rg.columns])
