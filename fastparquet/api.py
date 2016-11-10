@@ -222,7 +222,7 @@ def statistics(obj):
         return rv
 
     if isinstance(obj, parquet_thrift.RowGroup):
-        return {'/'.join(c.meta_data.path_in_schema): statistics(c)
+        return {'.'.join(c.meta_data.path_in_schema): statistics(c)
                 for c in obj.columns}
 
     if isinstance(obj, ParquetFile):
@@ -231,6 +231,14 @@ def statistics(obj):
         d = {n: {col: [item[col].get(n, None) for item in L]
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
+        helper = schema.SchemaHelper(obj.schema)
+        for col in obj.row_groups[0].columns:
+            column = '.'.join(col.meta_data.path_in_schema)
+            se = helper.schema_element(column)
+            if se.converted_type:
+                for name in ['min', 'max']:
+                    d[name][column] = [x if x is None else converted_types.convert(x, se)
+                                       for x in d[name][column]]
         return d
 
 

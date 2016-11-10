@@ -1,6 +1,7 @@
 
 import os
 
+import numpy as np
 import pandas as pd
 
 from fastparquet.util import tempdir
@@ -29,6 +30,20 @@ def test_statistics(tempdir):
                 'null_count': {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]}}
 
     assert s == expected
+
+
+def test_logical_types(tempdir):
+    df = pd.util.testing.makeMixedDataFrame()
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df, partitions=[0, 2])
+
+    p = ParquetFile(fn)
+
+    s = statistics(p)
+
+    assert isinstance(s['min']['D'][0], np.datetime64)
+
 
 def test_empty_statistics(tempdir):
     p = ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
