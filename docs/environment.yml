@@ -1,0 +1,6 @@
+name: fastparquet-docs
+dependencies:
+    - numba
+    - pandas
+    - numpy
+    - thriftpy>=0.3.6
