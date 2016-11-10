@@ -1,8 +1,8 @@
 
-from itertools import product
 import numpy as np
 import os
 import pandas as pd
+import pandas.util.testing as tm
 from fastparquet import ParquetFile
 from fastparquet import write
 from fastparquet import writer, encoding
@@ -10,7 +10,9 @@ import pytest
 import shutil
 import tempfile
 
+from fastparquet.util import tempdir
 from fastparquet.test.test_read import s3
+from fastparquet.compression import compressions
 
 TEST_DATA = "test-data"
 
@@ -78,18 +80,9 @@ def test_rle_bp():
         assert (out.so_far()[:len(values)] == values).all()
 
 
-@pytest.yield_fixture()
-def tempdir():
-    d = tempfile.mkdtemp()
-    yield d
-    if os.path.exists(d):
-        shutil.rmtree(d, ignore_errors=True)
-
-
-@pytest.mark.parametrize("scheme,partitions,comp",
-                         product(('simple', 'hive'),
-                                 ([0], [0, 500]),
-                                 (None, 'GZIP', 'SNAPPY')))
+@pytest.mark.parametrize('scheme', ['simple', 'hive'])
+@pytest.mark.parametrize('partitions', [[0], [0, 500]])
+@pytest.mark.parametrize('comp', [None] + list(compressions))
 def test_pyspark_roundtrip(tempdir, scheme, partitions, comp, sql):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
@@ -133,10 +126,9 @@ def test_roundtrip_s3(s3):
         assert (df[col] == data[col])[~df[col].isnull()].all()
 
 
-@pytest.mark.parametrize('scheme,partitions,comp',
-                         product(('simple', 'hive'),
-                                 ([0], [0, 500]),
-                                 (None, 'GZIP', 'SNAPPY')))
+@pytest.mark.parametrize('scheme', ['simple', 'hive'])
+@pytest.mark.parametrize('partitions', [[0], [0, 500]])
+@pytest.mark.parametrize('comp', [None, 'GZIP', 'SNAPPY'])
 def test_roundtrip(tempdir, scheme, partitions, comp):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
@@ -278,3 +270,34 @@ def test_groups_roundtrip(tempdir):
 
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
+
+@pytest.mark.parametrize('compression', ['GZIP',
+                                         'gzip',
+                                         None,
+                                         {'x': 'GZIP'},
+                                         {'y': 'gzip', 'x': None}])
+def test_write_compression_dict(tempdir, compression):
+    df = pd.DataFrame({'x': [1, 2, 3],
+                       'y': [1., 2., 3.]})
+    fn = os.path.join(tempdir, 'tmp.parq')
+    writer.write(fn, df, compression=compression)
+    r = ParquetFile(fn)
+    df2 = r.to_pandas()
+
+    tm.assert_frame_equal(df, df2)
+
+
+def test_write_compression_schema(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3],
+                       'y': [1., 2., 3.]})
+    fn = os.path.join(tempdir, 'tmp.parq')
+    writer.write(fn, df, compression={'x': 'gzip'})
+    r = ParquetFile(fn)
+
+    assert all(c.meta_data.codec for row in r.row_groups
+                                 for c in row.columns
+                                 if c.meta_data.path_in_schema == ['x'])
+    assert not any(c.meta_data.codec for row in r.row_groups
+                                 for c in row.columns
+                                 if c.meta_data.path_in_schema == ['y'])
