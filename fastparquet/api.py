@@ -22,13 +22,23 @@ from .util import (default_open, ParquetException, sep_from_open, val_to_num,
 
 
 class ParquetFile(object):
-    """For now: metadata representation
+    """The metadata of a parquet file or collection
+
+    Reads the metadata (row-groups and schema definition) and provides
+    methods to extract the data from the files.
 
     Parameters
     ----------
     fn: path/URL string
-    verify: test file start/end bytes
-    open_with: function returning an open file
+        Location of the data. If a directory, will attempt to read a file
+        "_metadata" within that directory.
+    verify: bool [False]
+        test file start/end byte markers
+    open_with: function
+        With the signature `func(path, mode)`, returns a context which
+        evaluated to a file open for reading. Defaults to the built-in `open`.
+    sep: string [`os.sep`]
+        Path separator to use, if data is in multiple files.
     """
     def __init__(self, fn, verify=False, open_with=default_open,
                  sep=os.sep):
@@ -78,7 +88,12 @@ class ParquetFile(object):
 
     @property
     def columns(self):
+        """Column names"""
         return [f.name for f in self.schema if f.num_children is None]
+
+    @property
+    def statistics(self):
+        return statistics(self)
 
     def _read_partitions(self):
         cats = {}
@@ -90,17 +105,16 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
-    def read_row_group_file(self, rg, columns, categories, filters={}):
+    def read_row_group_file(self, rg, columns, categories):
+        """Open file for reading, and process it as a row-group"""
         ofname = self.sep.join([os.path.dirname(self.fn),
                                 rg.columns[0].file_path])
         with self.open(ofname, 'rb') as f:
             return self.read_row_group(rg, columns, categories,
                                        filters={}, infile=f)
 
-    def read_row_group(self, rg, columns, categories, filters={},
-                       infile=None):
-        """Filter syntax: [(column, op, val), ...],
-        where op is [==, >, >=, <, <=, !=, in, not in]
+    def read_row_group(self, rg, columns, categories, infile=None):
+        """Access row-group in a file and read some columns into a data-frame.
         """
         out = {}
 
@@ -129,7 +143,26 @@ class ParquetFile(object):
                     codes, [val_to_num(c) for c in self.cats[cat]])
         return out
 
-    def to_pandas(self, columns=None, categories=None, filters={}):
+    def to_pandas(self, columns=None, categories=None, filters=[]):
+        """ Read data from parquet into a Pandas dataframe.
+
+        Parameters
+        ----------
+        columns: list of names or `None`
+            Column to load (see `ParquetFile.columns`). Any columns in the
+            data not in this list will be ignored. If `None`, read all columns.
+        categories: list of names or `None`
+            If a column is encoded using dictionary encoding in every row-group
+            and its name is also in this list, it will generate a Pandas
+            Category-type column, potentially saving memory and time.
+        filters: list of tuples
+            Filter syntax: [(column, op, val), ...],
+            where op is [==, >, >=, <, <=, !=, in, not in]
+
+        Returns
+        -------
+        Pandas data-frame
+        """
         columns = columns or self.columns
         rgs = [rg for rg in self.row_groups if
                not(filter_out_stats(rg, filters, self.helper)) and
@@ -154,15 +187,18 @@ class ParquetFile(object):
 
     @property
     def count(self):
+        """Total number of rows"""
         return sum(rg.num_rows for rg in self.row_groups)
 
     @property
     def info(self):
+        """Some metadata details"""
         return {'name': self.fn, 'columns': self.columns,
                 'categories': list(self.cats), 'rows': self.count}
 
     @property
     def dtypes(self):
+        """Implied types of the columns in the schema"""
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None}
         for cat in self.cats:
@@ -300,6 +336,10 @@ def sorted_partitioned_columns(pf):
 
 
 def filter_out_cats(rg, filters):
+    """Accoring to the filters, should this row-group be excluded
+
+    Considers the partitioning category applicable to this row-group
+    """
     if len(filters) == 0:
         return False
     partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
@@ -316,6 +356,10 @@ def filter_out_cats(rg, filters):
 
 
 def filter_val(op, val, vmin=None, vmax=None):
+    """Accoring to the filters, should this row-group be excluded
+
+    Considers the stats stored in the row-group meta-data.
+    """
     if vmin is not None:
         if op in ['==', '>='] and val > vmax:
             return True
