@@ -88,7 +88,7 @@ class ParquetFile(object):
 
     @property
     def columns(self):
-        """Column names"""
+        """ Column names """
         return [f.name for f in self.schema if f.num_children is None]
 
     @property
@@ -106,14 +106,15 @@ class ParquetFile(object):
         self.cats = {key: list(v) for key, v in cats.items()}
 
     def read_row_group_file(self, rg, columns, categories):
-        """Open file for reading, and process it as a row-group"""
+        """ Open file for reading, and process it as a row-group """
         ofname = self.sep.join([os.path.dirname(self.fn),
                                 rg.columns[0].file_path])
         with self.open(ofname, 'rb') as f:
             return self.read_row_group(rg, columns, categories, infile=f)
 
     def read_row_group(self, rg, columns, categories, infile=None):
-        """Access row-group in a file and read some columns into a data-frame.
+        """
+        Access row-group in a file and read some columns into a data-frame.
         """
         out = {}
 
@@ -143,7 +144,8 @@ class ParquetFile(object):
         return out
 
     def to_pandas(self, columns=None, categories=None, filters=[]):
-        """ Read data from parquet into a Pandas dataframe.
+        """
+        Read data from parquet into a Pandas dataframe.
 
         Parameters
         ----------
@@ -184,18 +186,18 @@ class ParquetFile(object):
 
     @property
     def count(self):
-        """Total number of rows"""
+        """ Total number of rows """
         return sum(rg.num_rows for rg in self.row_groups)
 
     @property
     def info(self):
-        """Some metadata details"""
+        """ Some metadata details """
         return {'name': self.fn, 'columns': self.columns,
                 'categories': list(self.cats), 'rows': self.count}
 
     @property
     def dtypes(self):
-        """Implied types of the columns in the schema"""
+        """ Implied types of the columns in the schema """
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None}
         for cat in self.cats:
@@ -210,7 +212,23 @@ class ParquetFile(object):
 
 
 def filter_out_stats(rg, filters, helper):
-    """Based on filters, should this row_group be avoided"""
+    """
+    According to the filters, should this row-group be excluded
+
+    Considers the statistics included in the metadata of this row-group
+
+    Parameters
+    ----------
+    rg: thrift RowGroup structure
+    filters: list of 3-tuples
+        Structure of each tuple: (column, op, value) where op is one of
+        ['==', '!=', '<', '<=', '>', '>=', 'in', 'not in'] and value is
+        appropriate for the column in question
+
+    Returns
+    -------
+    True or False
+    """
     if len(filters) == 0:
         return False
     for column in rg.columns:
@@ -333,9 +351,22 @@ def sorted_partitioned_columns(pf):
 
 
 def filter_out_cats(rg, filters):
-    """Accoring to the filters, should this row-group be excluded
+    """
+    According to the filters, should this row-group be excluded
 
     Considers the partitioning category applicable to this row-group
+
+    Parameters
+    ----------
+    rg: thrift RowGroup structure
+    filters: list of 3-tuples
+        Structure of each tuple: (column, op, value) where op is one of
+        ['==', '!=', '<', '<=', '>', '>=', 'in', 'not in'] and value is
+        appropriate for the column in question
+
+    Returns
+    -------
+    True or False
     """
     if len(filters) == 0:
         return False
@@ -353,9 +384,16 @@ def filter_out_cats(rg, filters):
 
 
 def filter_val(op, val, vmin=None, vmax=None):
-    """Accoring to the filters, should this row-group be excluded
+    """
+    Perform value comparison for filtering
 
-    Considers the stats stored in the row-group meta-data.
+    op: ['==', '!=', '<', '<=', '>', '>=', 'in', 'not in']
+    val: appropriate value
+    vmin, vmax: the range to compare within
+
+    Returns
+    -------
+    True or False
     """
     if vmin is not None:
         if op in ['==', '>='] and val > vmax:

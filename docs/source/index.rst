@@ -6,8 +6,8 @@ A python interface to the parquet file format.
 Introduction
 ------------
 
-The `parquet format <https://github.com/Parquet/parquet-format>`_ is a common binary data store, used
-particularly in the hadoop/big-data sphere. It provides several advantages relevant to big-data
+The `Parquet format <https://github.com/Parquet/parquet-format>`_ is a common binary data store, used
+particularly in the Hadoop/big-data sphere. It provides several advantages relevant to big-data
 processing:
 
 - columnar storage, only read the data of interest
@@ -18,7 +18,7 @@ processing:
 - statistics stored in metadata allow for skipping unneeded chunks
 - data partitioning using the directory structure
 
-Since it was developed as part of the hadoop ecosystem, parquet's reference implementation is
+Since it was developed as part of the Hadoop ecosystem, parquet's reference implementation is
 written in java. This package aims to provide a performant library to read and write parquet files
 from python, without any need for a python-java bridge. This will make the parquet format an
 ideal storage mechanism for python-based big data workflows.
