@@ -443,6 +443,8 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
                    encoding='PLAIN'):
     """ Make a single row group of a Parquet file """
     rows = len(data)
+    if rows == 0:
+        return
     rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0, columns=[])
 
     for column in schema:
@@ -456,11 +458,12 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
             rg.columns.append(chunk)
     rg.total_byte_size = sum([c.meta_data.total_uncompressed_size for c in
                               rg.columns])
-
     return rg
 
 
 def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
+    if len(data) == 0:
+        return
     with f as f:
         f.write(MARKER)
         rg = make_row_group(f, data, schema, compression=compression,
@@ -476,7 +479,7 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN'):
     return rg
 
 
-def make_metadata(data, has_nulls=[]):
+def make_metadata(data, has_nulls=[], ignore_columns=[]):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
@@ -487,6 +490,8 @@ def make_metadata(data, has_nulls=[]):
                                       row_groups=[])
 
     for column in data.columns:
+        if column in ignore_columns:
+            continue
         if str(data[column].dtype) == 'category':
             se, type, _ = find_type(data[column].cat.categories)
             se.name = column
@@ -501,7 +506,8 @@ def make_metadata(data, has_nulls=[]):
 
 def write(filename, data, partitions=[0], encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
-          mkdirs=default_mkdirs, has_nulls=[], write_index=None):
+          mkdirs=default_mkdirs, has_nulls=[], write_index=None,
+          partition_on=[]):
     """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
@@ -538,6 +544,10 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
     write_index: boolean
         Whether or not to write the index to a separate column.  By default we
         write the index *if* it is not 0, 1, ..., n.
+    partition_on: list of column names
+        Passed to groupby in order to split data within each row-group,
+        producing a structured directory tree. Note: as with pandas, null
+        values will be dropped. Ignored if file_scheme is simple.
 
     Examples
     --------
@@ -552,42 +562,28 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
     with open_with(fn) as f:
         f.write(MARKER)
 
-        if isinstance(data, pd.core.groupby.DataFrameGroupBy):
-            fmd = False
-            names = list(data.dtypes.index.names)
-            for key in data.indices:
-                df = data.get_group(key)
-                fmd = fmd or make_metadata(df, has_nulls=has_nulls)
-                path = sep.join(["%s=%s" % (name, val) for name, val in zip(names, key)])
-                mkdirs(filename+sep+path)
-                for i, start in enumerate(partitions):
-                    end = partitions[i+1] if i < (len(partitions) - 1) else None
-                    part = 'part.%i.parquet' % i
-                    partname = sep.join([filename, path, part])
-                    with open_with(partname) as f2:
-                        rg = make_part_file(f2, df[start:end], fmd.schema,
-                                            compression=compression,
-                                            encoding=encoding)
-                    for chunk in rg.columns:
-                        chunk.file_path = sep.join([path, part])
-
-                    fmd.row_groups.append(rg)
-            fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
-        else:
-            if write_index or write_index is None and not (
-                    isinstance(data.index, pd.RangeIndex) and
-                    data.index._start == 0 and
-                    data.index._stop == len(data.index) and
-                    data.index._step == 1 and data.index.name is None):
-                data = data.reset_index()
-            fmd = make_metadata(data, has_nulls=has_nulls)
-            for i, start in enumerate(partitions):
-                end = partitions[i+1] if i < (len(partitions) - 1) else None
-                if file_scheme == 'simple':
-                    rg = make_row_group(f, data[start:end], fmd.schema,
-                                        compression=compression, encoding=encoding)
+        if write_index or write_index is None and not (
+                isinstance(data.index, pd.RangeIndex) and
+                data.index._start == 0 and
+                data.index._stop == len(data.index) and
+                data.index._step == 1 and data.index.name is None):
+            data = data.reset_index()
+        ignore = partition_on if file_scheme != 'simple' else []
+        fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore)
+        for i, start in enumerate(partitions):
+            end = partitions[i+1] if i < (len(partitions) - 1) else None
+            if file_scheme == 'simple':
+                rg = make_row_group(f, data[start:end], fmd.schema,
+                                    compression=compression, encoding=encoding)
+            else:
+                part = 'part.%i.parquet' % i
+                if partition_on:
+                    partition_on_columns(
+                        data[start:end], partition_on, filename, part, fmd,
+                        sep, compression, encoding, open_with, mkdirs
+                    )
+                    rg = None
                 else:
-                    part = 'part.%i.parquet' % i
                     partname = sep.join([filename, part])
                     with open_with(partname) as f2:
                         rg = make_part_file(f2, data[start:end], fmd.schema,
@@ -596,6 +592,7 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
                     for chunk in rg.columns:
                         chunk.file_path = part
 
+            if rg is not None:
                 fmd.row_groups.append(rg)
 
         foot_size = write_thrift(f, fmd)
@@ -605,6 +602,31 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
     if file_scheme != 'simple':
         write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                               open_with)
+
+
+def partition_on_columns(data, columns, root_path, partname, fmd, sep,
+                         compression, encoding, open_with, mkdirs):
+    """Split each data division on columns, and write in structured directories
+    """
+    gb = data.groupby(columns)
+    remaining = list(data)
+    for column in columns:
+        remaining.remove(column)
+    for key in gb.indices:
+        df = gb.get_group(key)[remaining]
+        path = sep.join(["%s=%s" % (name, val)
+                         for name, val in zip(columns, key)])
+        relname = sep.join([path, partname])
+        mkdirs(root_path + sep + path)
+        fullname = sep.join([root_path, path, partname])
+        with open_with(fullname) as f2:
+            rg = make_part_file(f2, df, fmd.schema,
+                                compression=compression,
+                                encoding=encoding)
+        if rg is not None:
+            for chunk in rg.columns:
+                chunk.file_path = relname
+            fmd.row_groups.append(rg)
 
 
 def write_common_metadata(fn, fmd, open_with=default_openw):

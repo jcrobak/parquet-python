@@ -84,6 +84,8 @@ def test_rle_bp():
 @pytest.mark.parametrize('partitions', [[0], [0, 500]])
 @pytest.mark.parametrize('comp', [None] + list(compressions))
 def test_pyspark_roundtrip(tempdir, scheme, partitions, comp, sql):
+    if comp == 'BROTLI':
+        pytest.xfail("spark doesn't support BROTLI compression")
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -251,8 +253,7 @@ def test_groups_roundtrip(tempdir):
     df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
                        'b': np.random.randint(0, 64000, size=1000),
                        'c': np.random.choice([True, False], size=1000)})
-    gb = df.groupby(['a', 'c'])
-    writer.write(tempdir, gb)
+    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive')
 
     r = ParquetFile(tempdir)
     assert r.columns == ['b']
@@ -261,7 +262,8 @@ def test_groups_roundtrip(tempdir):
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
-    writer.write(tempdir, gb, partitions=[0, 50])
+    writer.write(tempdir, df, partitions=[0, 50], partition_on=['a', 'c'],
+                 file_scheme='hive')
 
     r = ParquetFile(tempdir)
     assert r.count == sum(~df.a.isnull())
