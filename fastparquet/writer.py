@@ -504,7 +504,7 @@ def make_metadata(data, has_nulls=[], ignore_columns=[]):
     return fmd
 
 
-def write(filename, data, partitions=[0], encoding="PLAIN",
+def write(filename, data, row_group_offsets=[0], encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
           mkdirs=default_mkdirs, has_nulls=[], write_index=None,
           partition_on=[]):
@@ -515,13 +515,9 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
     filename: string
         File contains everything (if file_scheme='same'), else contains the
         metadata only
-    data: pandas dataframe or groupby
-        If a dataframe, will create one file per partition; if a groupby,
-        will create partitioned directory tree and one or more files in
-        each location - the file_scheme will then be hive. Note that for
-        groupby objects, null values in the original grouping columns will
-        be silently dropped.
-    partitions: list of row index values to start new row groups
+    data: pandas dataframe
+        The table to write
+    row_group_offsets: list of row index values to start new row groups
     encoding: single value from parquet_thrift.Encoding, if applied to all
         columns, or dict of name:parquet_thrift.Encoding for a different
         encoding per column.
@@ -570,8 +566,8 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
             data = data.reset_index()
         ignore = partition_on if file_scheme != 'simple' else []
         fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore)
-        for i, start in enumerate(partitions):
-            end = partitions[i+1] if i < (len(partitions) - 1) else None
+        for i, start in enumerate(row_group_offsets):
+            end = row_group_offsets[i+1] if i < (len(row_group_offsets) - 1) else None
             if file_scheme == 'simple':
                 rg = make_row_group(f, data[start:end], fmd.schema,
                                     compression=compression, encoding=encoding)
@@ -606,7 +602,10 @@ def write(filename, data, partitions=[0], encoding="PLAIN",
 
 def partition_on_columns(data, columns, root_path, partname, fmd, sep,
                          compression, encoding, open_with, mkdirs):
-    """Split each data division on columns, and write in structured directories
+    """ Split each row-group by the given columns
+
+    Each combination of column values (determined by pandas groupby) will
+    be written in structured directories.
     """
     gb = data.groupby(columns)
     remaining = list(data)
