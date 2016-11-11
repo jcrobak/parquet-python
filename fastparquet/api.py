@@ -110,8 +110,7 @@ class ParquetFile(object):
         ofname = self.sep.join([os.path.dirname(self.fn),
                                 rg.columns[0].file_path])
         with self.open(ofname, 'rb') as f:
-            return self.read_row_group(rg, columns, categories,
-                                       filters={}, infile=f)
+            return self.read_row_group(rg, columns, categories, infile=f)
 
     def read_row_group(self, rg, columns, categories, infile=None):
         """Access row-group in a file and read some columns into a data-frame.
@@ -170,12 +169,10 @@ class ParquetFile(object):
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
             with self.open(self.fn) as f:
-                tot = [self.read_row_group(rg, columns, categories,
-                                           filters=filters, infile=f)
+                tot = [self.read_row_group(rg, columns, categories, infile=f)
                        for rg in rgs]
         else:
-            tot = [self.read_row_group_file(rg, columns, categories,
-                                            filters=filters)
+            tot = [self.read_row_group_file(rg, columns, categories)
                    for rg in rgs]
 
         if len(tot) == 0:
