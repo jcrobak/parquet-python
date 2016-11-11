@@ -235,6 +235,15 @@ def test_make_definitions_without_nulls():
     # halper, metadata = mock(), mock()
 
 
+def test_empty_row_group(tempdir):
+    fname = os.path.join(tempdir, 'temp.parq')
+    data = pd.DataFrame({'o': np.random.choice(['hello', 'world'],
+                                               size=1000)})
+    writer.write(fname, data, partitions=[0, 900, 1800])
+    pf = ParquetFile(fname)
+    assert len(pf.row_groups) == 2
+
+
 @pytest.mark.skip()
 def test_write_delta(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
@@ -272,6 +281,23 @@ def test_groups_roundtrip(tempdir):
 
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
+
+def test_empty_groupby(tempdir):
+    df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
+                       'b': np.random.randint(0, 64000, size=1000),
+                       'c': np.random.choice([True, False], size=1000)})
+    df.loc[499:, 'c'] = True  # no False in second half
+    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive',
+                 partitions=[0, 500])
+    r = ParquetFile(tempdir)
+    assert r.count == sum(~df.a.isnull())
+    assert len(r.row_groups) == 6
+    out = r.to_pandas()
+
+    for i, row in out.iterrows():
+        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
 
 
 @pytest.mark.parametrize('compression', ['GZIP',
