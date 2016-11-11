@@ -28,7 +28,7 @@ Similarly, providing an open function and another to make any necessary director
 
 .. code-block:: python
 
-   write('/mybucket/output_parq', data, file_scheme='hive', partitions=[0, 500],
-          open_with=myopen, mkdirs=noop)
+   write('/mybucket/output_parq', data, file_scheme='hive',
+         row_group_offsets=[0, 500], open_with=myopen, mkdirs=noop)
 
 (In the case of s3, no intermediate directories need to be created)

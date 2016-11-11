@@ -85,7 +85,7 @@ data files. The latter is what is typically output by hive/spark.
 
     from fastparquet import write
     write('outfile.parq', df)
-    write('outfile2.parq', df, partitions=[0, 10000, 20000],
+    write('outfile2.parq', df, row_group_offsets=[0, 10000, 20000],
           compression='GZIP', file_scheme='hive')
 
 The default is to produce a single output file with a single row-group
