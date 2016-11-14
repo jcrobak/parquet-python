@@ -81,9 +81,11 @@ def test_rle_bp():
 
 
 @pytest.mark.parametrize('scheme', ['simple', 'hive'])
-@pytest.mark.parametrize('partitions', [[0], [0, 500]])
+@pytest.mark.parametrize('row_groups', [[0], [0, 500]])
 @pytest.mark.parametrize('comp', [None] + list(compressions))
-def test_pyspark_roundtrip(tempdir, scheme, partitions, comp, sql):
+def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
+    if comp == 'BROTLI':
+        pytest.xfail("spark doesn't support BROTLI compression")
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -96,7 +98,7 @@ def test_pyspark_roundtrip(tempdir, scheme, partitions, comp, sql):
     data['cat'] = data.hello.astype('category')
 
     fname = os.path.join(tempdir, 'test.parquet')
-    write(fname, data, file_scheme=scheme, partitions=partitions,
+    write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
           compression=comp)
 
     df = sql.read.parquet(fname)
@@ -117,8 +119,8 @@ def test_roundtrip_s3(s3):
     data['cat'] = data.hello.astype('category')
     noop = lambda x: True
     myopen = lambda f: s3.open(f, 'wb')
-    write(TEST_DATA+'/temp_parq', data, file_scheme='hive', partitions=[0, 500],
-          open_with=myopen, mkdirs=noop)
+    write(TEST_DATA+'/temp_parq', data, file_scheme='hive',
+          row_group_offsets=[0, 500], open_with=myopen, mkdirs=noop)
     myopen = s3.open
     pf = ParquetFile(TEST_DATA+'/temp_parq', open_with=myopen)
     df = pf.to_pandas(categories=['cat', 'bcat'])
@@ -127,9 +129,9 @@ def test_roundtrip_s3(s3):
 
 
 @pytest.mark.parametrize('scheme', ['simple', 'hive'])
-@pytest.mark.parametrize('partitions', [[0], [0, 500]])
+@pytest.mark.parametrize('row_groups', [[0], [0, 500]])
 @pytest.mark.parametrize('comp', [None, 'GZIP', 'SNAPPY'])
-def test_roundtrip(tempdir, scheme, partitions, comp):
+def test_roundtrip(tempdir, scheme, row_groups, comp):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
@@ -141,7 +143,7 @@ def test_roundtrip(tempdir, scheme, partitions, comp):
     data['bcat'] = data.bhello.astype('category')
     data['cat'] = data.hello.astype('category')
     fname = os.path.join(tempdir, 'test.parquet')
-    write(fname, data, file_scheme=scheme, partitions=partitions,
+    write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
           compression=comp)
 
     r = ParquetFile(fname)
@@ -233,6 +235,15 @@ def test_make_definitions_without_nulls():
     # halper, metadata = mock(), mock()
 
 
+def test_empty_row_group(tempdir):
+    fname = os.path.join(tempdir, 'temp.parq')
+    data = pd.DataFrame({'o': np.random.choice(['hello', 'world'],
+                                               size=1000)})
+    writer.write(fname, data, row_group_offsets=[0, 900, 1800])
+    pf = ParquetFile(fname)
+    assert len(pf.row_groups) == 2
+
+
 @pytest.mark.skip()
 def test_write_delta(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
@@ -251,8 +262,7 @@ def test_groups_roundtrip(tempdir):
     df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
                        'b': np.random.randint(0, 64000, size=1000),
                        'c': np.random.choice([True, False], size=1000)})
-    gb = df.groupby(['a', 'c'])
-    writer.write(tempdir, gb)
+    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive')
 
     r = ParquetFile(tempdir)
     assert r.columns == ['b']
@@ -261,7 +271,8 @@ def test_groups_roundtrip(tempdir):
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
-    writer.write(tempdir, gb, partitions=[0, 50])
+    writer.write(tempdir, df, row_group_offsets=[0, 50], partition_on=['a', 'c'],
+                 file_scheme='hive')
 
     r = ParquetFile(tempdir)
     assert r.count == sum(~df.a.isnull())
@@ -270,6 +281,23 @@ def test_groups_roundtrip(tempdir):
 
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
+
+def test_empty_groupby(tempdir):
+    df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
+                       'b': np.random.randint(0, 64000, size=1000),
+                       'c': np.random.choice([True, False], size=1000)})
+    df.loc[499:, 'c'] = True  # no False in second half
+    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive',
+                 row_group_offsets=[0, 500])
+    r = ParquetFile(tempdir)
+    assert r.count == sum(~df.a.isnull())
+    assert len(r.row_groups) == 6
+    out = r.to_pandas()
+
+    for i, row in out.iterrows():
+        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
 
 
 @pytest.mark.parametrize('compression', ['GZIP',

@@ -17,7 +17,7 @@ def test_statistics(tempdir):
                        'z': ['a', 'b', 'c']})
 
     fn = os.path.join(tempdir, 'foo.parquet')
-    write(fn, df, partitions=[0, 2])
+    write(fn, df, row_group_offsets=[0, 2])
 
     p = ParquetFile(fn)
 
@@ -36,7 +36,7 @@ def test_logical_types(tempdir):
     df = pd.util.testing.makeMixedDataFrame()
 
     fn = os.path.join(tempdir, 'foo.parquet')
-    write(fn, df, partitions=[0, 2])
+    write(fn, df, row_group_offsets=[0, 2])
 
     p = ParquetFile(fn)
 
@@ -67,13 +67,13 @@ def test_empty_statistics(tempdir):
                                  'n_regionkey': [None]}}
 
 
-def test_sorted_partitioned_columns(tempdir):
+def test_sorted_row_group_columns(tempdir):
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [1.0, 2.0, 1.0, 2.0],
                        'z': ['a', 'b', 'c', 'd']})
 
     fn = os.path.join(tempdir, 'foo.parquet')
-    write(fn, df, partitions=[0, 2])
+    write(fn, df, row_group_offsets=[0, 2])
 
     pf = ParquetFile(fn)
 
