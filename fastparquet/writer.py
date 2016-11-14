@@ -6,16 +6,18 @@ import os
 import pandas as pd
 import shutil
 import struct
+import sys
 import thriftpy
 
 import numba
 
 from thriftpy.protocol.compact import TCompactProtocolFactory
+from thriftpy.protocol.exc import TProtocolException
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from . import encoding
-from .util import default_openw, default_mkdirs, sep_from_open
+from .util import default_openw, default_mkdirs, sep_from_open, ParquetException
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -162,7 +164,25 @@ def write_thrift(fobj, thrift):
     t0 = fobj.tell()
     tout = TFileTransport(fobj)
     pout = TCompactProtocolFactory().get_protocol(tout)
-    thrift.write(pout)
+    try:
+        thrift.write(pout)
+        fail = False
+    except TProtocolException as e:
+        typ, val, tb = sys.exc_info()
+        frames = []
+        while tb is not None:
+            frames.append(tb)
+            tb = tb.tb_next
+        frame = [tb for tb in frames if 'write_struct' in str(tb.tb_frame.f_code)]
+        variables = frame[0].tb_frame.f_locals
+        obj = variables['obj']
+        name = variables['fname']
+        fail = True
+    if fail:
+        raise ParquetException('Thrift parameter validation failure %s'
+                               ' when writing: %s-> Field: %s' % (
+            val.args[0], obj, name
+        ))
     return fobj.tell() - t0
 
 
@@ -504,7 +524,7 @@ def make_metadata(data, has_nulls=[], ignore_columns=[]):
     return fmd
 
 
-def write(filename, data, row_group_offsets=[0], encoding="PLAIN",
+def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
           mkdirs=default_mkdirs, has_nulls=[], write_index=None,
           partition_on=[]):
@@ -517,7 +537,10 @@ def write(filename, data, row_group_offsets=[0], encoding="PLAIN",
         metadata only
     data: pandas dataframe
         The table to write
-    row_group_offsets: list of row index values to start new row groups
+    row_group_offsets: int or list of ints
+        In int, row-groups will be approximately this many rows, rounded down
+        to make row groups about the same size; if a list, the explicit index
+        values to start new row groups.
     encoding: single value from parquet_thrift.Encoding, if applied to all
         columns, or dict of name:parquet_thrift.Encoding for a different
         encoding per column.
@@ -555,6 +578,11 @@ def write(filename, data, row_group_offsets=[0], encoding="PLAIN",
         fn = sep.join([filename, '_metadata'])
     else:
         fn = filename
+    if isinstance(row_group_offsets, int):
+        l = len(data)
+        nparts = (l - 1) // row_group_offsets + 1
+        chunksize = (l - 1) // nparts + 1
+        row_group_offsets = list(range(0, l, chunksize))
     with open_with(fn) as f:
         f.write(MARKER)
 
