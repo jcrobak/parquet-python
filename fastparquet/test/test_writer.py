@@ -179,6 +179,32 @@ def test_roundtrip_complex(tempdir, scheme,):
         assert (df[col] == data[col])[~data[col].isnull()].all()
 
 
+@pytest.mark.parametrize('df', [
+    pd.util.testing.makeMixedDataFrame(),
+    pd.DataFrame({'x': pd.date_range('3/6/2012 00:00',
+                  periods=10, freq='H', tz='Europe/London')}),
+    pd.DataFrame({'x': pd.date_range('3/6/2012 00:00',
+                  periods=10, freq='H', tz='Europe/Berlin')}),
+    pd.DataFrame({'x': pd.date_range('3/6/2012 00:00',
+                  periods=10, freq='H', tz='UTC')})
+    ])
+def test_datetime_roundtrip(tempdir, df, capsys):
+    fname = os.path.join(tempdir, 'test.parquet')
+    write(fname, df)
+
+    r = ParquetFile(fname)
+    out, err = capsys.readouterr()
+    if 'x' in df and str(df.x.dtype.tz) == 'Europe/London':
+        # warning happens first time only
+        assert "UTC" in err
+
+    df2 = r.to_pandas()
+    if 'x' in df:
+        df['x'] = df.x.dt.tz_convert(None)
+
+    pd.util.testing.assert_frame_equal(df, df2)
+
+
 def test_nulls_roundtrip(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
     data = pd.DataFrame({'o': np.random.choice(['hello', 'world', None],

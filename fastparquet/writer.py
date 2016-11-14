@@ -7,6 +7,7 @@ import pandas as pd
 import shutil
 import struct
 import thriftpy
+import warnings
 
 import numba
 
@@ -86,7 +87,7 @@ def find_type(data, convert=False):
             out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
         elif convert:
             out = data.values
-    elif "S" in str(dtype) or "U" in str(dtype):
+    elif "S" in str(dtype)[:2] or "U" in str(dtype)[:2]:
         # TODO: check effect of unicode
         type, converted_type, width = (parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY,
                                        None, dtype.itemsize)
@@ -113,6 +114,8 @@ def find_type(data, convert=False):
     elif str(dtype).startswith("datetime64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
+        if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
+            warnings.warn('Coercing datetimes to UTC')
         if convert:
             out = data.values.astype('datetime64[us]')
     elif str(dtype).startswith("timedelta64"):
