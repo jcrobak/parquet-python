@@ -179,6 +179,21 @@ def test_roundtrip_complex(tempdir, scheme,):
         assert (df[col] == data[col])[~data[col].isnull()].all()
 
 
+@pytest.mark.parametrize('df', [
+    pd.util.testing.makeMixedDataFrame(),
+    pytest.mark.xfail(pd.DataFrame({'x': pd.date_range('3/6/2012 00:00',
+                                    periods=10, freq='D', tz='Europe/London')}))
+    ])
+def test_datetime_roundtrip(tempdir, df):
+    fname = os.path.join(tempdir, 'test.parquet')
+    write(fname, df)
+
+    r = ParquetFile(fname)
+    df2 = r.to_pandas()
+
+    pd.util.testing.assert_frame_equal(df, df2)
+
+
 def test_nulls_roundtrip(tempdir):
     fname = os.path.join(tempdir, 'temp.parq')
     data = pd.DataFrame({'o': np.random.choice(['hello', 'world', None],
