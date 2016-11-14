@@ -2,7 +2,7 @@ fastparquet
 ===========
 
 .. image:: https://travis-ci.org/jcrobak/parquet-python.svg?branch=master
-    :target: https://github.com/martindurant/fastparquet
+    :target: https://github.com/dask/fastparquet
 
 fastparquet is a python implementation of the `parquet
 format <https://github.com/Parquet/parquet-format>`_, aiming integrate
@@ -17,13 +17,13 @@ project.
 Introduction
 ------------
 
-This software is alpha, expect frequent API changes and breakages.
+**This software is alpha, expect frequent API changes and breakages.**
 
 A list of expected features and their status in this branch can be found in
-`this issue`_.
+`this issue`_, and further
 Please feel free to comment on that list as to missing items and priorities.
 
-.. _this issue: https://github.com/martindurant/fastparquet/issues/1
+.. _this issue: https://github.com/dask/fastparquet/issues/1
 
 In the meantime, the more eyes on this code, the more example files and the
 more use cases the better.
@@ -48,12 +48,19 @@ Optional (compression algorithms; gzip is always available):
 Installation
 ------------
 
-Install from github::
+Install using conda::
 
-   > pip install git+https://github.com/martindurant/fastparquet
+   conda install -c conda-forge fastparquet
 
-Assuming the requirements have been met. Numba should be installed using conda,
-and a conda package of this package will be forthcoming.
+install from pypi::
+
+   pip install fastparquet
+
+or install latest version from github::
+
+   pip install git+https://github.com/dask/fastparquet
+
+For the pip methods, numba must have been previously installed (using conda).
 
 Usage
 -----
@@ -78,7 +85,7 @@ data files. The latter is what is typically output by hive/spark.
 
     from fastparquet import write
     write('outfile.parq', df)
-    write('outfile2.parq', df, partitions=[0, 10000, 20000],
+    write('outfile2.parq', df, row_group_offsets=[0, 10000, 20000],
           compression='GZIP', file_scheme='hive')
 
 The default is to produce a single output file with a single row-group
@@ -89,7 +96,7 @@ similar to *numpy.savez*.
 History
 -------
 
-Since the second week of October, this fork of `parquet-python`_ has been
+Since early October 2016, this fork of `parquet-python`_ has been
 undergoing considerable redevelopment. The aim is to have a small and simple
 and performant library for reading and writing the parquet format from python.
 
