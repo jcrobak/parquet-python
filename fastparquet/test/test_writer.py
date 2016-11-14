@@ -284,6 +284,23 @@ def test_write_delta(tempdir):
         assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
+def test_int_rowgroups(tempdir):
+    df = pd.DataFrame({'a': [1]*100})
+    fname = os.path.join(tempdir, 'test.parq')
+    writer.write(fname, df, row_group_offsets=30)
+    r = ParquetFile(fname)
+    assert [rg.num_rows for rg in r.row_groups] == [25, 25, 25, 25]
+    writer.write(fname, df, row_group_offsets=33)
+    r = ParquetFile(fname)
+    assert [rg.num_rows for rg in r.row_groups] == [25, 25, 25, 25]
+    writer.write(fname, df, row_group_offsets=34)
+    r = ParquetFile(fname)
+    assert [rg.num_rows for rg in r.row_groups] == [34, 34, 32]
+    writer.write(fname, df, row_group_offsets=35)
+    r = ParquetFile(fname)
+    assert [rg.num_rows for rg in r.row_groups] == [34, 34, 32]
+
+
 def test_groups_roundtrip(tempdir):
     df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
                        'b': np.random.randint(0, 64000, size=1000),
