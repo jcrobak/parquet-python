@@ -56,6 +56,7 @@ with a single row-group (i.e., logical segments) with plain encoding and no comp
 performance will therefore be similar to simple binary packing such as ``numpy.save``.
 
 Further options that may be of interest are:
+
 - the compression algorithms (typically "snappy", for fast, but not too space-efficient)
 - the row-group splits to apply, which may lead to efficiencies on loading, if some row-groups can be skipped. Statistics (min/max) are calculated for each column in each row-group on the fly.
 - multi-file saving can be enabled with the ``file_scheme`` keyword: hive-style output is a directory with a single metadata file and several data-files.
