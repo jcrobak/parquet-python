@@ -1,4 +1,4 @@
-name: fastparquet-docs
+name: fastparquet
 dependencies:
     - numba
     - pandas
