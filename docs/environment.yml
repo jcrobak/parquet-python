@@ -4,3 +4,6 @@ dependencies:
     - pandas
     - numpy
     - thriftpy>=0.3.6
+    - numpydoc
+python:
+   version: 3
