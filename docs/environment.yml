@@ -6,3 +6,4 @@ dependencies:
     - thriftpy>=0.3.6
     - numpydoc
     - python=3
+    - pytest
