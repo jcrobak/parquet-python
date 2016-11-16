@@ -397,12 +397,8 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     bdata = definition_data + repetition_data + encode[encoding](data, selement)
     try:
         max, min = data.max(), data.min()
-        if encoding == "DELTA_BINARY_PACKED":
-            encode2 = "PLAIN"
-        else:
-            encode2 = encoding
-        max = encode[encode2](pd.Series([max], dtype=data.dtype), selement)
-        min = encode[encode2](pd.Series([min], dtype=data.dtype), selement)
+        max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement)
+        min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement)
     except TypeError:
         max, min = None, None
 
