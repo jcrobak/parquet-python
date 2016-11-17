@@ -99,7 +99,7 @@ A couple of caveats should be noted:
 - only UTF8 encoding for text is automatically handled, although arbitrary
   byte strings can be written as raw bytes type;
 - the time types have millisecond accuracy, whereas pandas time types normally
-  are microsecond;
+  are nanosecond accuracy;
 - all times are stored as UTC, and timezone information will
   be lost;
 - complex numbers must have their real and imaginary parts stored as two
