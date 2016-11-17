@@ -136,7 +136,8 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     return values
 
 
-def read_col(column, schema_helper, infile, use_cat=False):
+def read_col(column, schema_helper, infile, use_cat=False,
+             grab_dict=False):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -150,10 +151,12 @@ def read_col(column, schema_helper, infile, use_cat=False):
     use_cat: bool (False)
         If this column is encoded throughout with dict encoding, give back
         a pandas categorical column; otherwise, decode to values
+    grab_dict: bool (False)
+        Short-cut mode to return the dictionary values only - skips the actual
+        data.
     """
     cmd = column.meta_data
-    name = ".".join(cmd.path_in_schema)
-    rows = cmd.num_values
+    se = schema_helper.schema_element(cmd.path_in_schema[-1])
     off = min((cmd.dictionary_page_offset or cmd.data_page_offset,
                cmd.data_page_offset))
 
@@ -164,6 +167,11 @@ def read_col(column, schema_helper, infile, use_cat=False):
     if ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
         dic = np.array(read_dictionary_page(infile, schema_helper, ph, cmd))
         ph = read_thrift(infile, parquet_thrift.PageHeader)
+    if grab_dict:
+        return convert(pd.Series(dic), se)
+
+    name = ".".join(cmd.path_in_schema)
+    rows = cmd.num_values
 
     out = []
     num = 0
@@ -229,7 +237,6 @@ def read_col(column, schema_helper, infile, use_cat=False):
                 final[start:start+l] = val
             start += l
 
-    se = schema_helper.schema_element(cmd.path_in_schema[-1])
     if all_dict:
         if se.converted_type is not None:
             dic = convert(pd.Series(dic), se)
