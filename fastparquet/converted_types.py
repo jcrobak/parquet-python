@@ -91,15 +91,15 @@ def convert(data, se):
         scale_factor = 10**-se.scale
         return data * scale_factor
     elif ctype == parquet_thrift.ConvertedType.DATE:
-        return pd.to_datetime(data.map(datetime.date.fromordinal), box=False)
+        return pd.to_datetime(data.map(datetime.date.fromordinal))
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
-        return pd.to_timedelta(data, unit='ms', box=False)
+        return pd.to_timedelta(data, unit='ms')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
-        return pd.to_datetime(data, unit='ms', box=False)
+        return pd.to_datetime(data, unit='ms')
     elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
-        return pd.to_timedelta(data, unit='us', box=False)
+        return pd.to_timedelta(data, unit='us')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
-        return pd.to_datetime(data, unit='us', box=False)
+        return pd.to_datetime(data, unit='us')
     elif ctype == parquet_thrift.ConvertedType.UINT_8:
         return data.astype(np.uint8)
     elif ctype == parquet_thrift.ConvertedType.UINT_16:
@@ -115,6 +115,7 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.INTERVAL:
         # for those that understand, output is month, day, ms
         # maybe should convert to timedelta
+        # TODO: seems like a np.view should do this much faster
         return data.map(lambda x: np.fromstring(x, dtype='<u4'))
     else:
         logger.info("Converted type '%s'' not handled",

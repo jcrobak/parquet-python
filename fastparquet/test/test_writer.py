@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import pandas.util.testing as tm
 from fastparquet import ParquetFile
-from fastparquet import write
+from fastparquet import write, parquet_thrift
 from fastparquet import writer, encoding
 import pytest
 import shutil
@@ -99,7 +99,7 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp)
+          compression=comp, fixed_text=False)
 
     df = sql.read.parquet(fname)
     ddf = df.toPandas()
@@ -400,3 +400,34 @@ def test_naive_index(tempdir):
     r = ParquetFile(fn)
 
     assert set(r.columns) == {'x', 'y', 'index'}
+
+
+def test_text_convert(tempdir):
+    df = pd.DataFrame({'a': ['a'] * 100,
+                       'b': [b'a'] * 100})
+    fn = os.path.join(tempdir, 'tmp.parq')
+
+    write(fn, df)
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df, fixed_text=False)
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df, fixed_text=['a'])
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+

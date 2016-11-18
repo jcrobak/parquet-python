@@ -133,9 +133,11 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
         values = [fobj.read(struct.unpack(b"<i", fobj.read(4))[0])
                   for _ in range(page_header.dictionary_page_header.num_values)]
     else:
+        width = schema_helper.schema_element(
+            column_metadata.path_in_schema[-1]).type_length
         values = encoding.read_plain(
                 raw_bytes, column_metadata.type,
-                page_header.dictionary_page_header.num_values)
+                page_header.dictionary_page_header.num_values, width)
     return values
 
 

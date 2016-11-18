@@ -19,7 +19,7 @@ except ImportError:
 try:
     import lzo
     compressions['LZO'] = lzo.compress
-    decompressions['LZO'] =lzo.decompress
+    decompressions['LZO'] = lzo.decompress
 except ImportError:
     pass
 try:
