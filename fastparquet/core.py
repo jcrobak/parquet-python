@@ -251,7 +251,12 @@ def read_col(column, schema_helper, infile, use_cat=False,
     return out
 
 
-def read_row_group(rg, columns, categories, schema_helper, cats, infile=None):
+def read_row_group_file(fn, open, *args, **kwargs):
+    with open(fn, mode='rb') as f:
+        return read_row_group(f, *args, **kwargs)
+
+
+def read_row_group(file, rg, columns, categories, schema_helper, cats):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
@@ -263,7 +268,7 @@ def read_row_group(rg, columns, categories, schema_helper, cats, infile=None):
             continue
 
         use = name in categories if categories is not None else False
-        s = read_col(column, schema_helper, infile, use_cat=use)
+        s = read_col(column, schema_helper, file, use_cat=use)
         out[name] = s
     out = pd.DataFrame(out, columns=columns)
 

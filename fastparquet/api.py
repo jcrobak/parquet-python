@@ -105,12 +105,22 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
+    def row_group_filename(self, rg):
+        return self.sep.join([os.path.dirname(self.fn),
+                              rg.columns[0].file_path])
+
     def read_row_group_file(self, rg, columns, categories):
         """ Open file for reading, and process it as a row-group """
-        ofname = self.sep.join([os.path.dirname(self.fn),
-                                rg.columns[0].file_path])
-        with self.open(ofname, 'rb') as f:
-            return self.read_row_group(rg, columns, categories, infile=f)
+        fn = self.row_group_filename(rg)
+        return core.read_row_group_file(fn, self.open, rg, columns, categories,
+                self.helper, self.cats)
+
+    def read_row_group(self, rg, columns, categories, infile=None):
+        """
+        Access row-group in a file and read some columns into a data-frame.
+        """
+        return core.read_row_group(infile, rg, columns, categories,
+                self.helper, self.cats)
 
     def grab_cats(self, columns, row_group_index=0):
         """ Read dictionaries of first row_group
@@ -143,13 +153,6 @@ class ParquetFile(object):
                 out[name] = core.read_col(column, self.helper, f,
                                           grab_dict=True)
         return out
-
-    def read_row_group(self, rg, columns, categories, infile=None):
-        """
-        Access row-group in a file and read some columns into a data-frame.
-        """
-        return core.read_row_group(rg, columns, categories, self.helper,
-                self.cats, infile)
 
     def to_pandas(self, columns=None, categories=None, filters=[]):
         """
