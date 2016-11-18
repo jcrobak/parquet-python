@@ -112,8 +112,8 @@ class ParquetFile(object):
     def read_row_group_file(self, rg, columns, categories):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
-        return core.read_row_group_file(fn, self.open, rg, columns, categories,
-                self.helper, self.cats)
+        return core.read_row_group_file(fn, rg, columns, categories,
+                self.helper, self.cats, open=self.open)
 
     def read_row_group(self, rg, columns, categories, infile=None):
         """

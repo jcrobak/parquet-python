@@ -251,9 +251,9 @@ def read_col(column, schema_helper, infile, use_cat=False,
     return out
 
 
-def read_row_group_file(fn, open, *args, **kwargs):
+def read_row_group_file(fn, columns, *args, open=open):
     with open(fn, mode='rb') as f:
-        return read_row_group(f, *args, **kwargs)
+        return read_row_group(f, columns, *args)
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats):
