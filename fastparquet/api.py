@@ -105,12 +105,22 @@ class ParquetFile(object):
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list(v) for key, v in cats.items()}
 
+    def row_group_filename(self, rg):
+        return self.sep.join([os.path.dirname(self.fn),
+                              rg.columns[0].file_path])
+
     def read_row_group_file(self, rg, columns, categories):
         """ Open file for reading, and process it as a row-group """
-        ofname = self.sep.join([os.path.dirname(self.fn),
-                                rg.columns[0].file_path])
-        with self.open(ofname, 'rb') as f:
-            return self.read_row_group(rg, columns, categories, infile=f)
+        fn = self.row_group_filename(rg)
+        return core.read_row_group_file(fn, rg, columns, categories,
+                self.helper, self.cats, open=self.open)
+
+    def read_row_group(self, rg, columns, categories, infile=None):
+        """
+        Access row-group in a file and read some columns into a data-frame.
+        """
+        return core.read_row_group(infile, rg, columns, categories,
+                self.helper, self.cats)
 
     def grab_cats(self, columns, row_group_index=0):
         """ Read dictionaries of first row_group
@@ -142,35 +152,6 @@ class ParquetFile(object):
                     continue
                 out[name] = core.read_col(column, self.helper, f,
                                           grab_dict=True)
-        return out
-
-    def read_row_group(self, rg, columns, categories, infile=None):
-        """
-        Access row-group in a file and read some columns into a data-frame.
-        """
-        out = {}
-
-        for column in rg.columns:
-            name = ".".join(column.meta_data.path_in_schema)
-            if name not in columns:
-                continue
-
-            use = name in categories if categories is not None else False
-            s = core.read_col(column, self.helper, infile, use_cat=use)
-            out[name] = s
-        out = pd.DataFrame(out, columns=columns)
-
-        # apply categories
-        for cat in self.cats:
-            # *Hard assumption*: all chunks in a row group have the
-            # same partition (correct for spark/hive)
-            partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
-                                    rg.columns[0].file_path)
-            val = [p[1] for p in partitions if p[0] == cat][0]
-            codes = np.empty(rg.num_rows, dtype=np.int16)
-            codes[:] = self.cats[cat].index(val)
-            out[cat] = pd.Categorical.from_codes(
-                    codes, [val_to_num(c) for c in self.cats[cat]])
         return out
 
     def to_pandas(self, columns=None, categories=None, filters=[]):
