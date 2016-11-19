@@ -79,6 +79,6 @@ def test_sorted_row_group_columns(tempdir):
 
     result = sorted_partitioned_columns(pf)
     expected = {'x': {'min': [1, 3], 'max': [2, 4]},
-                'z': {'min': [b'a', b'c'], 'max': [b'b', b'd']}}
+                'z': {'min': ['a', 'c'], 'max': ['b', 'd']}}
 
     assert result == expected
