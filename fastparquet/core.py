@@ -110,12 +110,15 @@ def read_data_page(f, helper, header, metadata):
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
         bit_width = io_obj.read_byte()
-        values = encoding.Numpy32(np.zeros(daph.num_values,
-                                           dtype=np.int32))
-        # length is simply "all data left in this page"
-        encoding.read_rle_bit_packed_hybrid(
-                    io_obj, bit_width, io_obj.len-io_obj.loc, o=values)
-        values = values.data[:daph.num_values-num_nulls]
+        if bit_width:
+            values = encoding.Numpy32(np.zeros(daph.num_values,
+                                               dtype=np.int32))
+            # length is simply "all data left in this page"
+            encoding.read_rle_bit_packed_hybrid(
+                        io_obj, bit_width, io_obj.len-io_obj.loc, o=values)
+            values = values.data[:daph.num_values-num_nulls]
+        else:
+            values = np.zeros(daph.num_values-num_nulls, dtype=np.int64)
     else:
         raise NotImplementedError('Encoding %s' % daph.encoding)
     return definition_levels, repetition_levels, values
