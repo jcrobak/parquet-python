@@ -25,8 +25,8 @@ def test_statistics(tempdir):
     expected = {'distinct_count': {'x': [None, None],
                                    'y': [None, None],
                                    'z': [None, None]},
-                'max': {'x': [2, 3], 'y': [2.0, 1.0], 'z': [b'b', b'c']},
-                'min': {'x': [1, 3], 'y': [1.0, 1.0], 'z': [b'a', b'c']},
+                'max': {'x': [2, 3], 'y': [2.0, 1.0], 'z': ['b', 'c']},
+                'min': {'x': [1, 3], 'y': [1.0, 1.0], 'z': ['a', 'c']},
                 'null_count': {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]}}
 
     assert s == expected
@@ -42,7 +42,7 @@ def test_logical_types(tempdir):
 
     s = statistics(p)
 
-    assert isinstance(s['min']['D'][0], np.datetime64)
+    assert isinstance(s['min']['D'][0], (np.datetime64, pd.tslib.Timestamp))
 
 
 def test_empty_statistics(tempdir):
@@ -79,6 +79,6 @@ def test_sorted_row_group_columns(tempdir):
 
     result = sorted_partitioned_columns(pf)
     expected = {'x': {'min': [1, 3], 'max': [2, 4]},
-                'z': {'min': [b'a', b'c'], 'max': [b'b', b'd']}}
+                'z': {'min': ['a', 'c'], 'max': ['b', 'd']}}
 
     assert result == expected

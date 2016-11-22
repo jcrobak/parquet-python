@@ -319,10 +319,12 @@ def statistics(obj):
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
             se = helper.schema_element(column)
-            if se.converted_type:
+            if se.converted_type is not None:
                 for name in ['min', 'max']:
-                    d[name][column] = [x if x is None else converted_types.convert(x, se)
-                                       for x in d[name][column]]
+                    d[name][column] = (
+                        [None] if d[name][column] is None
+                        else converted_types.convert(pd.Series(d[name][column]), se).tolist()
+                        )
         return d
 
 

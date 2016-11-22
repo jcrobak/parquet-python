@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import pandas.util.testing as tm
 from fastparquet import ParquetFile
-from fastparquet import write
+from fastparquet import write, parquet_thrift
 from fastparquet import writer, encoding
 import pytest
 import shutil
@@ -400,3 +400,35 @@ def test_naive_index(tempdir):
     r = ParquetFile(fn)
 
     assert set(r.columns) == {'x', 'y', 'index'}
+
+
+def test_text_convert(tempdir):
+    df = pd.DataFrame({'a': ['a'] * 100,
+                       'b': [b'a'] * 100})
+    fn = os.path.join(tempdir, 'tmp.parq')
+
+    write(fn, df, fixed_text={'a': 1, 'b': 2})
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[1].type_length == 1
+    assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[2].type_length == 2
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df)
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df, fixed_text={'a': 1})
+    pf = ParquetFile(fn)
+    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf.statistics['max']['a'] == ['a']
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)

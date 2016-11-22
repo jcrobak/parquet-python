@@ -35,6 +35,8 @@ def read_plain(raw_bytes, type_, count, width=0):
         dtype = DECODE_TYPEMAP[type_]
         return np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
     if type_ == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
+        if count == 1:
+            width = len(raw_bytes)
         dtype = np.dtype('S%i' % width)
         return np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
     if type_ == parquet_thrift.Type.BOOLEAN:
