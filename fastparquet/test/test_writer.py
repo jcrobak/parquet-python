@@ -99,7 +99,7 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp, fixed_text=False)
+          compression=comp)
 
     df = sql.read.parquet(fname)
     ddf = df.toPandas()
@@ -407,15 +407,17 @@ def test_text_convert(tempdir):
                        'b': [b'a'] * 100})
     fn = os.path.join(tempdir, 'tmp.parq')
 
-    write(fn, df)
+    write(fn, df, fixed_text={'a': 1, 'b': 2})
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[1].type_length == 1
     assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf.schema[2].type_length == 2
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2)
 
-    write(fn, df, fixed_text=False)
+    write(fn, df)
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
@@ -423,11 +425,10 @@ def test_text_convert(tempdir):
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2)
 
-    write(fn, df, fixed_text=['a'])
+    write(fn, df, fixed_text={'a': 1})
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2)
-

@@ -42,7 +42,7 @@ revmap = {parquet_thrift.Type.INT32: np.int32,
           parquet_thrift.Type.FLOAT: np.float32}
 
 
-def find_type(data, convert=False, fixed_text=True):
+def find_type(data, convert=False, fixed_text=None):
     """ Get appropriate typecodes for column dtype
 
     Data conversion may happen here, only at write time.
@@ -69,9 +69,9 @@ def find_type(data, convert=False, fixed_text=True):
     data: pd.Series
     convert: bool (False)
         Whether to actually perform the conversion, or just infer types
-    fixed_text: bool (True)
-        For str and bytes, whether to write as fixed-length (usually much
-        faster) or variable.
+    fixed_text: int or None
+        For str and bytes, the fixed-string length to use. If None, object
+        column will remain variable length.
 
     Returns
     -------
@@ -102,16 +102,9 @@ def find_type(data, convert=False, fixed_text=True):
         head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
         if all(isinstance(i, str) for i in head):
             if fixed_text:
+                width = fixed_text
                 if convert:
-                    out = data.str.encode('utf8').values.astype('S')
-                    width = out.dtype.itemsize
-                else:
-                    if isinstance(data, pd.Index):
-                        width = int(pd.Series(data).str.encode(
-                            'utf8').str.len().max())
-                    else:
-                        width = int(data[~data.isnull()].str.encode(
-                            'utf8').str.len().max())
+                    out = data.str.encode('utf8').values.astype('S%i' % width)
                 type, converted_type = (
                     parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY,
                     parquet_thrift.ConvertedType.UTF8)
@@ -122,14 +115,9 @@ def find_type(data, convert=False, fixed_text=True):
                     out = data.str.encode('utf8').values
         elif all(isinstance(i, bytes) for i in head):
             if fixed_text:
+                width = fixed_text
                 if convert:
-                    out = data.values.astype('S')
-                    width = out.dtype.itemsize
-                else:
-                    if isinstance(data, pd.Index):
-                        width = int(pd.Series(data).str.len().max())
-                    else:
-                        width = int(data[~data.isnull()].str.len().max())
+                    out = data.values.astype('S%i' % width)
                 type, converted_type = (
                     parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, None)
             else:
@@ -219,7 +207,7 @@ def write_thrift(fobj, thrift):
     return fobj.tell() - t0
 
 
-def encode_plain(data, se, fixed_text=True):
+def encode_plain(data, se, fixed_text=None):
     """PLAIN encoding; returns byte representation"""
     se, type, out = find_type(data, True, fixed_text=fixed_text)
     if se.type == parquet_thrift.Type.BYTE_ARRAY:
@@ -382,7 +370,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
 
     """
     has_nulls = selement.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    fixed_text = selement.type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    fixed_text = selement.type_length
     tot_rows = len(data)
 
     # no NULL handling (but NaNs, NaTs are allowed)
@@ -502,7 +490,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
 
 
 def make_row_group(f, data, schema, file_path=None, compression=None,
-                   encoding='PLAIN', fixed_text=True):
+                   encoding='PLAIN'):
     """ Make a single row group of a Parquet file """
     rows = len(data)
     if rows == 0:
@@ -524,13 +512,13 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
 
 
 def make_part_file(f, data, schema, compression=None, encoding='PLAIN',
-                   fixed_text=True):
+                   fixed_text=None):
     if len(data) == 0:
         return
     with f as f:
         f.write(MARKER)
         rg = make_row_group(f, data, schema, compression=compression,
-                            encoding=encoding, fixed_text=fixed_text)
+                            encoding=encoding)
         fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                           schema=schema,
                                           version=1,
@@ -542,7 +530,7 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN',
     return rg
 
 
-def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=True):
+def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
@@ -555,8 +543,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=True):
     for column in data.columns:
         if column in ignore_columns:
             continue
-        fixed = (fixed_text if fixed_text in [True, False]
-                      else column in fixed_text)
+        fixed = None if fixed_text is None else fixed_text.get(column, None)
         if str(data[column].dtype) == 'category':
             se, type, _ = find_type(data[column].cat.categories,
                                     fixed_text=fixed)
@@ -575,7 +562,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=True):
 def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
           mkdirs=default_mkdirs, has_nulls=True, write_index=None,
-          partition_on=[], fixed_text=True):
+          partition_on=[], fixed_text=None):
     """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
@@ -615,11 +602,11 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         Passed to groupby in order to split data within each row-group,
         producing a structured directory tree. Note: as with pandas, null
         values will be dropped. Ignored if file_scheme is simple.
-    fixed_text: bool (True) or list
-        For bytes or str columns, if this is true, values will be converted
-        to fixed-length before writing, potentially providing a large speed
-        boost. If a list or columns, will perform conversion for those
-        columns in the list (if they are str or bytes).
+    fixed_text: {column: int length} or None
+        For bytes or str columns, values will be converted
+        to fixed-length strings of the given length for the given columns
+        before writing, potentially providing a large speed
+        boost.
 
     Examples
     --------
@@ -652,8 +639,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
             end = row_group_offsets[i+1] if i < (len(row_group_offsets) - 1) else None
             if file_scheme == 'simple':
                 rg = make_row_group(f, data[start:end], fmd.schema,
-                                    compression=compression, encoding=encoding,
-                                    fixed_text=fixed_text)
+                                    compression=compression, encoding=encoding)
             else:
                 part = 'part.%i.parquet' % i
                 if partition_on:
@@ -667,8 +653,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
                     with open_with(partname) as f2:
                         rg = make_part_file(f2, data[start:end], fmd.schema,
                                             compression=compression,
-                                            encoding=encoding,
-                                            fixed_text=fixed_text)
+                                            encoding=encoding)
                     for chunk in rg.columns:
                         chunk.file_path = part
 
