@@ -308,6 +308,7 @@ def encode_rle_bp(data, width, o, withlength=False):
 def encode_dict(data, se, _):
     """ The data part of dictionary encoding is always int32s, with RLE/bitpack
     """
+    # TODO: should width be a parameter equal to len(cats) ?
     width = encoding.width_from_max_int(data.max())
     ldata = ((len(data) + 7) // 8) * width + 11
     i = data.values.astype(np.int32)
@@ -552,7 +553,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
             se, type, _ = find_type(data[column], fixed_text=fixed)
         has_nulls = (has_nulls if has_nulls in [True, False]
                      else column in has_nulls)
-        if has_nulls and str(data[column].dtype) in ['category', 'object']:
+        if has_nulls and data[column].dtype.kind in ['O', 'm', 'M']:
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1

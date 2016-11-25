@@ -432,3 +432,15 @@ def test_text_convert(tempdir):
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2)
+
+
+def test_null_time(tempdir):
+    """Test reading a file that contains null records."""
+    tmp = str(tempdir)
+    expected = pd.DataFrame({"t": [np.timedelta64(), np.timedelta64('NaT')]})
+    fn = os.path.join(tmp, "test-time-null.parquet")
+    write(fn, expected)
+    p = ParquetFile(fn)
+    data = p.to_pandas()
+    assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
+    assert sum(data['t'].isnull()) == sum(expected['t'].isnull())
