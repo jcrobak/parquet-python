@@ -102,9 +102,9 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
-        return (data * 1000000).view('timedelta64[ns]')
+        return (data.astype('int64') * 1000000).view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
-        return (data * 1000000).view('datetime64[ns]')
+        return (data.astype('int64') * 1000000).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
         return (data * 1000).view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
