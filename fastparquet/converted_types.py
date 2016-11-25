@@ -45,7 +45,8 @@ simple = {parquet_thrift.Type.INT32: np.dtype('int32'),
           parquet_thrift.Type.DOUBLE: np.dtype('float64'),
           parquet_thrift.Type.BOOLEAN: np.dtype('bool'),
           parquet_thrift.Type.INT96: np.dtype('S12'),
-          parquet_thrift.Type.BYTE_ARRAY: np.dtype("O")}
+          parquet_thrift.Type.BYTE_ARRAY: np.dtype("O"),
+          parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY: np.dtype("O")}
 complex = {parquet_thrift.ConvertedType.UTF8: np.dtype("O"),
            parquet_thrift.ConvertedType.DECIMAL: np.dtype('float64'),
            parquet_thrift.ConvertedType.UINT_8: np.dtype('uint8'),
@@ -84,6 +85,7 @@ def convert(data, se):
     data: pandas series of primitive type
     se: a schema element.
     """
+    data = np.asarray(data, dtype=simple[se.type])
     ctype = se.converted_type
     if ctype is None:
         return data

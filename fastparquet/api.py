@@ -323,7 +323,7 @@ def statistics(obj):
                 for name in ['min', 'max']:
                     d[name][column] = (
                         [None] if d[name][column] is None
-                        else converted_types.convert(d[name][column], se).tolist()
+                        else list(converted_types.convert(d[name][column], se))
                         )
         return d
 
