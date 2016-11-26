@@ -137,12 +137,12 @@ def find_type(data, convert=False, fixed_text=None):
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
         if convert:
-            out = data.values.astype('datetime64[us]')
+            out = data.values.view('uint64') // 1000
     elif str(dtype).startswith("timedelta64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
         if convert:
-            out = data.values.astype('timedelta64[us]')
+            out = data.values.view('uint64') // 1000
     else:
         raise ValueError("Don't know how to convert data type: %s" % dtype)
     # TODO: pandas has no explicit support for Decimal
