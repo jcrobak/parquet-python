@@ -27,14 +27,14 @@ def time_column():
 
         write(fn, df)
         with measure('write time column with random offsets', result):
-            write(fn, df)
+            write(fn, df, has_nulls=False)
 
         pf = ParquetFile(fn)
         out = pf.to_pandas()  # warm-up
 
-        with measure('read time columns with small offsets', result):
+        with measure('read time columns with random offsets', result):
             out = pf.to_pandas()
-            
+
         return result
 
 
