@@ -85,7 +85,7 @@ def find_type(data, convert=False, fixed_text=None):
     if dtype.name in typemap:
         type, converted_type, width = typemap[dtype.name]
         if type in revmap and convert:
-            out = data.values.astype(revmap[type])
+            out = data.values.astype(revmap[type], copy=False)
         elif type == parquet_thrift.Type.BOOLEAN and convert:
             padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
                                 'constant', constant_values=(0, 0))
@@ -311,7 +311,7 @@ def encode_dict(data, se, _):
     # TODO: should width be a parameter equal to len(cats) ?
     width = encoding.width_from_max_int(data.max())
     ldata = ((len(data) + 7) // 8) * width + 11
-    i = data.values.astype(np.int32)
+    i = data.values.astype(np.int32, copy=False)
     out = encoding.Numpy8(np.empty(ldata, dtype=np.uint8))
     out.write_byte(width)
     encode_rle_bp(i, width, out)
@@ -325,28 +325,31 @@ encode = {
 }
 
 
-def make_definitions(data):
+def make_definitions(data, no_nulls):
     """For data that can contain NULLs, produce definition levels binary
     data: either bitpacked bools, or (if number of nulls == 0), single RLE
     block."""
-    valid = ~data.isnull()
     temp = encoding.Numpy8(np.empty(10, dtype=np.uint8))
 
-    if valid.all():
+    if no_nulls:
         # no nulls at all
-        l = len(valid)
+        l = len(data)
         encode_unsigned_varint(l << 1, temp)
         temp.write_byte(1)
         block = struct.pack('<i', temp.loc) + temp.so_far().tostring()
+        out = data
     else:
         # bitpack bools
-        out = encode_plain(valid, None)
+        out = encode_plain(data.notnull(), None)
 
         encode_unsigned_varint(len(out) << 1 | 1, temp)
         head = temp.so_far().tostring()
 
         block = struct.pack('<i', len(head + out)) + head + out
-    return block, data.valid()
+        out = data.valid()  # better, data[data.notnull()], from above ?
+        import pdb
+        pdb.set_trace()
+    return block, out
 
 
 def write_column(f, data, selement, encoding='PLAIN', compression=None):
@@ -374,16 +377,16 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     fixed_text = selement.type_length
     tot_rows = len(data)
 
-    # no NULL handling (but NaNs, NaTs are allowed)
     if has_nulls:
-        definition_data, data = make_definitions(data)
+        num_nulls = data.count() - len(data)
+        definition_data, data = make_definitions(data, num_nulls == 0)
     else:
         definition_data = b""
+        num_nulls = 0
 
     # No nested field handling (encode those as J/BSON)
     repetition_data = b""
 
-    rows = len(data)
     cats = False
     name = data.name
     diff = 0
@@ -460,7 +463,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     uncompressed_size = compressed_size + diff
 
     offset = f.tell()
-    s = parquet_thrift.Statistics(max=max, min=min, null_count=0)
+    s = parquet_thrift.Statistics(max=max, min=min, null_count=num_nulls)
 
     p = [parquet_thrift.PageEncodingStats(
             page_type=parquet_thrift.PageType.DATA_PAGE,
