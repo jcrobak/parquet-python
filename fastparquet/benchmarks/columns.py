@@ -53,6 +53,16 @@ def time_column():
         with measure('read random times, with null', result):
             out = pf.to_pandas()
 
+        df.loc[n//2, 'x'] = pd.to_datetime('NaT')
+        with measure('write random times, with null but has_null=False', result):
+            write(fn, df, has_nulls=False)
+
+        pf = ParquetFile(fn)
+        out = pf.to_pandas()  # warm-up
+
+        with measure('read random times, with null but has_null=False', result):
+            out = pf.to_pandas()
+
         return result
 
 

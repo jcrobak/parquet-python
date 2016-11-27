@@ -15,6 +15,7 @@ import codecs
 import datetime
 import json
 import logging
+import numba
 import numpy as np
 import os
 import pandas as pd
@@ -38,6 +39,7 @@ except ImportError:
 
 DAYS_TO_MILLIS = 86400000000000
 """Number of millis in a day. Used to convert a Date to a date"""
+nat = np.datetime64('NaT').view('int64')
 
 simple = {parquet_thrift.Type.INT32: np.dtype('int32'),
           parquet_thrift.Type.INT64: np.dtype('int64'),
@@ -102,13 +104,21 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
-        return (data.astype('int64') * 1000000).view('timedelta64[ns]')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
-        return (data.astype('int64') * 1000000).view('datetime64[ns]')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
-        return (data * 1000).view('timedelta64[ns]')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
-        return (data * 1000).view('datetime64[ns]')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.UINT_8:
         return data.astype(np.uint8)
     elif ctype == parquet_thrift.ConvertedType.UINT_16:
@@ -139,3 +149,12 @@ def convert(data, se):
         logger.info("Converted type '%s'' not handled",
                     parquet_thrift.ConvertedType._VALUES_TO_NAMES[ctype])  # pylint:disable=protected-access
     return data
+
+
+@numba.njit()
+def time_shift(indata, outdata, factor=1000):
+    for i in range(len(indata)):
+        if indata[i] == nat:
+            outdata[i] = nat
+        else:
+            outdata[i] = indata[i] * factor

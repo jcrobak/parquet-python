@@ -22,6 +22,7 @@ from .util import default_openw, default_mkdirs, sep_from_open, ParquetException
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
+nat = np.datetime64('NaT').view('int64')
 
 typemap = {  # primitive type, converted type, bit width
     'bool': (parquet_thrift.Type.BOOLEAN, None, 1),
@@ -137,12 +138,14 @@ def find_type(data, convert=False, fixed_text=None):
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
         if convert:
-            out = data.values.view('uint64') // 1000
+            out = np.empty(len(data), 'int64')
+            time_shift(data.values.view('int64'), out)
     elif str(dtype).startswith("timedelta64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
         if convert:
-            out = data.values.view('uint64') // 1000
+            out = np.empty(len(data), 'int64')
+            time_shift(data.values.view('int64'), out)
     else:
         raise ValueError("Don't know how to convert data type: %s" % dtype)
     # TODO: pandas has no explicit support for Decimal
@@ -150,6 +153,15 @@ def find_type(data, convert=False, fixed_text=None):
                                       converted_type=converted_type, type=type,
                                       repetition_type=parquet_thrift.FieldRepetitionType.REQUIRED)
     return se, type, out
+
+
+@numba.njit()
+def time_shift(indata, outdata, factor=1000):
+    for i in range(len(indata)):
+        if indata[i] == nat:
+            outdata[i] = nat
+        else:
+            outdata[i] = indata[i] // factor
 
 
 def thrift_print(structure, offset=0):
@@ -347,8 +359,6 @@ def make_definitions(data, no_nulls):
 
         block = struct.pack('<i', len(head + out)) + head + out
         out = data.valid()  # better, data[data.notnull()], from above ?
-        import pdb
-        pdb.set_trace()
     return block, out
 
 

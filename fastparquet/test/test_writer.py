@@ -439,7 +439,16 @@ def test_null_time(tempdir):
     tmp = str(tempdir)
     expected = pd.DataFrame({"t": [np.timedelta64(), np.timedelta64('NaT')]})
     fn = os.path.join(tmp, "test-time-null.parquet")
-    write(fn, expected)
+
+    # with NaT
+    write(fn, expected, has_nulls=False)
+    p = ParquetFile(fn)
+    data = p.to_pandas()
+    assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
+    assert sum(data['t'].isnull()) == sum(expected['t'].isnull())
+
+    # with NULL
+    write(fn, expected, has_nulls=True)
     p = ParquetFile(fn)
     data = p.to_pandas()
     assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
