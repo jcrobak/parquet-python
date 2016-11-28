@@ -85,6 +85,7 @@ class ParquetFile(object):
             for chunk in rg.columns:
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
         self.helper = schema.SchemaHelper(self.schema)
+        self.selfmade = self.created_by == "fastparquet-python"
 
     @property
     def columns(self):
@@ -113,14 +114,14 @@ class ParquetFile(object):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
         return core.read_row_group_file(fn, rg, columns, categories,
-                self.helper, self.cats, open=self.open)
+                self.helper, self.cats, open=self.open, selfmade=self.selfmade)
 
     def read_row_group(self, rg, columns, categories, infile=None):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
         return core.read_row_group(infile, rg, columns, categories,
-                self.helper, self.cats)
+                self.helper, self.cats, self.selfmade)
 
     def grab_cats(self, columns, row_group_index=0):
         """ Read dictionaries of first row_group

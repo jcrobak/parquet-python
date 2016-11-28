@@ -87,7 +87,7 @@ def read_rep(io_obj, daph, helper, metadata):
     return repetition_levels
 
 
-def read_data_page(f, helper, header, metadata):
+def read_data_page(f, helper, header, metadata, skip_nulls=False):
     """Read a data page: definitions, repetitions, values (in order)
 
     Only values are guaranteed to exist, e.g., for a top-level, required
@@ -98,7 +98,16 @@ def read_data_page(f, helper, header, metadata):
     io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
                                            dtype=np.uint8))
 
-    definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
+    if skip_nulls and not helper.is_required(metadata.path_in_schema[-1]):
+        num_nulls = 0
+        definition_levels = None
+        io_obj.loc += 6
+        n = daph.num_values // 64
+        while n:
+            io_obj.loc += 1
+            n //= 128
+    else:
+        definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
 
     repetition_levels = read_rep(io_obj, daph, helper, metadata)
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
@@ -145,7 +154,7 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
 
 
 def read_col(column, schema_helper, infile, use_cat=False,
-             grab_dict=False):
+             grab_dict=False, selfmade=False):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -186,7 +195,13 @@ def read_col(column, schema_helper, infile, use_cat=False,
     while True:
         # TODO: under assumption such as all_dict, could assign once
         # and fill arrays, i.e., merge this loop and the next
-        defi, rep, val = read_data_page(infile, schema_helper, ph, cmd)
+        if (selfmade and hasattr(cmd, 'statistics')
+            and getattr(cmd.statistics, 'null_count', 1) == 0):
+            skip_nulls = True
+        else:
+            skip_nulls = False
+        defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
+                                        skip_nulls)
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
         out.append((defi, rep, val, d))
         num += len(defi) if defi is not None else len(val)
@@ -235,12 +250,13 @@ def read_col(column, schema_helper, infile, use_cat=False,
     return final
 
 
-def read_row_group_file(fn, columns, *args, open=open):
+def read_row_group_file(fn, columns, *args, open=open, selfmade=False):
     with open(fn, mode='rb') as f:
-        return read_row_group(f, columns, *args)
+        return read_row_group(f, columns, *args, selfmade=selfmade)
 
 
-def read_row_group(file, rg, columns, categories, schema_helper, cats):
+def read_row_group(file, rg, columns, categories, schema_helper, cats,
+                   selfmade=False):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
@@ -252,7 +268,8 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats):
             continue
 
         use = name in categories if categories is not None else False
-        s = read_col(column, schema_helper, file, use_cat=use)
+        s = read_col(column, schema_helper, file, use_cat=use,
+                     selfmade=selfmade)
         out[name] = s
     out = pd.DataFrame(out, columns=columns)
 
