@@ -453,3 +453,33 @@ def test_null_time(tempdir):
     data = p.to_pandas()
     assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
     assert sum(data['t'].isnull()) == sum(expected['t'].isnull())
+
+
+def test_auto_null(tempdir):
+    tmp = str(tempdir)
+    df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'b': [1., 2., 3., np.nan],
+                       'c': pd.to_timedelta([1, 2, 3, np.nan], unit='ms'),
+                       'd': ['a', 'b', 'c', None]})
+    fn = os.path.join(tmp, "test.parq")
+
+    with pytest.raises(TypeError):
+        ## TODO: this should be a nicer error?
+        write(fn, df, has_nulls=False)
+
+    write(fn, df, has_nulls=True)
+    pf = ParquetFile(fn)
+    for col in pf.schema[2:]:
+        assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    assert pf.schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df, has_nulls=None)
+    pf = ParquetFile(fn)
+    for col in pf.schema[1:3]:
+        assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    assert pf.schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    df2= pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+

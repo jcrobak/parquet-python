@@ -105,11 +105,11 @@ def convert(data, se):
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
         out = np.empty_like(data)
-        time_shift(data, out)
+        time_shift(data, out, 1000000)
         return out.view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
         out = np.empty_like(data)
-        time_shift(data, out)
+        time_shift(data, out, 1000000)
         return out.view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
         out = np.empty_like(data)

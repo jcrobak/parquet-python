@@ -43,11 +43,11 @@ def test_date():
 def test_time_millis():
     """Test int32 encoding a timedelta in millis."""
     schema = pt.SchemaElement(
-        type=pt.Type.INT32,
+        type=pt.Type.INT64,
         name="test",
         converted_type=pt.ConvertedType.TIME_MILLIS,
     )
-    assert (convert(np.array([731888], dtype='int32'), schema)[0] ==
+    assert (convert(np.array([731888], dtype='int64'), schema)[0] ==
             np.array([731888], dtype='timedelta64[ms]'))
 
 

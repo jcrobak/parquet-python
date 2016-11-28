@@ -110,7 +110,6 @@ def test_file_csv(parquet_file):
         data.columns = [mapping[k] for k in data.columns]
     data.set_index('n_nationkey', inplace=True)
 
-    # FIXME: in future, reader will return UTF8 strings
     for col in cols[1:]:
         if isinstance(data[col][0], bytes):
             data[col] = data[col].str.decode('utf8')
@@ -281,3 +280,17 @@ def test_grab_cats(tempdir):
     cats = pf.grab_cats(['b', 'c'])
     assert (cats['b'] == df.b.cat.categories).all()
     assert (cats['c'] == df.c.cat.categories).all()
+
+
+def test_index(tempdir):
+    s = pd.Series(['a', 'c', 'b']*20)
+    df = pd.DataFrame({'a': s, 'b': s.astype('category'),
+                       'c': range(60, 0, -1)})
+
+    for column in df:
+        d2 = df.set_index(column)
+        fastparquet.write(tempdir, d2, file_scheme='hive', write_index=True)
+        pf = fastparquet.ParquetFile(tempdir)
+        out = pf.to_pandas(index=column)
+        for col in out:
+            assert (out[col] == d2[col]).all()

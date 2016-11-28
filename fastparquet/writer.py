@@ -564,9 +564,12 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
             se.name = column
         else:
             se, type, _ = find_type(data[column], fixed_text=fixed)
-        has_nulls = (has_nulls if has_nulls in [True, False]
-                     else column in has_nulls)
-        if has_nulls and data[column].dtype.kind in ['O', 'm', 'M']:
+        if has_nulls is None:
+            se.repetition_type = type == parquet_thrift.Type.BYTE_ARRAY
+        else:
+            has_nulls = (has_nulls if has_nulls in [True, False]
+                         else column in has_nulls)
+        if has_nulls and data[column].dtype.kind != 'i':
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
@@ -575,7 +578,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
 
 def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
-          mkdirs=default_mkdirs, has_nulls=True, write_index=None,
+          mkdirs=default_mkdirs, has_nulls=None, write_index=None,
           partition_on=[], fixed_text=None):
     """ Write Pandas DataFrame to filename as Parquet Format
 
@@ -605,10 +608,14 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         When called with a path/URL, creates any necessary dictionaries to
         make that location writable, e.g., ``os.makedirs``. This is not
         necessary if using the simple file scheme
-    has_nulls: bool or list of strings
-        Whether columns can have nulls. Only applies to Object and Category
-        columns, as pandas ints can't have NULLs, and NaN/NaT is equivalent
-        to NULL in float and time-like columns.
+    has_nulls: None, bool or list of strings
+        Whether columns can have nulls. If a list of strings, those given
+        columns will be marked as "optional" in the metadata, and include
+        null definition blocks on disk. Some data types (floats and times)
+        can instead use the sentry values NaN and NaT, which are not the same
+        as NULL in parquet, but functionally act the same in many cases,
+        particularly if converting back to pandas later. A value of None
+        will assume nulls for object columns and not otherwise.
     write_index: boolean
         Whether or not to write the index to a separate column.  By default we
         write the index *if* it is not 0, 1, ..., n.

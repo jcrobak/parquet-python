@@ -110,18 +110,21 @@ class ParquetFile(object):
         return self.sep.join([os.path.dirname(self.fn),
                               rg.columns[0].file_path])
 
-    def read_row_group_file(self, rg, columns, categories):
+    def read_row_group_file(self, rg, columns, categories, index=None):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
-        return core.read_row_group_file(fn, rg, columns, categories,
-                self.helper, self.cats, open=self.open, selfmade=self.selfmade)
+        return core.read_row_group_file(
+                fn, rg, columns, categories, self.helper, self.cats,
+                open=self.open, selfmade=self.selfmade, index=index)
 
-    def read_row_group(self, rg, columns, categories, infile=None):
+    def read_row_group(self, rg, columns, categories, infile=None,
+                       index=None):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
-        return core.read_row_group(infile, rg, columns, categories,
-                self.helper, self.cats, self.selfmade)
+        return core.read_row_group(
+                infile, rg, columns, categories, self.helper, self.cats,
+                self.selfmade, index=index)
 
     def grab_cats(self, columns, row_group_index=0):
         """ Read dictionaries of first row_group
@@ -155,7 +158,8 @@ class ParquetFile(object):
                                           grab_dict=True)
         return out
 
-    def to_pandas(self, columns=None, categories=None, filters=[]):
+    def to_pandas(self, columns=None, categories=None, filters=[],
+                  index=None):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -171,6 +175,9 @@ class ParquetFile(object):
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
+        index: string or None
+            Column to assign to the index. If None, index is simple sequential
+            integers.
 
         Returns
         -------
@@ -183,10 +190,11 @@ class ParquetFile(object):
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
             with self.open(self.fn) as f:
-                tot = [self.read_row_group(rg, columns, categories, infile=f)
+                tot = [self.read_row_group(rg, columns, categories, infile=f,
+                                           index=index)
                        for rg in rgs]
         else:
-            tot = [self.read_row_group_file(rg, columns, categories)
+            tot = [self.read_row_group_file(rg, columns, categories, index)
                    for rg in rgs]
 
         if len(tot) == 0:
@@ -194,7 +202,7 @@ class ParquetFile(object):
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
-        return pd.concat(tot, ignore_index=True)
+        return pd.concat(tot, ignore_index=index is None)
 
     @property
     def count(self):

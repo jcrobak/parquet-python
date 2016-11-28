@@ -193,10 +193,10 @@ def read_col(column, schema_helper, infile, use_cat=False,
     out = []
     num = 0
     while True:
-        # TODO: under assumption such as all_dict, could assign once
+        # TODO: under assumption such as all_dict, could allocate once
         # and fill arrays, i.e., merge this loop and the next
-        if (selfmade and hasattr(cmd, 'statistics')
-            and getattr(cmd.statistics, 'null_count', 1) == 0):
+        if (selfmade and hasattr(cmd, 'statistics') and
+                getattr(cmd.statistics, 'null_count', 1) == 0):
             skip_nulls = True
         else:
             skip_nulls = False
@@ -246,17 +246,19 @@ def read_col(column, schema_helper, infile, use_cat=False,
             final[start:start+len(val)] = cval
             start += len(val)
     if all_dict:
-        final = pd.Series(pd.Categorical.from_codes(final, categories=dic))
+        final = pd.Categorical.from_codes(final, categories=dic)
     return final
 
 
-def read_row_group_file(fn, columns, *args, open=open, selfmade=False):
+def read_row_group_file(fn, columns, *args, open=open, selfmade=False,
+                        index=None):
     with open(fn, mode='rb') as f:
-        return read_row_group(f, columns, *args, selfmade=selfmade)
+        return read_row_group(f, columns, *args, selfmade=selfmade,
+                              index=index)
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
-                   selfmade=False):
+                   selfmade=False, index=None):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
@@ -271,7 +273,14 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
         s = read_col(column, schema_helper, file, use_cat=use,
                      selfmade=selfmade)
         out[name] = s
-    out = pd.DataFrame(out, columns=columns)
+    # TODO: out is a dict of numpy arrays and maybe Category arrays;
+    # could optionally return here before dataframe construction
+
+    if index is not None and index in columns:
+        i = out.pop(index)
+        out = pd.DataFrame(out, index=i)
+    else:
+        out = pd.DataFrame(out, columns=columns)
 
     # apply categories
     for cat in cats:
