@@ -44,14 +44,15 @@ class ParquetFile(object):
                  sep=os.sep):
         try:
             fn2 = sep.join([fn, '_metadata'])
+            self.fn = fn2
             with open_with(fn2, 'rb') as f:
                 self._parse_header(f, verify)
             fn = fn2
         except (IOError, OSError):
+            self.fn = fn
             with open_with(fn, 'rb') as f:
                 self._parse_header(f, verify)
         self.open = open_with
-        self.fn = fn
         self.sep = sep
         self._read_partitions()
 
