@@ -44,15 +44,15 @@ class ParquetFile(object):
                  sep=os.sep):
         try:
             fn2 = sep.join([fn, '_metadata'])
-            f = open_with(fn2, 'rb')
+            with open_with(fn2, 'rb') as f:
+                self._parse_header(f, verify)
             fn = fn2
         except (IOError, OSError):
-            f = open_with(fn, 'rb')
+            with open_with(fn, 'rb') as f:
+                self._parse_header(f, verify)
         self.open = open_with
         self.fn = fn
         self.sep = sep
-        with f as f:
-            self._parse_header(f, verify)
         self._read_partitions()
 
     def _parse_header(self, f, verify=True):
@@ -107,8 +107,12 @@ class ParquetFile(object):
         self.cats = {key: list(v) for key, v in cats.items()}
 
     def row_group_filename(self, rg):
-        return self.sep.join([os.path.dirname(self.fn),
-                              rg.columns[0].file_path])
+        if rg.columns[0].file_path:
+            return self.sep.join([os.path.dirname(self.fn),
+                                  rg.columns[0].file_path])
+        else:
+            return self.fn
+
 
     def read_row_group_file(self, rg, columns, categories, index=None):
         """ Open file for reading, and process it as a row-group """
