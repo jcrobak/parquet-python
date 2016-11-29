@@ -20,6 +20,7 @@ import pandas as pd
 import pytest
 
 import fastparquet
+from fastparquet import writer, core
 
 TEST_DATA = "test-data"
 
@@ -291,6 +292,15 @@ def test_index(tempdir):
         d2 = df.set_index(column)
         fastparquet.write(tempdir, d2, file_scheme='hive', write_index=True)
         pf = fastparquet.ParquetFile(tempdir)
-        out = pf.to_pandas(index=column)
-        for col in out:
-            assert (out[col] == d2[col]).all()
+        out = pf.to_pandas(index=column, categories=['b'])
+        pd.util.testing.assert_frame_equal(out, d2)
+
+
+def test_skip_length():
+    class MockIO:
+        loc = 0
+    for num in [1, 63, 64, 64*127, 64*128, 63*128**2, 64*128**2]:
+        block, _ = writer.make_definitions(np.zeros(num), True)
+        MockIO.loc = 0
+        core.skip_definition_bytes(MockIO, num)
+        assert len(block) == MockIO.loc

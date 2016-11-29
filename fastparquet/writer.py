@@ -612,7 +612,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         Whether columns can have nulls. If a list of strings, those given
         columns will be marked as "optional" in the metadata, and include
         null definition blocks on disk. Some data types (floats and times)
-        can instead use the sentry values NaN and NaT, which are not the same
+        can instead use the sentinel values NaN and NaT, which are not the same
         as NULL in parquet, but functionally act the same in many cases,
         particularly if converting back to pandas later. A value of None
         will assume nulls for object columns and not otherwise.

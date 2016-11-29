@@ -101,11 +101,7 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
     if skip_nulls and not helper.is_required(metadata.path_in_schema[-1]):
         num_nulls = 0
         definition_levels = None
-        io_obj.loc += 6
-        n = daph.num_values // 64
-        while n:
-            io_obj.loc += 1
-            n //= 128
+        skip_definition_bytes(io_obj, daph.num_values)
     else:
         definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
 
@@ -131,6 +127,14 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
     else:
         raise NotImplementedError('Encoding %s' % daph.encoding)
     return definition_levels, repetition_levels, values
+
+
+def skip_definition_bytes(io_obj, num):
+    io_obj.loc += 6
+    n = num // 64
+    while n:
+        io_obj.loc += 1
+        n //= 128
 
 
 def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
@@ -257,10 +261,14 @@ def read_row_group_file(fn, columns, *args, open=open, selfmade=False,
                               index=index)
 
 
-def read_row_group(file, rg, columns, categories, schema_helper, cats,
-                   selfmade=False, index=None):
+def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
+                          selfmade=False):
     """
-    Access row-group in a file and read some columns into a data-frame.
+    Read a row group and return as a dict of arrays
+
+    Note that categorical columns (if appearing in the parameter categories)
+    will be pandas Categorical objects: the codes and the category labels
+    are arrays.
     """
     out = {}
 
@@ -273,12 +281,21 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
         s = read_col(column, schema_helper, file, use_cat=use,
                      selfmade=selfmade)
         out[name] = s
-    # TODO: out is a dict of numpy arrays and maybe Category arrays;
-    # could optionally return here before dataframe construction
+    return out
+
+
+def read_row_group(file, rg, columns, categories, schema_helper, cats,
+                   selfmade=False, index=None):
+    """
+    Access row-group in a file and read some columns into a data-frame.
+    """
+    out = read_row_group_arrays(file, rg, columns, categories, schema_helper,
+                                cats, selfmade)
 
     if index is not None and index in columns:
         i = out.pop(index)
         out = pd.DataFrame(out, index=i)
+        out.index.name = index
     else:
         out = pd.DataFrame(out, columns=columns)
 
