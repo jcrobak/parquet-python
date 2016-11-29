@@ -9,7 +9,7 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 
 from . import encoding
 from .compression import decompress_data
-from .converted_types import convert
+from .converted_types import convert, typemap
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .util import val_to_num
@@ -87,7 +87,7 @@ def read_rep(io_obj, daph, helper, metadata):
     return repetition_levels
 
 
-def read_data_page(f, helper, header, metadata):
+def read_data_page(f, helper, header, metadata, skip_nulls=False):
     """Read a data page: definitions, repetitions, values (in order)
 
     Only values are guaranteed to exist, e.g., for a top-level, required
@@ -98,7 +98,12 @@ def read_data_page(f, helper, header, metadata):
     io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
                                            dtype=np.uint8))
 
-    definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
+    if skip_nulls and not helper.is_required(metadata.path_in_schema[-1]):
+        num_nulls = 0
+        definition_levels = None
+        skip_definition_bytes(io_obj, daph.num_values)
+    else:
+        definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
 
     repetition_levels = read_rep(io_obj, daph, helper, metadata)
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
@@ -124,6 +129,14 @@ def read_data_page(f, helper, header, metadata):
     return definition_levels, repetition_levels, values
 
 
+def skip_definition_bytes(io_obj, num):
+    io_obj.loc += 6
+    n = num // 64
+    while n:
+        io_obj.loc += 1
+        n //= 128
+
+
 def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     """Read a page containing dictionary data.
 
@@ -145,7 +158,7 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
 
 
 def read_col(column, schema_helper, infile, use_cat=False,
-             grab_dict=False):
+             grab_dict=False, selfmade=False):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -175,16 +188,24 @@ def read_col(column, schema_helper, infile, use_cat=False,
     if ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
         dic = np.array(read_dictionary_page(infile, schema_helper, ph, cmd))
         ph = read_thrift(infile, parquet_thrift.PageHeader)
+        dic = convert(dic, se)
     if grab_dict:
-        return convert(pd.Series(dic), se)
+        return dic
 
-    name = ".".join(cmd.path_in_schema)
     rows = cmd.num_values
 
     out = []
     num = 0
     while True:
-        defi, rep, val = read_data_page(infile, schema_helper, ph, cmd)
+        # TODO: under assumption such as all_dict, could allocate once
+        # and fill arrays, i.e., merge this loop and the next
+        if (selfmade and hasattr(cmd, 'statistics') and
+                getattr(cmd.statistics, 'null_count', 1) == 0):
+            skip_nulls = True
+        else:
+            skip_nulls = False
+        defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
+                                        skip_nulls)
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
         out.append((defi, rep, val, d))
         num += len(defi) if defi is not None else len(val)
@@ -192,78 +213,62 @@ def read_col(column, schema_helper, infile, use_cat=False,
             break
         ph = read_thrift(infile, parquet_thrift.PageHeader)
 
-    # TODO: the code below could be separate "assemble" func
     all_dict = use_cat and all(_[3] for _ in out)
-    any_dict = any(_[3] for _ in out)
     any_def = any(_[0] is not None for _ in out)
-    if any_def:
-        # decode definitions
-        dtype = encoding.DECODE_TYPEMAP.get(cmd.type, np.object_)
-        try:
-            # because we have nulls, and ints don't support NaN
-            dtype('nan')
-        except ValueError:
-            dtype = np.float64
-        final = np.empty(rows, dtype=(int if all_dict else dtype))
-        start = 0
-        for o in out:
-            defi, rep, val, d = o
-            if defi is not None:
-                # there are nulls in this page
-                l = len(defi)
-                if all_dict:
-                    final[start:start+l][defi == 1] = val
-                    final[start:start+l][defi != 1] = -1
-                elif d:
-                    final[start:start+l][defi == 1] = dic[val]
-                    final[start:start+l][defi != 1] = np.nan
-                else:
-                    final[start:start+l][defi == 1] = val
-                    final[start:start+l][defi != 1] = np.nan
-            else:
-                # no nulls in this page
-                l = len(val)
-                if d and not all_dict:
-                    final[start:start+l] = dic[val]
-                else:
-                    final[start:start+l] = val
-
-            start += l
-    elif all_dict or not any_dict:
-        # either a single int col for categorical, or no cats at all
-        final = np.concatenate([_[2] for _ in out])
-    else:
-        # *some* dictionary encoding, but not all, and no nulls
-        final = np.empty(rows, dtype=dic.dtype)
-        start = 0
-        for o in out:
-            defi, rep, val, d = o
-            l = len(val)
-            if d:
-                final[start:start+l] = dic[val]
-            else:
-                final[start:start+l] = val
-            start += l
-
+    do_convert = True
     if all_dict:
-        if se.converted_type is not None:
-            dic = convert(pd.Series(dic), se)
-        out = pd.Series(pd.Categorical.from_codes(final, dic), name=name)
+        final = np.empty(cmd.num_values, np.int64)
+        my_nan = -1
+        do_convert = False
     else:
-        out = pd.Series(final)
-        if se.converted_type is not None:
-            out = convert(out, se)
-    return out
+        dtype = typemap(se)  # output dtype
+        if any_def and dtype.kind == 'i':
+            # integers cannot hold NULLs/NaNs
+            dtype = np.dtype('float64')
+            do_convert = False
+        if dtype.kind == 'f':
+            my_nan = np.nan
+        elif dtype.kind in ["M", 'm']:
+            my_nan = -9223372036854775808  # int64 version of NaT
+        else:
+            my_nan = None
+        final = np.empty(cmd.num_values, dtype)
+    start = 0
+    for defi, rep, val, d in out:
+        if d and not all_dict:
+            cval = dic[val]
+        elif do_convert:
+            cval = convert(val, se)
+        else:
+            cval = val
+        if defi is not None:
+            part = final[start:start+len(defi)]
+            part[defi != 1] = my_nan
+            part[defi == 1] = cval
+            start += len(defi)
+        else:
+            final[start:start+len(val)] = cval
+            start += len(val)
+    if all_dict:
+        final = pd.Categorical.from_codes(final, categories=dic)
+    return final
 
 
-def read_row_group_file(fn, columns, *args, open=open):
+def read_row_group_file(fn, columns, *args, open=open, selfmade=False,
+                        index=None):
     with open(fn, mode='rb') as f:
-        return read_row_group(f, columns, *args)
+        return read_row_group(f, columns, *args, selfmade=selfmade,
+                              index=index)
 
 
-def read_row_group(file, rg, columns, categories, schema_helper, cats):
+def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
+                          selfmade=False):
     """
-    Access row-group in a file and read some columns into a data-frame.
+    Read a row group and return as a dict of arrays
+
+    Note that categorical columns (if appearing in the parameter categories)
+    will be pandas Categorical objects: the codes and the category labels
+    are arrays.
     """
     out = {}
 
@@ -273,9 +278,26 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats):
             continue
 
         use = name in categories if categories is not None else False
-        s = read_col(column, schema_helper, file, use_cat=use)
+        s = read_col(column, schema_helper, file, use_cat=use,
+                     selfmade=selfmade)
         out[name] = s
-    out = pd.DataFrame(out, columns=columns)
+    return out
+
+
+def read_row_group(file, rg, columns, categories, schema_helper, cats,
+                   selfmade=False, index=None):
+    """
+    Access row-group in a file and read some columns into a data-frame.
+    """
+    out = read_row_group_arrays(file, rg, columns, categories, schema_helper,
+                                cats, selfmade)
+
+    if index is not None and index in columns:
+        i = out.pop(index)
+        out = pd.DataFrame(out, index=i)
+        out.index.name = index
+    else:
+        out = pd.DataFrame(out, columns=columns)
 
     # apply categories
     for cat in cats:

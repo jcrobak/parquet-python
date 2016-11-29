@@ -225,7 +225,7 @@ def test_make_definitions_with_nulls():
         o = encoding.Numpy32(out)
         data = pd.Series(np.random.choice([True, None],
                                           size=np.random.randint(1, 1000)))
-        out, d2 = writer.make_definitions(data)
+        out, d2 = writer.make_definitions(data, False)
         i = encoding.Numpy8(np.fromstring(out, dtype=np.uint8))
         encoding.read_rle_bit_packed_hybrid(i, 1, length=None, o=o)
         out = o.so_far()[:len(data)]
@@ -237,7 +237,7 @@ def test_make_definitions_without_nulls():
         out = np.empty(10000, dtype=np.int32)
         o = encoding.Numpy32(out)
         data = pd.Series([True] * np.random.randint(1, 10000))
-        out, d2 = writer.make_definitions(data)
+        out, d2 = writer.make_definitions(data, True)
 
         l = len(data) << 1
         p = 1
@@ -432,3 +432,54 @@ def test_text_convert(tempdir):
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2)
+
+
+def test_null_time(tempdir):
+    """Test reading a file that contains null records."""
+    tmp = str(tempdir)
+    expected = pd.DataFrame({"t": [np.timedelta64(), np.timedelta64('NaT')]})
+    fn = os.path.join(tmp, "test-time-null.parquet")
+
+    # with NaT
+    write(fn, expected, has_nulls=False)
+    p = ParquetFile(fn)
+    data = p.to_pandas()
+    assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
+    assert sum(data['t'].isnull()) == sum(expected['t'].isnull())
+
+    # with NULL
+    write(fn, expected, has_nulls=True)
+    p = ParquetFile(fn)
+    data = p.to_pandas()
+    assert (data['t'] == expected['t'])[~expected['t'].isnull()].all()
+    assert sum(data['t'].isnull()) == sum(expected['t'].isnull())
+
+
+def test_auto_null(tempdir):
+    tmp = str(tempdir)
+    df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'b': [1., 2., 3., np.nan],
+                       'c': pd.to_timedelta([1, 2, 3, np.nan], unit='ms'),
+                       'd': ['a', 'b', 'c', None]})
+    fn = os.path.join(tmp, "test.parq")
+
+    with pytest.raises(TypeError):
+        ## TODO: this should be a nicer error?
+        write(fn, df, has_nulls=False)
+
+    write(fn, df, has_nulls=True)
+    pf = ParquetFile(fn)
+    for col in pf.schema[2:]:
+        assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    assert pf.schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+
+    write(fn, df, has_nulls=None)
+    pf = ParquetFile(fn)
+    for col in pf.schema[1:3]:
+        assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    assert pf.schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    df2= pf.to_pandas()
+    tm.assert_frame_equal(df, df2)
+

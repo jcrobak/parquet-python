@@ -22,6 +22,7 @@ from .util import default_openw, default_mkdirs, sep_from_open, ParquetException
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
+nat = np.datetime64('NaT').view('int64')
 
 typemap = {  # primitive type, converted type, bit width
     'bool': (parquet_thrift.Type.BOOLEAN, None, 1),
@@ -85,7 +86,7 @@ def find_type(data, convert=False, fixed_text=None):
     if dtype.name in typemap:
         type, converted_type, width = typemap[dtype.name]
         if type in revmap and convert:
-            out = data.values.astype(revmap[type])
+            out = data.values.astype(revmap[type], copy=False)
         elif type == parquet_thrift.Type.BOOLEAN and convert:
             padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
                                 'constant', constant_values=(0, 0))
@@ -137,12 +138,14 @@ def find_type(data, convert=False, fixed_text=None):
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
         if convert:
-            out = data.values.astype('datetime64[us]')
+            out = np.empty(len(data), 'int64')
+            time_shift(data.values.view('int64'), out)
     elif str(dtype).startswith("timedelta64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
         if convert:
-            out = data.values.astype('timedelta64[us]')
+            out = np.empty(len(data), 'int64')
+            time_shift(data.values.view('int64'), out)
     else:
         raise ValueError("Don't know how to convert data type: %s" % dtype)
     # TODO: pandas has no explicit support for Decimal
@@ -150,6 +153,15 @@ def find_type(data, convert=False, fixed_text=None):
                                       converted_type=converted_type, type=type,
                                       repetition_type=parquet_thrift.FieldRepetitionType.REQUIRED)
     return se, type, out
+
+
+@numba.njit()
+def time_shift(indata, outdata, factor=1000):
+    for i in range(len(indata)):
+        if indata[i] == nat:
+            outdata[i] = nat
+        else:
+            outdata[i] = indata[i] // factor
 
 
 def thrift_print(structure, offset=0):
@@ -308,9 +320,10 @@ def encode_rle_bp(data, width, o, withlength=False):
 def encode_dict(data, se, _):
     """ The data part of dictionary encoding is always int32s, with RLE/bitpack
     """
+    # TODO: should width be a parameter equal to len(cats) ?
     width = encoding.width_from_max_int(data.max())
     ldata = ((len(data) + 7) // 8) * width + 11
-    i = data.values.astype(np.int32)
+    i = data.values.astype(np.int32, copy=False)
     out = encoding.Numpy8(np.empty(ldata, dtype=np.uint8))
     out.write_byte(width)
     encode_rle_bp(i, width, out)
@@ -324,28 +337,29 @@ encode = {
 }
 
 
-def make_definitions(data):
+def make_definitions(data, no_nulls):
     """For data that can contain NULLs, produce definition levels binary
     data: either bitpacked bools, or (if number of nulls == 0), single RLE
     block."""
-    valid = ~data.isnull()
     temp = encoding.Numpy8(np.empty(10, dtype=np.uint8))
 
-    if valid.all():
+    if no_nulls:
         # no nulls at all
-        l = len(valid)
+        l = len(data)
         encode_unsigned_varint(l << 1, temp)
         temp.write_byte(1)
         block = struct.pack('<i', temp.loc) + temp.so_far().tostring()
+        out = data
     else:
         # bitpack bools
-        out = encode_plain(valid, None)
+        out = encode_plain(data.notnull(), None)
 
         encode_unsigned_varint(len(out) << 1 | 1, temp)
         head = temp.so_far().tostring()
 
         block = struct.pack('<i', len(head + out)) + head + out
-    return block, data.valid()
+        out = data.valid()  # better, data[data.notnull()], from above ?
+    return block, out
 
 
 def write_column(f, data, selement, encoding='PLAIN', compression=None):
@@ -373,16 +387,16 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     fixed_text = selement.type_length
     tot_rows = len(data)
 
-    # no NULL handling (but NaNs, NaTs are allowed)
     if has_nulls:
-        definition_data, data = make_definitions(data)
+        num_nulls = data.count() - len(data)
+        definition_data, data = make_definitions(data, num_nulls == 0)
     else:
         definition_data = b""
+        num_nulls = 0
 
     # No nested field handling (encode those as J/BSON)
     repetition_data = b""
 
-    rows = len(data)
     cats = False
     name = data.name
     diff = 0
@@ -459,7 +473,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     uncompressed_size = compressed_size + diff
 
     offset = f.tell()
-    s = parquet_thrift.Statistics(max=max, min=min, null_count=0)
+    s = parquet_thrift.Statistics(max=max, min=min, null_count=num_nulls)
 
     p = [parquet_thrift.PageEncodingStats(
             page_type=parquet_thrift.PageType.DATA_PAGE,
@@ -550,9 +564,12 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
             se.name = column
         else:
             se, type, _ = find_type(data[column], fixed_text=fixed)
-        has_nulls = (has_nulls if has_nulls in [True, False]
-                     else column in has_nulls)
-        if has_nulls and str(data[column].dtype) in ['category', 'object']:
+        if has_nulls is None:
+            se.repetition_type = type == parquet_thrift.Type.BYTE_ARRAY
+        else:
+            has_nulls = (has_nulls if has_nulls in [True, False]
+                         else column in has_nulls)
+        if has_nulls and data[column].dtype.kind != 'i':
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
@@ -561,7 +578,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
 
 def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
-          mkdirs=default_mkdirs, has_nulls=True, write_index=None,
+          mkdirs=default_mkdirs, has_nulls=None, write_index=None,
           partition_on=[], fixed_text=None):
     """ Write Pandas DataFrame to filename as Parquet Format
 
@@ -591,10 +608,14 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         When called with a path/URL, creates any necessary dictionaries to
         make that location writable, e.g., ``os.makedirs``. This is not
         necessary if using the simple file scheme
-    has_nulls: bool or list of strings
-        Whether columns can have nulls. Only applies to Object and Category
-        columns, as pandas ints can't have NULLs, and NaN/NaT is equivalent
-        to NULL in float and time-like columns.
+    has_nulls: None, bool or list of strings
+        Whether columns can have nulls. If a list of strings, those given
+        columns will be marked as "optional" in the metadata, and include
+        null definition blocks on disk. Some data types (floats and times)
+        can instead use the sentinel values NaN and NaT, which are not the same
+        as NULL in parquet, but functionally act the same in many cases,
+        particularly if converting back to pandas later. A value of None
+        will assume nulls for object columns and not otherwise.
     write_index: boolean
         Whether or not to write the index to a separate column.  By default we
         write the index *if* it is not 0, 1, ..., n.

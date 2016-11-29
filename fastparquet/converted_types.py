@@ -15,6 +15,7 @@ import codecs
 import datetime
 import json
 import logging
+import numba
 import numpy as np
 import os
 import pandas as pd
@@ -38,33 +39,36 @@ except ImportError:
 
 DAYS_TO_MILLIS = 86400000000000
 """Number of millis in a day. Used to convert a Date to a date"""
+nat = np.datetime64('NaT').view('int64')
 
-simple = {parquet_thrift.Type.INT32: np.int32,
-          parquet_thrift.Type.INT64: np.int64,
-          parquet_thrift.Type.FLOAT: np.float32,
-          parquet_thrift.Type.DOUBLE: np.float64,
-          parquet_thrift.Type.BOOLEAN: np.bool_,
+simple = {parquet_thrift.Type.INT32: np.dtype('int32'),
+          parquet_thrift.Type.INT64: np.dtype('int64'),
+          parquet_thrift.Type.FLOAT: np.dtype('float32'),
+          parquet_thrift.Type.DOUBLE: np.dtype('float64'),
+          parquet_thrift.Type.BOOLEAN: np.dtype('bool'),
           parquet_thrift.Type.INT96: np.dtype('S12'),
-          parquet_thrift.Type.BYTE_ARRAY: np.dtype("O")}
+          parquet_thrift.Type.BYTE_ARRAY: np.dtype("O"),
+          parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY: np.dtype("O")}
 complex = {parquet_thrift.ConvertedType.UTF8: np.dtype("O"),
-           parquet_thrift.ConvertedType.DECIMAL: np.float64,
-           parquet_thrift.ConvertedType.UINT_8: np.uint8,
-           parquet_thrift.ConvertedType.UINT_16: np.uint16,
-           parquet_thrift.ConvertedType.UINT_32: np.uint32,
-           parquet_thrift.ConvertedType.UINT_64: np.uint64,
-           parquet_thrift.ConvertedType.INT_8: np.int8,
-           parquet_thrift.ConvertedType.INT_16: np.int16,
-           parquet_thrift.ConvertedType.INT_32: np.int32,
-           parquet_thrift.ConvertedType.INT_64: np.int64,
+           parquet_thrift.ConvertedType.DECIMAL: np.dtype('float64'),
+           parquet_thrift.ConvertedType.UINT_8: np.dtype('uint8'),
+           parquet_thrift.ConvertedType.UINT_16: np.dtype('uint16'),
+           parquet_thrift.ConvertedType.UINT_32: np.dtype('uint32'),
+           parquet_thrift.ConvertedType.UINT_64: np.dtype('uint64'),
+           parquet_thrift.ConvertedType.INT_8: np.dtype('int8'),
+           parquet_thrift.ConvertedType.INT_16: np.dtype('int16'),
+           parquet_thrift.ConvertedType.INT_32: np.dtype('int32'),
+           parquet_thrift.ConvertedType.INT_64: np.dtype('int64'),
            parquet_thrift.ConvertedType.TIME_MILLIS: np.dtype('<m8[ns]'),
            parquet_thrift.ConvertedType.DATE: np.dtype('<M8[ns]'),
-           parquet_thrift.ConvertedType.TIMESTAMP_MILLIS: np.dtype(
-                   '<M8[ns]')
+           parquet_thrift.ConvertedType.TIMESTAMP_MILLIS: np.dtype('<M8[ns]'),
+           parquet_thrift.ConvertedType.TIME_MICROS: np.dtype('<m8[ns]'),
+           parquet_thrift.ConvertedType.TIMESTAMP_MICROS: np.dtype('<M8[ns]')
            }
 
 
 def typemap(se):
-    """Get the final (pandas) dtype - no actual conversion"""
+    """Get the final dtype - no actual conversion"""
     if se.converted_type is None:
         if se.type in simple:
             return simple[se.type]
@@ -83,23 +87,38 @@ def convert(data, se):
     data: pandas series of primitive type
     se: a schema element.
     """
-    # TODO: if input is categorical, only map on categories
+    data = np.asarray(data, dtype=simple[se.type])
     ctype = se.converted_type
+    if ctype is None:
+        return data
     if ctype == parquet_thrift.ConvertedType.UTF8:
-        return data.astype("O").str.decode('utf8')
+        if isinstance(data, list) or data.dtype != "O":
+            out = np.empty(len(data), dtype="O")
+        else:
+            out = data
+        out[:] = [s.decode('utf8') for s in data]
+        return out
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale
         return data * scale_factor
     elif ctype == parquet_thrift.ConvertedType.DATE:
-        return pd.to_datetime(data.map(datetime.date.fromordinal))
+        return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
-        return pd.to_timedelta(data, unit='ms')
+        out = np.empty(len(data), dtype='int64')
+        time_shift(data, out, 1000000)
+        return out.view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
-        return pd.to_datetime(data, unit='ms')
+        out = np.empty_like(data)
+        time_shift(data, out, 1000000)
+        return out.view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MICROS:
-        return pd.to_timedelta(data, unit='us')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('timedelta64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
-        return pd.to_datetime(data, unit='us')
+        out = np.empty_like(data)
+        time_shift(data, out)
+        return out.view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.UINT_8:
         return data.astype(np.uint8)
     elif ctype == parquet_thrift.ConvertedType.UINT_16:
@@ -109,15 +128,33 @@ def convert(data, se):
     elif ctype == parquet_thrift.ConvertedType.UINT_64:
         return data.astype(np.uint64)
     elif ctype == parquet_thrift.ConvertedType.JSON:
-        return data.astype('O').str.decode('utf8').map(json.loads)
+        if isinstance(data, list) or data.dtype != "O":
+            out = np.empty(len(data), dtype="O")
+        else:
+            out = data
+        out[:] = [json.loads(d.decode('utf8')) for d in data]
+        return out
     elif ctype == parquet_thrift.ConvertedType.BSON:
-        return data.map(unbson)
+        if isinstance(data, list) or data.dtype != "O":
+            out = np.empty(len(data), dtype="O")
+        else:
+            out = data
+        out[:] = [unbson(d) for d in data]
+        return out
     elif ctype == parquet_thrift.ConvertedType.INTERVAL:
         # for those that understand, output is month, day, ms
         # maybe should convert to timedelta
-        # TODO: seems like a np.view should do this much faster
-        return data.map(lambda x: np.fromstring(x, dtype='<u4'))
+        return data.view('<u4').reshape((len(data), -1))
     else:
         logger.info("Converted type '%s'' not handled",
                     parquet_thrift.ConvertedType._VALUES_TO_NAMES[ctype])  # pylint:disable=protected-access
     return data
+
+
+@numba.njit()
+def time_shift(indata, outdata, factor=1000):
+    for i in range(len(indata)):
+        if indata[i] == nat:
+            outdata[i] = nat
+        else:
+            outdata[i] = indata[i] * factor

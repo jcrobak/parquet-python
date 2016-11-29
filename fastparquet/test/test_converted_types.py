@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 
 import datetime
 from decimal import Decimal
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -34,7 +35,8 @@ def test_date():
         name="test",
         converted_type=pt.ConvertedType.DATE,
     )
-    assert (convert(pd.Series([731888]), schema)[0] ==
+    days = (datetime.date(2004, 11, 3) - datetime.date(1970, 1, 1)).days
+    assert (convert(pd.Series([days]), schema)[0] ==
             pd.to_datetime([datetime.date(2004, 11, 3)]))
 
 
@@ -45,7 +47,8 @@ def test_time_millis():
         name="test",
         converted_type=pt.ConvertedType.TIME_MILLIS,
     )
-    assert convert(pd.Series([731888]), schema)[0] == datetime.timedelta(milliseconds=731888)
+    assert (convert(np.array([731888], dtype='int32'), schema)[0] ==
+            np.array([731888], dtype='timedelta64[ms]'))
 
 
 def test_timestamp_millis():
@@ -55,7 +58,9 @@ def test_timestamp_millis():
         name="test",
         converted_type=pt.ConvertedType.TIMESTAMP_MILLIS,
     )
-    assert convert(pd.Series([1099511625014]), schema)[0] == datetime.datetime(2004, 11, 3, 19, 53, 45, 14 * 1000)
+    assert (convert(np.array([1099511625014], dtype='int64'), schema)[0] ==
+            np.array(datetime.datetime(2004, 11, 3, 19, 53, 45, 14 * 1000),
+                dtype='datetime64[ns]'))
 
 
 def test_utf8():

@@ -20,6 +20,7 @@ import pandas as pd
 import pytest
 
 import fastparquet
+from fastparquet import writer, core
 
 TEST_DATA = "test-data"
 
@@ -110,7 +111,6 @@ def test_file_csv(parquet_file):
         data.columns = [mapping[k] for k in data.columns]
     data.set_index('n_nationkey', inplace=True)
 
-    # FIXME: in future, reader will return UTF8 strings
     for col in cols[1:]:
         if isinstance(data[col][0], bytes):
             data[col] = data[col].str.decode('utf8')
@@ -281,3 +281,26 @@ def test_grab_cats(tempdir):
     cats = pf.grab_cats(['b', 'c'])
     assert (cats['b'] == df.b.cat.categories).all()
     assert (cats['c'] == df.c.cat.categories).all()
+
+
+def test_index(tempdir):
+    s = pd.Series(['a', 'c', 'b']*20)
+    df = pd.DataFrame({'a': s, 'b': s.astype('category'),
+                       'c': range(60, 0, -1)})
+
+    for column in df:
+        d2 = df.set_index(column)
+        fastparquet.write(tempdir, d2, file_scheme='hive', write_index=True)
+        pf = fastparquet.ParquetFile(tempdir)
+        out = pf.to_pandas(index=column, categories=['b'])
+        pd.util.testing.assert_frame_equal(out, d2)
+
+
+def test_skip_length():
+    class MockIO:
+        loc = 0
+    for num in [1, 63, 64, 64*127, 64*128, 63*128**2, 64*128**2]:
+        block, _ = writer.make_definitions(np.zeros(num), True)
+        MockIO.loc = 0
+        core.skip_definition_bytes(MockIO, num)
+        assert len(block) == MockIO.loc
