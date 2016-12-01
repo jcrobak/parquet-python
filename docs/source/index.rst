@@ -37,15 +37,24 @@ Briefly, some features of interest:
 - choice of encoding and compression per-column; ability to choose row divisions and partitioning on write.
 - acceleration of both reading and writing using `numba <http://numba.pydata.org/>`_
 - ability to read and write to arbitrary file-like objects, allowing interoperability with `s3fs <http://s3fs.readthedocs.io/>`_, `hdfs3 <http://hdfs3.readthedocs.io/>`_, `adlfs <https://github.com/Azure/azure-data-lake-store-python>`_ and possibly others.
-- can be called from `dask <http://dask.pydata.org>`_, to enable parallel reading and writing with parquet files, possibly distributed across a cluster.
+- (experimental) can be called from `dask <http://dask.pydata.org>`_, to enable parallel reading and writing with parquet files, possibly distributed across a cluster.
 
 Caveats, Known Issues
 ---------------------
 
 Not all parts of the parquet-format have been implemented yet or tested.
 fastparquet is, however, capable of reading all the data files from the
-`parquet-compatability <https://github.com/Parquet/parquet-compatibility>`_
-project.
+`parquet-compatibility <https://github.com/Parquet/parquet-compatibility>`_
+project. Some encoding mechanisms in parquet are rare, and may be implemented
+on request - please post an issue.
+
+Nested data types do not fit well with the pandas tabular model, and are not
+currently supported. We do aim to support 1-level nesting (lists and key-value
+maps) in the future.
+
+Not all output options will be compatible with every other parquet
+framework, which each implement only a subset of the standard, see
+the usage notes.
 
 A list of current issues can be found `here <https://github.com/dask/fastparquet/>`_.
 

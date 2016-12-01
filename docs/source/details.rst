@@ -44,22 +44,18 @@ Conversely, variable-length byte arrays are also slow and inefficient, since
 the length of each value needs to be stored.
 
 Fixed-length byte arrays provide the best of both, and will probably be the
-most efficient storage where the values are 1-4 characters. They are not,
-however, very common in pandas, so the data-type must always be explicitly
-given, and converting from an object (variable-length)
-column is slightly cumbersome:
+most efficient storage where the values are 1-4 `bytes`. To automatically
+convert string values to fixed-length when writing, use the ``fixed_text``
+optional keyword, with a predetermined length.
 
 .. code-block:: python
 
-    # Create a 1-character length fixed byte column
-    data['a'] = np.array([b'a', b'b', b'c', b'd', b'e'], dtype="S1")
+    write('out.parq', df, fixed_text={'char_code': 1})
 
-    # convert an existing column
-    s = data['a'].astype('S3')  # 3-char type
-    del data['a']
-    data['a'] = s
+Such an encoding will be the fastest to read, especially if there is no need
+to decode to UTF8 strings.
 
-Furthermore, fixed-length byte arrays are not supported by `spark`, so
+Fixed-length byte arrays are not supported by `spark`, so
 files written using this may not be portable.
 
 Nulls
@@ -69,7 +65,9 @@ In pandas, NULL values are typically represented by the floating point ``NaN``.
 This value can be stored in float and time fields, and will be read back such
 that the original data is recovered. They are not, however, the same thing
 as missing values, and if querying the resultant files using other frameworks,
-this should be born in mind.
+this should be born in mind. With ``has_nulls=None`` (the default) on writing,
+float and time fields will not write separate NULLs information, and
+the metadata will give num_nulls=0.
 
 Because of the ``NaN`` encoding for NULLs, pandas is unable to represent missing
 data in an integer field. In practice, this means that fastparquet will never
@@ -78,10 +76,12 @@ the resultant column will become a float type. This is in line with what
 pandas does when reading integers.
 
 For object and category columns, NULLs (``None``) do exist, and fastparquet can
-read and write them. Including this data does come at a cost, however, and
-so we only enable writing the NULLs data if the corresponding column name is
-included in the ``has_nulls`` optional keyword. This situation may change in
-the future to make writing of the nulls information the default.
+read and write them. Including this data does come at a cost, however.
+Currently, with ``has_nulls=None`` (the default), object fields will assume
+the existence of NULLs; if a chunk does not in fact have any, then skipping
+their decoding will be pretty efficient. In general, it is best to provide
+``has_nulls`` with a list of columns known to contain NULLs - however if None
+is encountered in a column not in the list, this will raise an exception.
 
 
 Data Types
@@ -98,7 +98,7 @@ A couple of caveats should be noted:
   the output will also be float, with potential machine-precision errors;
 - only UTF8 encoding for text is automatically handled, although arbitrary
   byte strings can be written as raw bytes type;
-- the time types have millisecond accuracy, whereas pandas time types normally
+- the time types have microsecond accuracy, whereas pandas time types normally
   are nanosecond accuracy;
 - all times are stored as UTC, and timezone information will
   be lost;
@@ -162,6 +162,10 @@ that data file is omitted.
 
 Connection to dask
 ------------------
+
+*Warning*: dask usage is experimental. Expect the features to lag behind
+those in fastparquet, and sometimes to become incompatible, if a change has
+been made in the one but not the other.
 
 `dask <http://dask.pydata.org/>`_ provides a pandas-like dataframe interface to
 larger-than-memory and distributed datasets, as part of a general parallel
