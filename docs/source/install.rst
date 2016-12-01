@@ -6,9 +6,11 @@ Requirements
 
 Required:
 
+- python 3
 - numba
 - numpy
 - pandas
+- pytest
 
 Optional (compression algorithms; gzip is always available):
 

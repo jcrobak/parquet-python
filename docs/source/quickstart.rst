@@ -22,10 +22,11 @@ One may wish to investigate the meta-data associated with the data before loadin
 for example, to choose which row-groups and columns to load. The properties ``columns``,
 ``count``, ``dtypes`` and ``statistics`` are available
 to assist with this. In addition, if the data is in a hierarchical directory-partitioned
-structure, then the property `cats` specified the possible values of each partitioning field.
+structure, then the property `cats` specifies the possible values of each partitioning field.
 
 You may specify which columns to load, which of those to keep as categoricals
-(if the data uses dictionary encoding). By selecting columns, we only access parts of the file,
+(if the data uses dictionary encoding), and which column to use as the
+pandas index. By selecting columns, we only access parts of the file,
 and efficiently skip columns that are not of interest.
 
 .. code-block:: python
@@ -52,14 +53,16 @@ To create a single parquet file from a dataframe:
     write('outfile.parq', df)
 
 The function ``write`` provides a number of options. The default is to produce a single output file
-with a single row-group (i.e., logical segments) with plain encoding and no compression. The
-performance will therefore be similar to simple binary packing such as ``numpy.save``.
+with a row-groups up to 50m rows, with plain encoding and no compression. The
+performance will therefore be similar to simple binary packing such as ``numpy.save``
+for numerical columns.
 
 Further options that may be of interest are:
 
-- the compression algorithms (typically "snappy", for fast, but not too space-efficient)
+- the compression algorithms (typically "snappy", for fast, but not too space-efficient), which can vary by column
 - the row-group splits to apply, which may lead to efficiencies on loading, if some row-groups can be skipped. Statistics (min/max) are calculated for each column in each row-group on the fly.
 - multi-file saving can be enabled with the ``file_scheme`` keyword: hive-style output is a directory with a single metadata file and several data-files.
+- options has_nulls, fixed_text and write_index affect efficiency.
 
 .. code-block:: python
 

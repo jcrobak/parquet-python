@@ -9,7 +9,7 @@ except ImportError:
 
 setup(
     name='fastparquet',
-    version='0.0.2',
+    version='0.0.3',
     description='Python support for Parquet file format',
     author='Joe Crobak, Martin Durant',
     author_email='mdurant@continuum.io',
@@ -21,9 +21,7 @@ setup(
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: Implementation :: CPython',
