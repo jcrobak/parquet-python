@@ -149,9 +149,10 @@ class ParquetFile(object):
         -------
         {column: [list, of, values]}
         """
+        if len(columns) == 0:
+            return {}
         rg = self.row_groups[row_group_index]
-        ofname = self.sep.join([os.path.dirname(self.fn),
-                                rg.columns[0].file_path])
+        ofname = self.row_group_filename(rg)
         out = {}
 
         with self.open(ofname, 'rb') as f:

@@ -87,7 +87,7 @@ def convert(data, se):
     data: pandas series of primitive type
     se: a schema element.
     """
-    data = np.asarray(data, dtype=simple[se.type])
+    #data = np.asarray(data, dtype=simple[se.type])
     ctype = se.converted_type
     if ctype is None:
         return data
