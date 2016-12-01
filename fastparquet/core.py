@@ -217,7 +217,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
     any_def = any(_[0] is not None for _ in out)
     do_convert = True
     if all_dict:
-        final = np.empty(cmd.num_values, np.int64)
+        dtype = np.int64
         my_nan = -1
         do_convert = False
     else:
@@ -232,23 +232,32 @@ def read_col(column, schema_helper, infile, use_cat=False,
             my_nan = -9223372036854775808  # int64 version of NaT
         else:
             my_nan = None
-        final = np.empty(cmd.num_values, dtype)
-    start = 0
-    for defi, rep, val, d in out:
+    if len(out) == 1 and not any_def:
+        defi, rep, val, d = out[0]
         if d and not all_dict:
-            cval = dic[val]
+            final = dic[val]
         elif do_convert:
-            cval = convert(val, se)
+            final = convert(val, se)
         else:
-            cval = val
-        if defi is not None:
-            part = final[start:start+len(defi)]
-            part[defi != 1] = my_nan
-            part[defi == 1] = cval
-            start += len(defi)
-        else:
-            final[start:start+len(val)] = cval
-            start += len(val)
+            final = val
+    else:
+        final = np.empty(cmd.num_values, dtype)
+        start = 0
+        for defi, rep, val, d in out:
+            if d and not all_dict:
+                cval = dic[val]
+            elif do_convert:
+                cval = convert(val, se)
+            else:
+                cval = val
+            if defi is not None:
+                part = final[start:start+len(defi)]
+                part[defi != 1] = my_nan
+                part[defi == 1] = cval
+                start += len(defi)
+            else:
+                final[start:start+len(val)] = cval
+                start += len(val)
     if all_dict:
         final = pd.Categorical.from_codes(final, categories=dic)
     return final

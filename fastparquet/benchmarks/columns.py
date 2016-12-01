@@ -35,7 +35,7 @@ def time_column():
             out = pf.to_pandas()
 
         with measure('write random times, no nulls but has_null=True', result):
-            write(fn, df)
+            write(fn, df, has_nulls=True)
 
         pf = ParquetFile(fn)
         out = pf.to_pandas()  # warm-up
@@ -45,7 +45,7 @@ def time_column():
 
         df.loc[n//2, 'x'] = pd.to_datetime('NaT')
         with measure('write random times, with null', result):
-            write(fn, df)
+            write(fn, df, has_nulls=True)
 
         pf = ParquetFile(fn)
         out = pf.to_pandas()  # warm-up
