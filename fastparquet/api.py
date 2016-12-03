@@ -164,6 +164,60 @@ class ParquetFile(object):
                                           grab_dict=True)
         return out
 
+    def filter_row_groups(self, filters):
+        """
+        Select row groups using set of filters
+
+        Parameters
+        ----------
+        filters: list of tuples
+            See ``filter_out_cats`` and ``filter_out_stats``
+
+        Returns
+        -------
+        Filtered list of row groups
+        """
+        return [rg for rg in self.row_groups if
+                not(filter_out_stats(rg, filters, self.helper)) and
+                not(filter_out_cats(rg, filters))]
+
+    def iter_row_groups(self, columns=None, categories=None, filters=[],
+                        index=None):
+        """
+        Read data from parquet into a Pandas dataframe.
+
+        Parameters
+        ----------
+        columns: list of names or `None`
+            Column to load (see `ParquetFile.columns`). Any columns in the
+            data not in this list will be ignored. If `None`, read all columns.
+        categories: list of names or `None`
+            If a column is encoded using dictionary encoding in every row-group
+            and its name is also in this list, it will generate a Pandas
+            Category-type column, potentially saving memory and time.
+        filters: list of tuples
+            Filter syntax: [(column, op, val), ...],
+            where op is [==, >, >=, <, <=, !=, in, not in]
+        index: string or None
+            Column to assign to the index. If None, index is simple sequential
+            integers.
+
+        Returns
+        -------
+        Generator yielding one Pandas data-frame per row-group
+        """
+        columns = columns or self.columns
+        rgs = self.filter_row_groups(filters)
+        if all(column.file_path is None for rg in self.row_groups
+               for column in rg.columns):
+            with self.open(self.fn) as f:
+                for rg in rgs:
+                    yield self.read_row_group(rg, columns, categories, infile=f,
+                                           index=index)
+        else:
+            for rg in rgs:
+                yield self.read_row_group_file(rg, columns, categories, index)
+
     def to_pandas(self, columns=None, categories=None, filters=[],
                   index=None):
         """
@@ -189,26 +243,15 @@ class ParquetFile(object):
         -------
         Pandas data-frame
         """
+        tot = self.iter_row_groups(columns, categories, filters, index)
         columns = columns or self.columns
-        rgs = [rg for rg in self.row_groups if
-               not(filter_out_stats(rg, filters, self.helper)) and
-               not(filter_out_cats(rg, filters))]
-        if all(column.file_path is None for rg in self.row_groups
-               for column in rg.columns):
-            with self.open(self.fn) as f:
-                tot = [self.read_row_group(rg, columns, categories, infile=f,
-                                           index=index)
-                       for rg in rgs]
-        else:
-            tot = [self.read_row_group_file(rg, columns, categories, index)
-                   for rg in rgs]
-
-        if len(tot) == 0:
-            return pd.DataFrame(columns=columns + list(self.cats))
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
-        return pd.concat(tot, ignore_index=index is None)
+        try:
+            return pd.concat(tot, ignore_index=index is None)
+        except ValueError:
+            return pd.DataFrame(columns=columns + list(self.cats))
 
     @property
     def count(self):
