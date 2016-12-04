@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from fastparquet.util import tempdir
 from fastparquet import write, ParquetFile
@@ -82,3 +83,21 @@ def test_sorted_row_group_columns(tempdir):
                 'z': {'min': ['a', 'c'], 'max': ['b', 'd']}}
 
     assert result == expected
+
+
+def test_iter(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [1.0, 2.0, 1.0, 2.0],
+                       'z': ['a', 'b', 'c', 'd']})
+    df.index.name = 'index'
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df, row_group_offsets=[0, 2], write_index=True)
+    pf = ParquetFile(fn)
+    out = iter(pf.iter_row_groups(index='index'))
+    d1 = next(out)
+    pd.util.testing.assert_frame_equal(d1, df[:2])
+    d2 = next(out)
+    pd.util.testing.assert_frame_equal(d2, df[2:])
+    with pytest.raises(StopIteration):
+        next(out)
