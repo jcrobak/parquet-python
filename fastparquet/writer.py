@@ -386,7 +386,10 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     tot_rows = len(data)
 
     if has_nulls:
-        num_nulls = len(data) - data.count()
+        if str(data.dtype) == 'category':
+            num_nulls = (data.cat.codes == -1).sum()
+        else:
+            num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
     else:
         definition_data = b""
