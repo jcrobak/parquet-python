@@ -21,47 +21,60 @@ def time_column():
         result = {}
         fn = os.path.join(tempdir, 'temp.parq')
         n = 10000000
-        r = np.random.randint(-1e10, 1e10, n).view('timedelta64[ns]')
-        df = pd.DataFrame({'x': r.copy()})
+        r = np.random.randint(-1e10, 1e10, n)
+        d = pd.DataFrame({'w': pd.Categorical(np.random.choice(
+                ['hi', 'you', 'people'], size=n)),
+                          'x': r.view('timedelta64[ns]'),
+                          'y': r.view('float64'),
+                          'z': np.random.randint(0, 127, size=n,
+                                                 dtype=np.uint8)})
 
-        write(fn, df)
-        with measure('write random times, no nulls', result):
-            write(fn, df, has_nulls=False)
+        for col in d.columns:
+            df = d[[col]]
+            write(fn, df)
+            with measure('%s: write, no nulls' % d.dtypes[col], result):
+                write(fn, df, has_nulls=False)
 
-        pf = ParquetFile(fn)
-        out = pf.to_pandas()  # warm-up
+            pf = ParquetFile(fn)
+            pf.to_pandas(categories=['w'])  # warm-up
 
-        with measure('read random times, no nulls', result):
-            out = pf.to_pandas()
+            with measure('%s: read, no nulls' % d.dtypes[col], result):
+                pf.to_pandas(categories=['w'])
 
-        with measure('write random times, no nulls but has_null=True', result):
-            write(fn, df, has_nulls=True)
+            with measure('%s: write, no nulls, has_null=True' % d.dtypes[col], result):
+                write(fn, df, has_nulls=True)
 
-        pf = ParquetFile(fn)
-        out = pf.to_pandas()  # warm-up
+            pf = ParquetFile(fn)
+            pf.to_pandas(categories=['w'])  # warm-up
 
-        with measure('read random times, no nulls but has_null=True', result):
-            out = pf.to_pandas()
+            with measure('%s: read, no nulls, has_null=True' % d.dtypes[col], result):
+                pf.to_pandas(categories=['w'])
 
-        df.loc[n//2, 'x'] = pd.to_datetime('NaT')
-        with measure('write random times, with null', result):
-            write(fn, df, has_nulls=True)
+            if d.dtypes[col].kind == 'm':
+                d.loc[n//2, col] = pd.to_datetime('NaT')
+            elif d.dtypes[col].kind == 'f':
+                d.loc[n//2, col] = np.nan
+            elif d.dtypes[col].kind in ['i', 'u']:
+                continue
+            else:
+                d.loc[n//2, col] = None
+            with measure('%s: write, with null, has_null=True' % d.dtypes[col], result):
+                write(fn, df, has_nulls=True)
 
-        pf = ParquetFile(fn)
-        out = pf.to_pandas()  # warm-up
+            pf = ParquetFile(fn)
+            pf.to_pandas(categories=['w'])  # warm-up
 
-        with measure('read random times, with null', result):
-            out = pf.to_pandas()
+            with measure('%s: read, with null, has_null=True' % d.dtypes[col], result):
+                pf.to_pandas(categories=['w'])
 
-        df.loc[n//2, 'x'] = pd.to_datetime('NaT')
-        with measure('write random times, with null but has_null=False', result):
-            write(fn, df, has_nulls=False)
+            with measure('%s: write, with null, has_null=False' % d.dtypes[col], result):
+                write(fn, df, has_nulls=False)
 
-        pf = ParquetFile(fn)
-        out = pf.to_pandas()  # warm-up
+            pf = ParquetFile(fn)
+            pf.to_pandas(categories=['w'])  # warm-up
 
-        with measure('read random times, with null but has_null=False', result):
-            out = pf.to_pandas()
+            with measure('%s: read, with null, has_null=False' % d.dtypes[col], result):
+                pf.to_pandas(categories=['w'])
 
         return result
 
@@ -102,7 +115,7 @@ def time_find_nulls(N=10000000):
     df.loc[:, 'x'] = pd.to_datetime('NaT')
     run_find_nulls(df, result)
 
-    out = [(k + (v, )) for k, v in result.items()]
+    [(k + (v, )) for k, v in result.items()]
     df = pd.DataFrame(out, columns=('type', 'nvalid', 'op', 'time'))
     df.groupby(('type', 'nvalid', 'op')).sum()
     return df
