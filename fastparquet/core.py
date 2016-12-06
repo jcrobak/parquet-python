@@ -87,7 +87,8 @@ def read_rep(io_obj, daph, helper, metadata):
     return repetition_levels
 
 
-def read_data_page(f, helper, header, metadata, skip_nulls=False):
+def read_data_page(f, helper, header, metadata, skip_nulls=False,
+                   selfmade=False):
     """Read a data page: definitions, repetitions, values (in order)
 
     Only values are guaranteed to exist, e.g., for a top-level, required
@@ -112,10 +113,18 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
                                      metadata.type,
                                      int(daph.num_values - num_nulls),
                                      width=width)
-    elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
+    elif daph.encoding in [parquet_thrift.Encoding.PLAIN_DICTIONARY,
+                           parquet_thrift.Encoding.RLE]:
         # bit_width is stored as single byte.
-        bit_width = io_obj.read_byte()
-        if bit_width:
+        if daph.encoding == parquet_thrift.Encoding.RLE:
+            bit_width = helper.schema_element(
+                    metadata.path_in_schema[-1]).type_length
+        else:
+            bit_width = io_obj.read_byte()
+        if bit_width in [8, 16] and selfmade:
+            num = (encoding.read_unsigned_var_int(io_obj) >> 1) * 8
+            values = io_obj.read(num).view('int8')
+        elif bit_width:
             values = encoding.Numpy32(np.zeros(daph.num_values,
                                                dtype=np.int32))
             # length is simply "all data left in this page"
@@ -123,7 +132,7 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
                         io_obj, bit_width, io_obj.len-io_obj.loc, o=values)
             values = values.data[:daph.num_values-num_nulls]
         else:
-            values = np.zeros(daph.num_values-num_nulls, dtype=np.int64)
+            values = np.zeros(daph.num_values-num_nulls, dtype=np.int8)
     else:
         raise NotImplementedError('Encoding %s' % daph.encoding)
     return definition_levels, repetition_levels, values
@@ -205,7 +214,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
         else:
             skip_nulls = False
         defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
-                                        skip_nulls)
+                                        skip_nulls, selfmade=selfmade)
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
         out.append((defi, rep, val, d))
         num += len(defi) if defi is not None else len(val)

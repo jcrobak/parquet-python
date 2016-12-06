@@ -318,16 +318,14 @@ def encode_rle_bp(data, width, o, withlength=False):
 
 
 def encode_dict(data, se, _):
-    """ The data part of dictionary encoding is always int32s, with RLE/bitpack
+    """ The data part of dictionary encoding is always int8, with RLE/bitpack
     """
-    # TODO: should width be a parameter equal to len(cats) ?
-    width = encoding.width_from_max_int(data.max())
-    ldata = ((len(data) + 7) // 8) * width + 11
-    i = data.values.astype(np.int32, copy=False)
-    out = encoding.Numpy8(np.empty(ldata, dtype=np.uint8))
-    out.write_byte(width)
-    encode_rle_bp(i, width, out)
-    return out.so_far().tostring()
+    width = 8
+    o = encoding.Numpy8(np.empty(10, dtype=np.uint8))
+    o.write_byte(width)
+    bit_packed_count = (len(data) + 7) // 8
+    encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
+    return o.so_far().tostring() + data.values.tostring()
 
 encode = {
     'PLAIN': encode_plain,
@@ -388,7 +386,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     tot_rows = len(data)
 
     if has_nulls:
-        num_nulls = data.count() - len(data)
+        num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
     else:
         definition_data = b""
@@ -430,7 +428,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
                                   fixed_text=fixed_text)
         except TypeError:
             max, min = None, None
-        data = data.cat.codes.astype(np.int32)
+        data = data.cat.codes
         cats = True
         encoding = "PLAIN_DICTIONARY"
 
