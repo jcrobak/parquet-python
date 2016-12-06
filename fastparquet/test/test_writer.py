@@ -343,11 +343,6 @@ def test_empty_groupby(tempdir):
 
 
 
-@pytest.mark.parametrize('compression', ['GZIP',
-                                         'gzip',
-                                         None,
-                                         {'x': 'GZIP'},
-                                         {'y': 'gzip', 'x': None}])
 def test_write_compression_dict(tempdir, compression):
     df = pd.DataFrame({'x': [1, 2, 3],
                        'y': [1., 2., 3.]})
@@ -484,3 +479,17 @@ def test_auto_null(tempdir):
     df2= pf.to_pandas(categories=['e'])
     tm.assert_frame_equal(df, df2)
 
+
+@pytest.mark.parametrize('n', (10, 127, 2**8 + 1, 2**16 + 1))
+def test_many_categories(tempdir, n):
+    tmp = str(tempdir)
+    cats = np.arange(n)
+    codes = np.random.randint(0, n, size=1000000)
+    df = pd.DataFrame({'x': pd.Categorical.from_codes(codes, cats)})
+    fn = os.path.join(tmp, "test.parq")
+
+    write(fn, df, has_nulls=False)
+    pf = ParquetFile(fn)
+    out = pf.to_pandas(categories=['x'])
+
+    tm.assert_frame_equal(df, out)

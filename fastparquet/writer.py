@@ -320,7 +320,7 @@ def encode_rle_bp(data, width, o, withlength=False):
 def encode_dict(data, se, _):
     """ The data part of dictionary encoding is always int8, with RLE/bitpack
     """
-    width = 8
+    width = data.values.dtype.itemsize * 8
     o = encoding.Numpy8(np.empty(10, dtype=np.uint8))
     o.write_byte(width)
     bit_packed_count = (len(data) + 7) // 8

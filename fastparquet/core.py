@@ -121,9 +121,9 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
                     metadata.path_in_schema[-1]).type_length
         else:
             bit_width = io_obj.read_byte()
-        if bit_width in [8, 16] and selfmade:
+        if bit_width in [8, 16, 32] and selfmade:
             num = (encoding.read_unsigned_var_int(io_obj) >> 1) * 8
-            values = io_obj.read(num).view('int8')
+            values = io_obj.read(num * bit_width // 8).view('int%i' % bit_width)
         elif bit_width:
             values = encoding.Numpy32(np.zeros(daph.num_values,
                                                dtype=np.int32))
