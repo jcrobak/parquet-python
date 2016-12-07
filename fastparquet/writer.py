@@ -401,6 +401,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     cats = False
     name = data.name
     diff = 0
+    max, min = None, None
 
     if str(data.dtype) == 'category':
         dph = parquet_thrift.DictionaryPageHeader(
@@ -424,13 +425,14 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         write_thrift(f, ph)
         f.write(bdata)
         try:
-            max, min = data.values.max(), data.values.min()
-            max = encode['PLAIN'](pd.Series([max]), selement,
-                                  fixed_text=fixed_text)
-            min = encode['PLAIN'](pd.Series([min]), selement,
-                                  fixed_text=fixed_text)
+            if num_nulls == 0:
+                max, min = data.values.max(), data.values.min()
+                max = encode['PLAIN'](pd.Series([max]), selement,
+                                      fixed_text=fixed_text)
+                min = encode['PLAIN'](pd.Series([min]), selement,
+                                      fixed_text=fixed_text)
         except TypeError:
-            max, min = None, None
+            pass
         data = data.cat.codes
         cats = True
         encoding = "PLAIN_DICTIONARY"
@@ -439,14 +441,14 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     bdata = definition_data + repetition_data + encode[encoding](data, selement,
                                                                  fixed_text)
     try:
-        if encoding != 'PLAIN_DICTIONARY':
+        if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
             max, min = data.values.max(), data.values.min()
             max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement,
                                   fixed_text=fixed_text)
             min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement,
                                   fixed_text=fixed_text)
     except TypeError:
-        max, min = None, None
+        pass
 
     dph = parquet_thrift.DataPageHeader(
             num_values=tot_rows,
