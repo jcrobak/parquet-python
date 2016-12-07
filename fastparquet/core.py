@@ -310,12 +310,18 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
     out = read_row_group_arrays(file, rg, columns, categories, schema_helper,
                                 cats, selfmade)
 
-    if index is not None and index in columns:
-        i = out.pop(index)
-        out = pd.DataFrame(out, index=i)
-        out.index.name = index
+    i = out.pop(index, None)
+    dtypes = {str(d.dtype) for d in out.values()}
+    if len(out) == 1 and dtypes != {'category'}:
+        c = list(out)[0]
+        out = pd.DataFrame(out[c].reshape(-1, 1), columns=[c], index=i)
+    elif len(dtypes) == 1 and dtypes != {'category'}:
+        out = pd.DataFrame(np.hstack([d.reshape(-1, 1) for d in out.values()]),
+                           columns=list(out))
     else:
-        out = pd.DataFrame(out, columns=columns)
+        out = pd.DataFrame(out, index=i)
+    if i is not None:
+        out.index.name = index
 
     # apply categories
     for cat in cats:

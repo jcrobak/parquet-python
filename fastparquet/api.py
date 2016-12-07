@@ -251,7 +251,7 @@ class ParquetFile(object):
         # pandas.types.concat.union_categoricals
         try:
             if num_row_groups > 1:
-                return pd.concat(tot, ignore_index=index is None)
+                return pd.concat(tot, ignore_index=index is None, copy=False)
             else:
                 return next(iter(tot))
         except (ValueError, StopIteration):
