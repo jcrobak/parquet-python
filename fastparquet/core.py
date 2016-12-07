@@ -268,7 +268,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
                 final[start:start+len(val)] = cval
                 start += len(val)
     if all_dict:
-        final = pd.Categorical.from_codes(final, categories=dic)
+        final = pd.Categorical(final, categories=dic, fastpath=True)
     return final
 
 

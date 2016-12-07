@@ -155,7 +155,7 @@ def find_type(data, convert=False, fixed_text=None):
     return se, type, out
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def time_shift(indata, outdata, factor=1000):
     for i in range(len(indata)):
         if indata[i] == nat:
@@ -424,7 +424,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         write_thrift(f, ph)
         f.write(bdata)
         try:
-            max, min = data.max(), data.min()
+            max, min = data.values.max(), data.values.min()
             max = encode['PLAIN'](pd.Series([max]), selement,
                                   fixed_text=fixed_text)
             min = encode['PLAIN'](pd.Series([min]), selement,
@@ -440,7 +440,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
                                                                  fixed_text)
     try:
         if encoding != 'PLAIN_DICTIONARY':
-            max, min = data.max(), data.min()
+            max, min = data.values.max(), data.values.min()
             max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement,
                                   fixed_text=fixed_text)
             min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement,
