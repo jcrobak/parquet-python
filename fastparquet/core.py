@@ -316,8 +316,9 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
         c = list(out)[0]
         out = pd.DataFrame(out[c].reshape(-1, 1), columns=[c], index=i)
     elif len(dtypes) == 1 and dtypes != {'category'}:
-        out = pd.DataFrame(np.hstack([d.reshape(-1, 1) for d in out.values()]),
-                           columns=list(out))
+        columns = list(sorted(out))
+        out = pd.DataFrame(np.hstack([out[k].reshape(-1, 1) for k in columns]),
+                           columns=columns)
     else:
         out = pd.DataFrame(out, index=i)
     if i is not None:

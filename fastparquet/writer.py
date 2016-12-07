@@ -317,6 +317,26 @@ def encode_rle_bp(data, width, o, withlength=False):
         o.loc = end
 
 
+def encode_rle(data, se, fixed_text=None):
+    if data.dtype.kind not in ['i', 'u']:
+        raise ValueError('RLE/bitpack encoding only works for integers')
+    if se.type_length in [8, 16]:
+        o = encoding.Numpy8(np.empty(10, dtype=np.uint8))
+        bit_packed_count = (len(data) + 7) // 8
+        encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
+        return o.so_far().tostring() + data.values.tostring()
+    else:
+        m = data.max()
+        width = 0
+        while m:
+            m >>= 1
+            width += 1
+        l = (len(data) * width + 7) // 8 + 10
+        o = encoding.Numpy8(np.empty(l, dtype='uint8'))
+        encode_rle_bp(data, width, o)
+        return o.so_far().tostring()
+
+
 def encode_dict(data, se, _):
     """ The data part of dictionary encoding is always int8, with RLE/bitpack
     """
@@ -329,7 +349,7 @@ def encode_dict(data, se, _):
 
 encode = {
     'PLAIN': encode_plain,
-    'RLE': encode_rle_bp,
+    'RLE': encode_rle,
     'PLAIN_DICTIONARY': encode_dict,
     # 'DELTA_BINARY_PACKED': encode_delta
 }
@@ -436,6 +456,8 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         data = data.cat.codes
         cats = True
         encoding = "PLAIN_DICTIONARY"
+    elif str(data.dtype) in ['int8', 'int16', 'uint8', 'uint16']:
+        encoding = "RLE"
 
     start = f.tell()
     bdata = definition_data + repetition_data + encode[encoding](data, selement,
