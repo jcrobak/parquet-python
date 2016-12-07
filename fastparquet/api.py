@@ -254,7 +254,7 @@ class ParquetFile(object):
                 return pd.concat(tot, ignore_index=index is None)
             else:
                 return next(iter(tot))
-        except ValueError:
+        except (ValueError, StopIteration):
             return pd.DataFrame(columns=columns + list(self.cats))
 
     @property
