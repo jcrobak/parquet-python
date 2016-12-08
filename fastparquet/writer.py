@@ -155,7 +155,7 @@ def find_type(data, convert=False, fixed_text=None):
     return se, type, out
 
 
-@numba.njit()
+@numba.njit(nogil=True)
 def time_shift(indata, outdata, factor=1000):
     for i in range(len(indata)):
         if indata[i] == nat:
@@ -317,21 +317,39 @@ def encode_rle_bp(data, width, o, withlength=False):
         o.loc = end
 
 
+def encode_rle(data, se, fixed_text=None):
+    if data.dtype.kind not in ['i', 'u']:
+        raise ValueError('RLE/bitpack encoding only works for integers')
+    if se.type_length in [8, 16]:
+        o = encoding.Numpy8(np.empty(10, dtype=np.uint8))
+        bit_packed_count = (len(data) + 7) // 8
+        encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
+        return o.so_far().tostring() + data.values.tostring()
+    else:
+        m = data.max()
+        width = 0
+        while m:
+            m >>= 1
+            width += 1
+        l = (len(data) * width + 7) // 8 + 10
+        o = encoding.Numpy8(np.empty(l, dtype='uint8'))
+        encode_rle_bp(data, width, o)
+        return o.so_far().tostring()
+
+
 def encode_dict(data, se, _):
-    """ The data part of dictionary encoding is always int32s, with RLE/bitpack
+    """ The data part of dictionary encoding is always int8, with RLE/bitpack
     """
-    # TODO: should width be a parameter equal to len(cats) ?
-    width = encoding.width_from_max_int(data.max())
-    ldata = ((len(data) + 7) // 8) * width + 11
-    i = data.values.astype(np.int32, copy=False)
-    out = encoding.Numpy8(np.empty(ldata, dtype=np.uint8))
-    out.write_byte(width)
-    encode_rle_bp(i, width, out)
-    return out.so_far().tostring()
+    width = data.values.dtype.itemsize * 8
+    o = encoding.Numpy8(np.empty(10, dtype=np.uint8))
+    o.write_byte(width)
+    bit_packed_count = (len(data) + 7) // 8
+    encode_unsigned_varint(bit_packed_count << 1 | 1, o)  # write run header
+    return o.so_far().tostring() + data.values.tostring()
 
 encode = {
     'PLAIN': encode_plain,
-    'RLE': encode_rle_bp,
+    'RLE': encode_rle,
     'PLAIN_DICTIONARY': encode_dict,
     # 'DELTA_BINARY_PACKED': encode_delta
 }
@@ -388,7 +406,10 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     tot_rows = len(data)
 
     if has_nulls:
-        num_nulls = data.count() - len(data)
+        if str(data.dtype) == 'category':
+            num_nulls = (data.cat.codes == -1).sum()
+        else:
+            num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
     else:
         definition_data = b""
@@ -400,6 +421,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     cats = False
     name = data.name
     diff = 0
+    max, min = None, None
 
     if str(data.dtype) == 'category':
         dph = parquet_thrift.DictionaryPageHeader(
@@ -423,29 +445,32 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         write_thrift(f, ph)
         f.write(bdata)
         try:
-            max, min = data.max(), data.min()
-            max = encode['PLAIN'](pd.Series([max]), selement,
-                                  fixed_text=fixed_text)
-            min = encode['PLAIN'](pd.Series([min]), selement,
-                                  fixed_text=fixed_text)
+            if num_nulls == 0:
+                max, min = data.values.max(), data.values.min()
+                max = encode['PLAIN'](pd.Series([max]), selement,
+                                      fixed_text=fixed_text)
+                min = encode['PLAIN'](pd.Series([min]), selement,
+                                      fixed_text=fixed_text)
         except TypeError:
-            max, min = None, None
-        data = data.cat.codes.astype(np.int32)
+            pass
+        data = data.cat.codes
         cats = True
         encoding = "PLAIN_DICTIONARY"
+    elif str(data.dtype) in ['int8', 'int16', 'uint8', 'uint16']:
+        encoding = "RLE"
 
     start = f.tell()
     bdata = definition_data + repetition_data + encode[encoding](data, selement,
                                                                  fixed_text)
     try:
-        if encoding != 'PLAIN_DICTIONARY':
-            max, min = data.max(), data.min()
+        if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
+            max, min = data.values.max(), data.values.min()
             max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement,
                                   fixed_text=fixed_text)
             min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement,
                                   fixed_text=fixed_text)
     except TypeError:
-        max, min = None, None
+        pass
 
     dph = parquet_thrift.DataPageHeader(
             num_values=tot_rows,

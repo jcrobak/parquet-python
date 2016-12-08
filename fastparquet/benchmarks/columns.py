@@ -25,7 +25,7 @@ def time_column():
         d = pd.DataFrame({'w': pd.Categorical(np.random.choice(
                 ['hi', 'you', 'people'], size=n)),
                           'x': r.view('timedelta64[ns]'),
-                          'y': r.view('float64'),
+                          'y': r / np.random.randint(1, 1000, size=n),
                           'z': np.random.randint(0, 127, size=n,
                                                  dtype=np.uint8)})
 

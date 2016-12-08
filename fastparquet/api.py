@@ -244,13 +244,17 @@ class ParquetFile(object):
         Pandas data-frame
         """
         tot = self.iter_row_groups(columns, categories, filters, index)
+        num_row_groups = len(self.filter_row_groups(filters))
         columns = columns or self.columns
 
         # TODO: if categories vary from one rg to next, need
         # pandas.types.concat.union_categoricals
         try:
-            return pd.concat(tot, ignore_index=index is None)
-        except ValueError:
+            if num_row_groups > 1:
+                return pd.concat(tot, ignore_index=index is None, copy=False)
+            else:
+                return next(iter(tot))
+        except (ValueError, StopIteration):
             return pd.DataFrame(columns=columns + list(self.cats))
 
     @property

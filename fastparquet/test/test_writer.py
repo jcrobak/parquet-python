@@ -169,6 +169,7 @@ def test_roundtrip_complex(tempdir, scheme,):
     import datetime
     data = pd.DataFrame({'ui32': np.arange(1000, dtype=np.uint32),
                          'i16': np.arange(1000, dtype=np.int16),
+                         'ui8': np.array([1, 2, 3, 4]*250, dtype=np.uint8),
                          'f16': np.arange(1000, dtype=np.float16),
                          'dicts': [{'oi': 'you'}] * 1000,
                          't': [datetime.datetime.now()] * 1000,
@@ -350,7 +351,6 @@ def test_empty_groupby(tempdir):
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
 
-
 @pytest.mark.parametrize('compression', ['GZIP',
                                          'gzip',
                                          None,
@@ -469,6 +469,7 @@ def test_auto_null(tempdir):
                        'b': [1., 2., 3., np.nan],
                        'c': pd.to_timedelta([1, 2, 3, np.nan], unit='ms'),
                        'd': ['a', 'b', 'c', None]})
+    df['e'] = df['d'].astype('category')
     fn = os.path.join(tmp, "test.parq")
 
     with pytest.raises(TypeError):
@@ -480,7 +481,7 @@ def test_auto_null(tempdir):
     for col in pf.schema[2:]:
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     assert pf.schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
-    df2 = pf.to_pandas()
+    df2 = pf.to_pandas(categories=['e'])
     tm.assert_frame_equal(df, df2)
 
     write(fn, df, has_nulls=None)
@@ -488,6 +489,20 @@ def test_auto_null(tempdir):
     for col in pf.schema[1:3]:
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     assert pf.schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    df2= pf.to_pandas()
+    df2= pf.to_pandas(categories=['e'])
     tm.assert_frame_equal(df, df2)
 
+
+@pytest.mark.parametrize('n', (10, 127, 2**8 + 1, 2**16 + 1))
+def test_many_categories(tempdir, n):
+    tmp = str(tempdir)
+    cats = np.arange(n)
+    codes = np.random.randint(0, n, size=1000000)
+    df = pd.DataFrame({'x': pd.Categorical.from_codes(codes, cats)})
+    fn = os.path.join(tmp, "test.parq")
+
+    write(fn, df, has_nulls=False)
+    pf = ParquetFile(fn)
+    out = pf.to_pandas(categories=['x'])
+
+    tm.assert_frame_equal(df, out)

@@ -87,7 +87,8 @@ def read_rep(io_obj, daph, helper, metadata):
     return repetition_levels
 
 
-def read_data_page(f, helper, header, metadata, skip_nulls=False):
+def read_data_page(f, helper, header, metadata, skip_nulls=False,
+                   selfmade=False):
     """Read a data page: definitions, repetitions, values (in order)
 
     Only values are guaranteed to exist, e.g., for a top-level, required
@@ -112,10 +113,18 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
                                      metadata.type,
                                      int(daph.num_values - num_nulls),
                                      width=width)
-    elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
+    elif daph.encoding in [parquet_thrift.Encoding.PLAIN_DICTIONARY,
+                           parquet_thrift.Encoding.RLE]:
         # bit_width is stored as single byte.
-        bit_width = io_obj.read_byte()
-        if bit_width:
+        if daph.encoding == parquet_thrift.Encoding.RLE:
+            bit_width = helper.schema_element(
+                    metadata.path_in_schema[-1]).type_length
+        else:
+            bit_width = io_obj.read_byte()
+        if bit_width in [8, 16, 32] and selfmade:
+            num = (encoding.read_unsigned_var_int(io_obj) >> 1) * 8
+            values = io_obj.read(num * bit_width // 8).view('int%i' % bit_width)
+        elif bit_width:
             values = encoding.Numpy32(np.zeros(daph.num_values,
                                                dtype=np.int32))
             # length is simply "all data left in this page"
@@ -123,7 +132,7 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False):
                         io_obj, bit_width, io_obj.len-io_obj.loc, o=values)
             values = values.data[:daph.num_values-num_nulls]
         else:
-            values = np.zeros(daph.num_values-num_nulls, dtype=np.int64)
+            values = np.zeros(daph.num_values-num_nulls, dtype=np.int8)
     else:
         raise NotImplementedError('Encoding %s' % daph.encoding)
     return definition_levels, repetition_levels, values
@@ -205,7 +214,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
         else:
             skip_nulls = False
         defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
-                                        skip_nulls)
+                                        skip_nulls, selfmade=selfmade)
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
         out.append((defi, rep, val, d))
         num += len(defi) if defi is not None else len(val)
@@ -259,7 +268,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
                 final[start:start+len(val)] = cval
                 start += len(val)
     if all_dict:
-        final = pd.Categorical.from_codes(final, categories=dic)
+        final = pd.Categorical(final, categories=dic, fastpath=True)
     return final
 
 
@@ -301,12 +310,19 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
     out = read_row_group_arrays(file, rg, columns, categories, schema_helper,
                                 cats, selfmade)
 
-    if index is not None and index in columns:
-        i = out.pop(index)
-        out = pd.DataFrame(out, index=i)
-        out.index.name = index
+    i = out.pop(index, None)
+    dtypes = {str(d.dtype) for d in out.values()}
+    if len(out) == 1 and dtypes != {'category'}:
+        c = list(out)[0]
+        out = pd.DataFrame(out[c].reshape(-1, 1), columns=[c], index=i)
+    elif len(dtypes) == 1 and dtypes != {'category'}:
+        columns = list(sorted(out))
+        out = pd.DataFrame(np.hstack([out[k].reshape(-1, 1) for k in columns]),
+                           columns=columns)
     else:
-        out = pd.DataFrame(out, columns=columns)
+        out = pd.DataFrame(out, index=i)
+    if i is not None:
+        out.index.name = index
 
     # apply categories
     for cat in cats:
