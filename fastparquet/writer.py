@@ -509,6 +509,10 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
     rows = len(data)
     if rows == 0:
         return
+    if any(not isinstance(c, (bytes, str)) for c in data):
+        raise ValueError('Column names must be str or bytes:',
+                         {c: type(c) for c in data.columns
+                          if not isinstance(c, (bytes, str))})
     rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0, columns=[])
 
     for column in schema:

@@ -156,6 +156,14 @@ def test_roundtrip(tempdir, scheme, row_groups, comp):
         assert (df[col] == data[col]).all()
 
 
+def test_bad_coltype(tempdir):
+    df = pd.DataFrame({'0': [1, 2], (0, 1): [3, 4]})
+    fn = os.path.join(tempdir, 'temp.parq')
+    with pytest.raises(ValueError) as e:
+        write(fn, df)
+        assert "tuple" in str(e)
+
+
 @pytest.mark.parametrize('scheme', ('simple', 'hive'))
 def test_roundtrip_complex(tempdir, scheme,):
     import datetime
