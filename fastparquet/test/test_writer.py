@@ -161,6 +161,7 @@ def test_roundtrip_complex(tempdir, scheme,):
     import datetime
     data = pd.DataFrame({'ui32': np.arange(1000, dtype=np.uint32),
                          'i16': np.arange(1000, dtype=np.int16),
+                         'ui8': np.array([1, 2, 3, 4]*250, dtype=np.uint8),
                          'f16': np.arange(1000, dtype=np.float16),
                          'dicts': [{'oi': 'you'}] * 1000,
                          't': [datetime.datetime.now()] * 1000,
