@@ -17,7 +17,7 @@ from thriftpy.protocol.exc import TProtocolException
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
-from . import encoding
+from . import encoding, api
 from .util import default_openw, default_mkdirs, sep_from_open, ParquetException
 
 MARKER = b'PAR1'
@@ -759,3 +759,45 @@ def write_common_metadata(fn, fmd, open_with=default_openw):
     f.write(struct.pack(b"<i", foot_size))
     f.write(MARKER)
     f.close()
+
+
+def merge(file_list, verify_schema=True, open_with=default_openw):
+    # TODO: verify compatible set of file paths
+    # TODO: infer correct location of _metadata, _common_metadata
+    # presume current directory for now
+    basepath = '.'
+    sep = sep_from_open(open_with)
+
+    pf = api.ParquetFile(file_list[0])
+
+    if verify_schema:
+        # we don't open and store the ParquetFile instances, because the
+        # operation may be memory expensive, e.g., for s3fs back-end.
+        for fn in file_list[1:]:
+            assert api.ParquetFile(fn).schema == pf.schema
+
+    fmd = pf.fmd  # we inherit "created by" field
+
+    for rg in pf.row_groups:
+        for chunk in rg.columns:
+            chunk.file_path = os.path.relpath(file_list[0], basepath)
+
+    for fn in file_list[1:]:
+        pf = api.ParquetFile(fn)
+        for rg in pf.row_groups:
+            for chunk in rg.columns:
+                chunk.file_path = os.path.relpath(fn, basepath)
+            fmd.row_groups.append(rg)
+
+    fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
+
+    out_file = sep.join([basepath, '_metadata'])
+    with open_with(out_file) as f:
+        f.write(MARKER)
+        foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
+        f.close()
+
+    out_file = sep.join([basepath, '_common_metadata'])
+    write_common_metadata(out_file, fmd, open_with)
