@@ -48,7 +48,7 @@ def read_plain(raw_bytes, type_, count, width=0):
 
 
 @numba.jit(nogil=True)
-def read_unsigned_var_int(file_obj):
+def read_unsigned_var_int(file_obj):  # pragma: no cover
     """Read a value using the unsigned, variable int encoding.
     file-obj is a NumpyIO of bytes; avoids struct to allow numba-jit
     """
@@ -64,7 +64,7 @@ def read_unsigned_var_int(file_obj):
 
 
 @numba.njit(nogil=True)
-def read_rle(file_obj, header, bit_width, o):
+def read_rle(file_obj, header, bit_width, o):  # pragma: no cover
     """Read a run-length encoded run from the given fo with the given header and bit_width.
 
     The count is determined from the header and the width is used to grab the
@@ -80,7 +80,7 @@ def read_rle(file_obj, header, bit_width, o):
 
 
 @numba.njit(nogil=True)
-def width_from_max_int(value):
+def width_from_max_int(value):  # pragma: no cover
     """Convert the value specified to a bit_width."""
     for i in range(0, 64):
         if value == 0:
@@ -89,13 +89,13 @@ def width_from_max_int(value):
 
 
 @numba.njit(nogil=True)
-def _mask_for_bits(i):
+def _mask_for_bits(i):  # pragma: no cover
     """Generate a mask to grab `i` bits from an int value."""
     return (1 << i) - 1
 
 
 @numba.njit(nogil=True)
-def read_bitpacked(file_obj, header, width, o):
+def read_bitpacked(file_obj, header, width, o):  # pragma: no cover
     """
     Read values packed into width-bits each (which can be >8)
 
@@ -129,7 +129,7 @@ def read_bitpacked(file_obj, header, width, o):
 
 
 @numba.njit(nogil=True)
-def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):
+def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):  # pragma: no cover
     """Read values from `io_obj` using the rel/bit-packed hybrid encoding.
 
     If length is not specified, then a 32-bit int is read first to grab the
@@ -150,7 +150,7 @@ def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):
 
 
 @numba.njit(nogil=True)
-def read_length(file_obj):
+def read_length(file_obj):  # pragma: no cover
     """ Numpy trick to get a 32-bit length from four bytes
 
     Equivalent to struct.unpack('<i'), but suitable for numba-jit
@@ -159,7 +159,7 @@ def read_length(file_obj):
     return sub[0] + sub[1]*256 + sub[2]*256*256 + sub[3]*256*256*256
 
 
-class NumpyIO(object):
+class NumpyIO(object):  # pragma: no cover
     """
     Read or write from a numpy arra like a file object
 
