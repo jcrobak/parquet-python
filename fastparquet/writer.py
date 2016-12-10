@@ -4,6 +4,7 @@ import json
 import numpy as np
 import os
 import pandas as pd
+import re
 import shutil
 import struct
 import sys
@@ -509,7 +510,8 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
             encodings=[parquet_thrift.Encoding.RLE,
                        parquet_thrift.Encoding.BIT_PACKED,
                        parquet_thrift.Encoding.PLAIN],
-            codec=getattr(parquet_thrift.CompressionCodec, compression.upper()) if compression else 0,
+            codec=(getattr(parquet_thrift.CompressionCodec, compression.upper())
+                   if compression else 0),
             num_values=tot_rows,
             statistics=s,
             data_page_offset=start,
@@ -605,10 +607,39 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
     return fmd
 
 
+def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
+                 open_with, has_nulls, append=False):
+    """
+    Write to one single file (for file_scheme='simple')
+    """
+    if append:
+        fmd = api.ParquetFile(fn, open_with=open_with).fmd
+        mode = 'rb+'
+    else:
+        mode = 'wb'
+    with open_with(fn, mode) as f:
+        if append:
+            f.seek(-8, 2)
+            head_size = struct.unpack('<i', f.read(4))[0]
+            f.seek(-(head_size+8), 2)
+        else:
+            f.write(MARKER)
+        for i, start in enumerate(row_group_offsets):
+            end = row_group_offsets[i+1] if i < (len(row_group_offsets) - 1) else None
+            rg = make_row_group(f, data[start:end], fmd.schema,
+                                compression=compression, encoding=encoding)
+            if rg is not None:
+                fmd.row_groups.append(rg)
+
+        foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
+
+
 def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
           compression=None, file_scheme='simple', open_with=default_openw,
           mkdirs=default_mkdirs, has_nulls=None, write_index=None,
-          partition_on=[], fixed_text=None):
+          partition_on=[], fixed_text=None, append=False):
     """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
@@ -657,6 +688,10 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         to fixed-length strings of the given length for the given columns
         before writing, potentially providing a large speed
         boost.
+    append: bool (False)
+        If False, construct data-set from scratch; if True, add new row-group(s)
+        to existing data-set. In the latter case, the data-set must exist,
+        and the schema must match the input data.
 
     Examples
     --------
@@ -673,55 +708,71 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         nparts = (l - 1) // row_group_offsets + 1
         chunksize = (l - 1) // nparts + 1
         row_group_offsets = list(range(0, l, chunksize))
-    with open_with(fn) as f:
-        f.write(MARKER)
+    if write_index or write_index is None and not (
+            isinstance(data.index, pd.RangeIndex) and
+            data.index._start == 0 and
+            data.index._stop == len(data.index) and
+            data.index._step == 1 and data.index.name is None):
+        data = data.reset_index()
+    ignore = partition_on if file_scheme != 'simple' else []
+    fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
+                        fixed_text=fixed_text)
 
-        if write_index or write_index is None and not (
-                isinstance(data.index, pd.RangeIndex) and
-                data.index._start == 0 and
-                data.index._stop == len(data.index) and
-                data.index._step == 1 and data.index.name is None):
-            data = data.reset_index()
-        ignore = partition_on if file_scheme != 'simple' else []
-        fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
-                            fixed_text=fixed_text)
+    if file_scheme == 'simple':
+        write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
+                     open_with, has_nulls, append)
+    else:  # multi-file format (hive)
+        if append:
+            pf = api.ParquetFile(fn)
+            fmd = pf.fmd
+            i_offset = find_max_part(fmd.row_groups)
+            partition_on = list(pf.cats)
+        else:
+            i_offset = 0
+        import pdb
+        pdb.set_trace()
         for i, start in enumerate(row_group_offsets):
-            end = row_group_offsets[i+1] if i < (len(row_group_offsets) - 1) else None
-            if file_scheme == 'simple':
-                rg = make_row_group(f, data[start:end], fmd.schema,
-                                    compression=compression, encoding=encoding)
+            end = (row_group_offsets[i+1] if i < (len(row_group_offsets) - 1)
+                   else None)
+            part = 'part.%i.parquet' % (i + i_offset)
+            if partition_on:
+                partition_on_columns(
+                    data[start:end], partition_on, filename, part, fmd,
+                    sep, compression, encoding, open_with, mkdirs
+                )
+                rg = None
             else:
-                part = 'part.%i.parquet' % i
-                if partition_on:
-                    partition_on_columns(
-                        data[start:end], partition_on, filename, part, fmd,
-                        sep, compression, encoding, open_with, mkdirs
-                    )
-                    rg = None
-                else:
-                    partname = sep.join([filename, part])
-                    with open_with(partname) as f2:
-                        rg = make_part_file(f2, data[start:end], fmd.schema,
-                                            compression=compression,
-                                            encoding=encoding)
-                    for chunk in rg.columns:
-                        chunk.file_path = part
+                partname = sep.join([filename, part])
+                with open_with(partname) as f2:
+                    rg = make_part_file(f2, data[start:end], fmd.schema,
+                                        compression=compression,
+                                        encoding=encoding)
+                for chunk in rg.columns:
+                    chunk.file_path = part
 
             if rg is not None:
                 fmd.row_groups.append(rg)
 
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(MARKER)
-
-    if file_scheme != 'simple':
+        write_common_metadata(fn, fmd, open_with, no_row_groups=False)
         write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                               open_with)
 
 
+def find_max_part(row_groups):
+    paths = [c.file_path or "" for rg in row_groups for c in rg.columns]
+    s = re.compile('.*part.(?P<i>[\d]+).parq$')
+    matches = [s.match(path) for path in paths]
+    nums = [int(match.groupdict()['i']) for match in matches if match]
+    if nums:
+        return max(nums)
+    else:
+        return 0
+
+
 def partition_on_columns(data, columns, root_path, partname, fmd, sep,
                          compression, encoding, open_with, mkdirs):
-    """ Split each row-group by the given columns
+    """
+    Split each row-group by the given columns
 
     Each combination of column values (determined by pandas groupby) will
     be written in structured directories.
@@ -747,18 +798,34 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
             fmd.row_groups.append(rg)
 
 
-def write_common_metadata(fn, fmd, open_with=default_openw):
-    """For hive-style parquet, write schema in special shared file"""
-    if isinstance(fn, str):
-        f = open_with(fn)
-    else:
-        f = fn
-    f.write(MARKER)
-    fmd.row_groups = []
-    foot_size = write_thrift(f, fmd)
-    f.write(struct.pack(b"<i", foot_size))
-    f.write(MARKER)
-    f.close()
+def write_common_metadata(fn, fmd, open_with=default_openw,
+                          no_row_groups=True):
+    """
+    For hive-style parquet, write schema in special shared file
+
+    Parameters
+    ----------
+    fn: str
+        Filename to write to
+    fmd: thrift FileMetaData
+        Information to write
+    open_with: func
+        To use to create writable file
+    no_row_groups: bool (True)
+        Strip out row groups from metadata before writing - used for "common
+        metadata" files, containing only the schema.
+    """
+    with open_with(fn) as f:
+        f.write(MARKER)
+        if no_row_groups:
+            rgs = fmd.row_groups
+            fmd.row_groups = []
+            foot_size = write_thrift(f, fmd)
+            fmd.row_groups = rgs
+        else:
+            foot_size = write_thrift(f, fmd)
+        f.write(struct.pack(b"<i", foot_size))
+        f.write(MARKER)
 
 
 def merge(file_list, verify_schema=True, open_with=default_openw):
@@ -792,12 +859,7 @@ def merge(file_list, verify_schema=True, open_with=default_openw):
     fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
 
     out_file = sep.join([basepath, '_metadata'])
-    with open_with(out_file) as f:
-        f.write(MARKER)
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(MARKER)
-        f.close()
+    write_common_metadata(out_file, fmd, open_with, no_row_groups=False)
 
     out_file = sep.join([basepath, '_common_metadata'])
     write_common_metadata(out_file, fmd, open_with)

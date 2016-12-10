@@ -20,8 +20,8 @@ def sep_from_open(opener):
         return '/'
 
 
-def default_openw(f):
-    return open(f, 'wb')
+def default_openw(f, mode='wb'):
+    return open(f, mode)
 
 
 def default_mkdirs(f):
