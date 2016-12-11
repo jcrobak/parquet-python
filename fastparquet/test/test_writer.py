@@ -118,7 +118,7 @@ def test_roundtrip_s3(s3):
     data.loc[100, 'f'] = np.nan
     data['cat'] = data.hello.astype('category')
     noop = lambda x: True
-    myopen = lambda f: s3.open(f, 'wb')
+    myopen = s3.open
     write(TEST_DATA+'/temp_parq', data, file_scheme='hive',
           row_group_offsets=[0, 500], open_with=myopen, mkdirs=noop)
     myopen = s3.open
@@ -547,6 +547,12 @@ def test_merge_fail(tempdir):
         writer.merge([fn0, fn1])
     assert 'schemas' in str(e)
 
+    os.remove(fn1)
+    write(fn1, df0, file_scheme='hive')
+    with pytest.raises(ValueError) as e:
+        writer.merge([fn0, fn1])
+    assert 'multi-file' in str(e)
+
 
 def test_analyse_paths():
     file_list = ['a', 'b']
@@ -618,3 +624,23 @@ def test_append(tempdir, row_groups, partition):
     items_in = {tuple(row[1])
                 for row in expected.iterrows()}
     assert items_in == items_out
+
+
+def test_append_fail(tempdir):
+    fn = str(tempdir)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 0],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': True})
+    df1 = pd.DataFrame({'a': [4, 5, 6, 7],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': False})
+    write(fn, df0, file_scheme='hive')
+    with pytest.raises(ValueError) as e:
+        write(fn, df1, file_scheme='simple', append=True)
+    assert 'existing file scheme' in str(e)
+
+    fn2 = os.path.join(fn, 'temp.parq')
+    write(fn2, df0, file_scheme='simple')
+    with pytest.raises(ValueError) as e:
+        write(fn2, df1, file_scheme='hive', append=True)
+    assert 'existing file scheme' in str(e)

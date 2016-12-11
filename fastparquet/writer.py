@@ -19,7 +19,7 @@ from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from . import encoding, api
-from .util import default_openw, default_mkdirs, sep_from_open, ParquetException
+from .util import default_open, default_mkdirs, sep_from_open, ParquetException
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -613,7 +613,11 @@ def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
     Write to one single file (for file_scheme='simple')
     """
     if append:
-        fmd = api.ParquetFile(fn, open_with=open_with).fmd
+        pf = api.ParquetFile(fn, open_with=open_with)
+        if pf.file_scheme != 'simple':
+            raise ValueError('File scheme requested is simple, but '
+                             'existing file scheme is not')
+        fmd = pf.fmd
         mode = 'rb+'
     else:
         mode = 'wb'
@@ -637,7 +641,7 @@ def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
 
 
 def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
-          compression=None, file_scheme='simple', open_with=default_openw,
+          compression=None, file_scheme='simple', open_with=default_open,
           mkdirs=default_mkdirs, has_nulls=None, write_index=None,
           partition_on=[], fixed_text=None, append=False):
     """ Write Pandas DataFrame to filename as Parquet Format
@@ -663,7 +667,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         If hive: each row group is in a separate file, and filename contains
         only the metadata
     open_with: function
-        When called with a path/URL, returns an open file-like object
+        When called with a f(path, mode), returns an open file-like object
     mkdirs: function
         When called with a path/URL, creates any necessary dictionaries to
         make that location writable, e.g., ``os.makedirs``. This is not
@@ -698,11 +702,6 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
     >>> fastparquet.write('myfile.parquet', df)  # doctest: +SKIP
     """
     sep = sep_from_open(open_with)
-    if file_scheme != 'simple' or isinstance(data, pd.core.groupby.DataFrameGroupBy):
-        mkdirs(filename)
-        fn = sep.join([filename, '_metadata'])
-    else:
-        fn = filename
     if isinstance(row_group_offsets, int):
         l = len(data)
         nparts = (l - 1) // row_group_offsets + 1
@@ -719,16 +718,21 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
                         fixed_text=fixed_text)
 
     if file_scheme == 'simple':
-        write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
-                     open_with, has_nulls, append)
+        write_simple(filename, data, fmd, row_group_offsets, encoding,
+                     compression, open_with, has_nulls, append)
     else:  # multi-file format (hive)
         if append:
-            pf = api.ParquetFile(fn)
+            pf = api.ParquetFile(filename, open_with=open_with)
+            if pf.file_scheme != 'hive':
+                raise ValueError('Requested file scheme is hive, '
+                                 'but existing file scheme is not.')
             fmd = pf.fmd
             i_offset = find_max_part(fmd.row_groups)
             partition_on = list(pf.cats)
         else:
             i_offset = 0
+        fn = sep.join([filename, '_metadata'])
+        mkdirs(filename)
         for i, start in enumerate(row_group_offsets):
             end = (row_group_offsets[i+1] if i < (len(row_group_offsets) - 1)
                    else None)
@@ -741,7 +745,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
                 rg = None
             else:
                 partname = sep.join([filename, part])
-                with open_with(partname) as f2:
+                with open_with(partname, 'wb') as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
                                         compression=compression,
                                         encoding=encoding)
@@ -786,7 +790,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         relname = sep.join([path, partname])
         mkdirs(root_path + sep + path)
         fullname = sep.join([root_path, path, partname])
-        with open_with(fullname) as f2:
+        with open_with(fullname, 'wb') as f2:
             rg = make_part_file(f2, df, fmd.schema,
                                 compression=compression,
                                 encoding=encoding)
@@ -796,7 +800,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
             fmd.row_groups.append(rg)
 
 
-def write_common_metadata(fn, fmd, open_with=default_openw,
+def write_common_metadata(fn, fmd, open_with=default_open,
                           no_row_groups=True):
     """
     For hive-style parquet, write schema in special shared file
@@ -808,12 +812,12 @@ def write_common_metadata(fn, fmd, open_with=default_openw,
     fmd: thrift FileMetaData
         Information to write
     open_with: func
-        To use to create writable file
+        To use to create writable file as f(path, mode)
     no_row_groups: bool (True)
         Strip out row groups from metadata before writing - used for "common
         metadata" files, containing only the schema.
     """
-    with open_with(fn) as f:
+    with open_with(fn, 'wb') as f:
         f.write(MARKER)
         if no_row_groups:
             rgs = fmd.row_groups
@@ -826,7 +830,7 @@ def write_common_metadata(fn, fmd, open_with=default_openw,
         f.write(MARKER)
 
 
-def merge(file_list, verify_schema=True, open_with=default_openw):
+def merge(file_list, verify_schema=True, open_with=default_open):
     """
     Create a logical data-set out of multiple parquet files.
 
@@ -842,18 +846,21 @@ def merge(file_list, verify_schema=True, open_with=default_openw):
         If True, will first check that all the schemas in the input files are
         identical.
     open_with: func
-        Used for opening a file for writing.
+        Used for opening a file for writing as f(path, mode)
     """
     sep = sep_from_open(open_with)
     basepath, file_list = analyse_paths(file_list, sep)
 
-    pf = api.ParquetFile(sep.join([basepath, file_list[0]]))
+    pf = api.ParquetFile(sep.join([basepath, file_list[0]]),
+                         open_with=open_with)
 
     if verify_schema:
         # we don't open and store the ParquetFile instances, because the
         # operation may be memory expensive, e.g., for s3fs back-end.
         for fn in file_list[1:]:
-            if api.ParquetFile(sep.join([basepath, fn])).schema != pf.schema:
+            pfi = api.ParquetFile(sep.join([basepath, fn]),
+                                  open_with=open_with)
+            if pfi.schema != pf.schema:
                 raise ValueError('Incompatible schemas')
 
     fmd = pf.fmd  # we inherit "created by" field
@@ -863,7 +870,9 @@ def merge(file_list, verify_schema=True, open_with=default_openw):
             chunk.file_path = file_list[0]
 
     for fn in file_list[1:]:
-        pf = api.ParquetFile(sep.join([basepath, fn]))
+        pf = api.ParquetFile(sep.join([basepath, fn]), open_with=open_with)
+        if pf.file_scheme != 'simple':
+            raise ValueError('Cannot merge multi-file input', fn)
         for rg in pf.row_groups:
             for chunk in rg.columns:
                 chunk.file_path = fn

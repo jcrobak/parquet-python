@@ -51,6 +51,12 @@ class ParquetFile(object):
             self.fn = fn
             with open_with(fn, 'rb') as f:
                 self._parse_header(f, verify)
+        if all(rg.columns[0].file_path is None for rg in self.row_groups):
+            self.file_scheme = 'simple'
+        elif all(rg.columns[0].file_path is not None for rg in self.row_groups):
+            self.file_scheme = 'hive'
+        else:
+            self.file_scheme = 'mixed'
         self.open = open_with
         self.sep = sep
         self._read_partitions()
