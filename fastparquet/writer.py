@@ -729,8 +729,6 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
             partition_on = list(pf.cats)
         else:
             i_offset = 0
-        import pdb
-        pdb.set_trace()
         for i, start in enumerate(row_group_offsets):
             end = (row_group_offsets[i+1] if i < (len(row_group_offsets) - 1)
                    else None)
@@ -760,11 +758,11 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
 
 def find_max_part(row_groups):
     paths = [c.file_path or "" for rg in row_groups for c in rg.columns]
-    s = re.compile('.*part.(?P<i>[\d]+).parq$')
+    s = re.compile('.*part.(?P<i>[\d]+).parquet$')
     matches = [s.match(path) for path in paths]
     nums = [int(match.groupdict()['i']) for match in matches if match]
     if nums:
-        return max(nums)
+        return max(nums) + 1
     else:
         return 0
 
@@ -829,6 +827,23 @@ def write_common_metadata(fn, fmd, open_with=default_openw,
 
 
 def merge(file_list, verify_schema=True, open_with=default_openw):
+    """
+    Create a logical data-set out of multiple parquet files.
+
+    The files referenced in file_list must either be in the same directory,
+    or at the same level within a structured directory, where the directories
+    give partitioning information. The schemas of the files should also be
+    consistent.
+
+    Parameters
+    ----------
+    file_list: list of paths
+    verify_schema: bool (True)
+        If True, will first check that all the schemas in the input files are
+        identical.
+    open_with: func
+        Used for opening a file for writing.
+    """
     sep = sep_from_open(open_with)
     basepath, file_list = analyse_paths(file_list, sep)
 

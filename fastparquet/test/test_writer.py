@@ -579,3 +579,42 @@ def test_analyse_paths():
     with pytest.raises(ValueError) as e:
         writer.analyse_paths(file_list, '/')
     assert 'nesting' in str(e)
+
+
+def test_append_simple(tempdir):
+    fn = os.path.join(str(tempdir), 'test.parq')
+    df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'b': ['a', 'a', 'b', 'b']})
+    write(fn, df, write_index=False)
+    write(fn, df, append=True, write_index=False)
+
+    pf = ParquetFile(fn)
+    expected = pd.concat([df, df], ignore_index=True)
+    pd.util.testing.assert_frame_equal(pf.to_pandas(), expected)
+
+
+@pytest.mark.parametrize('row_groups', ([0], [0, 2]))
+@pytest.mark.parametrize('partition', ([], ['b']))
+def test_append(tempdir, row_groups, partition):
+    fn = str(tempdir)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 0],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': True})
+    df1 = pd.DataFrame({'a': [4, 5, 6, 7],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': False})
+    write(fn, df0, partition_on=partition, file_scheme='hive',
+          row_group_offsets=row_groups)
+    write(fn, df1, partition_on=partition, file_scheme='hive',
+          row_group_offsets=row_groups, append=True)
+
+    pf = ParquetFile(fn)
+
+    expected = pd.concat([df0, df1], ignore_index=True)
+
+    assert len(pf.row_groups) == 2 * len(row_groups) * (len(partition) + 1)
+    items_out = {tuple(row[1])
+                 for row in pf.to_pandas()[['a', 'b', 'c']].iterrows()}
+    items_in = {tuple(row[1])
+                for row in expected.iterrows()}
+    assert items_in == items_out
