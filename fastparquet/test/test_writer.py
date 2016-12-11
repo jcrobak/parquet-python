@@ -506,3 +506,76 @@ def test_many_categories(tempdir, n):
     out = pf.to_pandas(categories=['x'])
 
     tm.assert_frame_equal(df, out)
+
+
+@pytest.mark.parametrize('row_groups', ([0], [0, 2]))
+@pytest.mark.parametrize('dirs', (['', ''], ['cat=1', 'cat=2']))
+def test_merge(tempdir, dirs, row_groups):
+    fn = str(tempdir)
+
+    os.makedirs(os.path.join(fn, dirs[0]), exist_ok=True)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = os.sep.join([fn, dirs[0], 'out0.parq'])
+    write(fn0, df0, row_group_offsets=row_groups)
+
+    os.makedirs(os.path.join(fn, dirs[1]), exist_ok=True)
+    df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
+    fn1 = os.sep.join([fn, dirs[1], 'out1.parq'])
+    write(fn1, df1, row_group_offsets=row_groups)
+
+    writer.merge([fn0, fn1])
+    pf = ParquetFile(fn)
+    assert len(pf.row_groups) == 2 * len(row_groups)
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
+    if "cat=1" in dirs:
+        assert 'cat' in pf.cats
+
+
+def test_merge_fail(tempdir):
+    fn = str(tempdir)
+
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = os.sep.join([fn, 'out0.parq'])
+    write(fn0, df0)
+
+    df1 = pd.DataFrame({'a': ['a', 'b', 'c']})
+    fn1 = os.sep.join([fn, 'out1.parq'])
+    write(fn1, df1)
+
+    with pytest.raises(ValueError) as e:
+        writer.merge([fn0, fn1])
+    assert 'schemas' in str(e)
+
+
+def test_analyse_paths():
+    file_list = ['a', 'b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('', ['a', 'b'])
+
+    file_list = ['c/a', 'c/b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c', ['a', 'b'])
+
+    file_list = ['c/d/a', 'c/d/b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c/d', ['a', 'b'])
+
+    file_list = ['c/cat=1/a', 'c/cat=2/b', 'c/cat=1/c']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c', ['cat=1/a', 'cat=2/b', 'cat=1/c'])
+
+    file_list = ['c/cat=2/b', 'c/cat/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'c/cat/a' in str(e)
+
+    file_list = ['c/cat=2/b', 'c/fred=2/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'directories' in str(e)
+
+    file_list = ['c/cat=2/b', 'c/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'nesting' in str(e)

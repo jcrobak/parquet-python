@@ -829,31 +829,29 @@ def write_common_metadata(fn, fmd, open_with=default_openw,
 
 
 def merge(file_list, verify_schema=True, open_with=default_openw):
-    # TODO: verify compatible set of file paths
-    # TODO: infer correct location of _metadata, _common_metadata
-    # presume current directory for now
-    basepath = '.'
     sep = sep_from_open(open_with)
+    basepath, file_list = analyse_paths(file_list, sep)
 
-    pf = api.ParquetFile(file_list[0])
+    pf = api.ParquetFile(sep.join([basepath, file_list[0]]))
 
     if verify_schema:
         # we don't open and store the ParquetFile instances, because the
         # operation may be memory expensive, e.g., for s3fs back-end.
         for fn in file_list[1:]:
-            assert api.ParquetFile(fn).schema == pf.schema
+            if api.ParquetFile(sep.join([basepath, fn])).schema != pf.schema:
+                raise ValueError('Incompatible schemas')
 
     fmd = pf.fmd  # we inherit "created by" field
 
     for rg in pf.row_groups:
         for chunk in rg.columns:
-            chunk.file_path = os.path.relpath(file_list[0], basepath)
+            chunk.file_path = file_list[0]
 
     for fn in file_list[1:]:
-        pf = api.ParquetFile(fn)
+        pf = api.ParquetFile(sep.join([basepath, fn]))
         for rg in pf.row_groups:
             for chunk in rg.columns:
-                chunk.file_path = os.path.relpath(fn, basepath)
+                chunk.file_path = fn
             fmd.row_groups.append(rg)
 
     fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
@@ -863,3 +861,31 @@ def merge(file_list, verify_schema=True, open_with=default_openw):
 
     out_file = sep.join([basepath, '_common_metadata'])
     write_common_metadata(out_file, fmd, open_with)
+
+
+def analyse_paths(file_list, sep):
+    """Consolidate list of file-paths into acceptable parquet relative paths"""
+    path_parts_list = [fn.split(sep) for fn in file_list]
+    if len({len(path_parts) for path_parts in path_parts_list}) > 1:
+        raise ValueError('Mixed nesting in merge files')
+    basepath = path_parts_list[0][:-1]
+    s = re.compile("([a-zA-Z_]+)=([^/]+)")
+    out_list = []
+    for i, path_parts in enumerate(path_parts_list):
+        j = len(path_parts) - 1
+        for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
+            if base_part != path_part:
+                j = k
+                break
+        basepath = basepath[:j]
+    l = len(basepath)
+    if len({tuple([p.split('=')[0] for p in parts[l:-1]])
+            for parts in path_parts_list}) > 1:
+        raise ValueError('Partitioning directories do not agree')
+    for path_parts in path_parts_list:
+        for path_part in path_parts[l:-1]:
+            if s.match(path_part) is None:
+                raise ValueError('Malformed paths set at', sep.join(path_parts))
+        out_list.append(sep.join(path_parts[l:]))
+
+    return sep.join(basepath), out_list
