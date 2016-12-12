@@ -101,3 +101,20 @@ def test_iter(tempdir):
     pd.util.testing.assert_frame_equal(d2, df[2:])
     with pytest.raises(StopIteration):
         next(out)
+
+
+def test_attributes(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [1.0, 2.0, 1.0, 2.0],
+                       'z': ['a', 'b', 'c', 'd']})
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df, row_group_offsets=[0, 2])
+    pf = ParquetFile(fn)
+    assert pf.columns == ['x', 'y', 'z']
+    assert len(pf.row_groups) == 2
+    assert pf.count == 4
+    assert fn == pf.info['name']
+    assert fn in str(pf)
+    for col in df:
+        assert pf.dtypes[col] == df.dtypes[col]

@@ -118,7 +118,7 @@ def test_roundtrip_s3(s3):
     data.loc[100, 'f'] = np.nan
     data['cat'] = data.hello.astype('category')
     noop = lambda x: True
-    myopen = lambda f: s3.open(f, 'wb')
+    myopen = s3.open
     write(TEST_DATA+'/temp_parq', data, file_scheme='hive',
           row_group_offsets=[0, 500], open_with=myopen, mkdirs=noop)
     myopen = s3.open
@@ -506,3 +506,167 @@ def test_many_categories(tempdir, n):
     out = pf.to_pandas(categories=['x'])
 
     tm.assert_frame_equal(df, out)
+
+
+@pytest.mark.parametrize('row_groups', ([0], [0, 2]))
+@pytest.mark.parametrize('dirs', (['', ''], ['cat=1', 'cat=2']))
+def test_merge(tempdir, dirs, row_groups):
+    fn = str(tempdir)
+
+    os.makedirs(os.path.join(fn, dirs[0]), exist_ok=True)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = os.sep.join([fn, dirs[0], 'out0.parq'])
+    write(fn0, df0, row_group_offsets=row_groups)
+
+    os.makedirs(os.path.join(fn, dirs[1]), exist_ok=True)
+    df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
+    fn1 = os.sep.join([fn, dirs[1], 'out1.parq'])
+    write(fn1, df1, row_group_offsets=row_groups)
+
+    # with file-names
+    pf = writer.merge([fn0, fn1])
+    assert len(pf.row_groups) == 2 * len(row_groups)
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
+    if "cat=1" in dirs:
+        assert 'cat' in pf.cats
+
+    # with instances
+    pf = writer.merge([ParquetFile(fn0), ParquetFile(fn1)])
+    assert len(pf.row_groups) == 2 * len(row_groups)
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
+    if "cat=1" in dirs:
+        assert 'cat' in pf.cats
+
+
+def test_merge_s3(tempdir, s3):
+    fn = str(tempdir)
+
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = TEST_DATA + '/out0.parq'
+    write(fn0, df0, open_with=s3.open)
+
+    df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
+    fn1 = TEST_DATA + '/out1.parq'
+    write(fn1, df1, open_with=s3.open)
+
+    # with file-names
+    pf = writer.merge([fn0, fn1], open_with=s3.open)
+    assert len(pf.row_groups) == 2
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
+
+
+def test_merge_fail(tempdir):
+    fn = str(tempdir)
+
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = os.sep.join([fn, 'out0.parq'])
+    write(fn0, df0)
+
+    df1 = pd.DataFrame({'a': ['a', 'b', 'c']})
+    fn1 = os.sep.join([fn, 'out1.parq'])
+    write(fn1, df1)
+
+    with pytest.raises(ValueError) as e:
+        writer.merge([fn0, fn1])
+    assert 'schemas' in str(e)
+
+    os.remove(fn1)
+    write(fn1, df0, file_scheme='hive')
+    with pytest.raises(ValueError) as e:
+        writer.merge([fn0, fn1])
+    assert 'multi-file' in str(e)
+
+
+def test_analyse_paths():
+    file_list = ['a', 'b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('', ['a', 'b'])
+
+    file_list = ['c/a', 'c/b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c', ['a', 'b'])
+
+    file_list = ['c/d/a', 'c/d/b']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c/d', ['a', 'b'])
+
+    file_list = ['c/cat=1/a', 'c/cat=2/b', 'c/cat=1/c']
+    base, out = writer.analyse_paths(file_list, '/')
+    assert (base, out) == ('c', ['cat=1/a', 'cat=2/b', 'cat=1/c'])
+
+    file_list = ['c/cat=2/b', 'c/cat/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'c/cat/a' in str(e)
+
+    file_list = ['c/cat=2/b', 'c/fred=2/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'directories' in str(e)
+
+    file_list = ['c/cat=2/b', 'c/a', 'c/cat=1/c']
+    with pytest.raises(ValueError) as e:
+        writer.analyse_paths(file_list, '/')
+    assert 'nesting' in str(e)
+
+
+def test_append_simple(tempdir):
+    fn = os.path.join(str(tempdir), 'test.parq')
+    df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'b': ['a', 'a', 'b', 'b']})
+    write(fn, df, write_index=False)
+    write(fn, df, append=True, write_index=False)
+
+    pf = ParquetFile(fn)
+    expected = pd.concat([df, df], ignore_index=True)
+    pd.util.testing.assert_frame_equal(pf.to_pandas(), expected)
+
+
+@pytest.mark.parametrize('row_groups', ([0], [0, 2]))
+@pytest.mark.parametrize('partition', ([], ['b']))
+def test_append(tempdir, row_groups, partition):
+    fn = str(tempdir)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 0],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': True})
+    df1 = pd.DataFrame({'a': [4, 5, 6, 7],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': False})
+    write(fn, df0, partition_on=partition, file_scheme='hive',
+          row_group_offsets=row_groups)
+    write(fn, df1, partition_on=partition, file_scheme='hive',
+          row_group_offsets=row_groups, append=True)
+
+    pf = ParquetFile(fn)
+
+    expected = pd.concat([df0, df1], ignore_index=True)
+
+    assert len(pf.row_groups) == 2 * len(row_groups) * (len(partition) + 1)
+    items_out = {tuple(row[1])
+                 for row in pf.to_pandas()[['a', 'b', 'c']].iterrows()}
+    items_in = {tuple(row[1])
+                for row in expected.iterrows()}
+    assert items_in == items_out
+
+
+def test_append_fail(tempdir):
+    fn = str(tempdir)
+    df0 = pd.DataFrame({'a': [1, 2, 3, 0],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': True})
+    df1 = pd.DataFrame({'a': [4, 5, 6, 7],
+                        'b': ['a', 'b', 'a', 'b'],
+                        'c': False})
+    write(fn, df0, file_scheme='hive')
+    with pytest.raises(ValueError) as e:
+        write(fn, df1, file_scheme='simple', append=True)
+    assert 'existing file scheme' in str(e)
+
+    fn2 = os.path.join(fn, 'temp.parq')
+    write(fn2, df0, file_scheme='simple')
+    with pytest.raises(ValueError) as e:
+        write(fn2, df1, file_scheme='hive', append=True)
+    assert 'existing file scheme' in str(e)
