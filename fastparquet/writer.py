@@ -19,7 +19,8 @@ from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from . import encoding, api
-from .util import default_open, default_mkdirs, sep_from_open, ParquetException
+from .util import (default_open, default_mkdirs, sep_from_open,
+                   ParquetException, thrift_copy, index_like)
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -163,24 +164,6 @@ def time_shift(indata, outdata, factor=1000):
             outdata[i] = nat
         else:
             outdata[i] = indata[i] // factor
-
-
-def thrift_print(structure, offset=0):
-    """
-    Handy recursive text ouput for thrift structures
-    """
-    if not isinstance(structure, thriftpy.thrift.TPayload):
-        return str(structure)
-    s = str(structure.__class__) + '\n'
-    for key in dir(structure):
-        if key.startswith('_') or key in ['thrift_spec', 'read', 'write',
-                                          'default_spec']:
-            continue
-        s = s + ' ' * offset + key + ': ' + thrift_print(getattr(structure, key)
-                                                         , offset+2) + '\n'
-    return s
-thriftpy.thrift.TPayload.__str__ = thrift_print
-thriftpy.thrift.TPayload.__repr__ = thrift_print
 
 
 def write_thrift(fobj, thrift):
@@ -707,11 +690,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         nparts = (l - 1) // row_group_offsets + 1
         chunksize = (l - 1) // nparts + 1
         row_group_offsets = list(range(0, l, chunksize))
-    if write_index or write_index is None and not (
-            isinstance(data.index, pd.RangeIndex) and
-            data.index._start == 0 and
-            data.index._stop == len(data.index) and
-            data.index._step == 1 and data.index.name is None):
+    if write_index or write_index is None and index_like(data.index):
         data = data.reset_index()
     ignore = partition_on if file_scheme != 'simple' else []
     fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
@@ -720,7 +699,7 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
     if file_scheme == 'simple':
         write_simple(filename, data, fmd, row_group_offsets, encoding,
                      compression, open_with, has_nulls, append)
-    else:  # multi-file format (hive)
+    elif file_scheme == 'hive':
         if append:
             pf = api.ParquetFile(filename, open_with=open_with)
             if pf.file_scheme != 'hive':
@@ -758,9 +737,14 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         write_common_metadata(fn, fmd, open_with, no_row_groups=False)
         write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
                               open_with)
+    else:
+        raise ValueError('File scheme should be simple|hive, not', file_scheme)
 
 
 def find_max_part(row_groups):
+    """
+    Find the highest integer matching "**part.*.parquet" in referenced paths.
+    """
     paths = [c.file_path or "" for rg in row_groups for c in rg.columns]
     s = re.compile('.*part.(?P<i>[\d]+).parquet$')
     matches = [s.match(path) for path in paths]
@@ -841,39 +825,42 @@ def merge(file_list, verify_schema=True, open_with=default_open):
 
     Parameters
     ----------
-    file_list: list of paths
+    file_list: list of paths or ParquetFile instances
     verify_schema: bool (True)
         If True, will first check that all the schemas in the input files are
         identical.
     open_with: func
-        Used for opening a file for writing as f(path, mode)
+        Used for opening a file for writing as f(path, mode). If input list
+        is ParquetFile instances, will be inferred from the first one of these.
+
+    Returns
+    -------
+    ParquetFile instance corresponding to the merged data.
     """
     sep = sep_from_open(open_with)
+    if all(isinstance(pf, api.ParquetFile) for pf in file_list):
+        pfs = file_list
+        file_list = [pf.fn for pf in pfs]
+        open_with = pfs[0].open
+    elif all(not isinstance(pf, api.ParquetFile) for pf in file_list):
+        pfs = [api.ParquetFile(fn, open_with=open_with) for fn in file_list]
+    else:
+        raise ValueError("Merge requires all PaquetFile instances or none")
     basepath, file_list = analyse_paths(file_list, sep)
 
-    pf = api.ParquetFile(sep.join([basepath, file_list[0]]),
-                         open_with=open_with)
-
     if verify_schema:
-        # we don't open and store the ParquetFile instances, because the
-        # operation may be memory expensive, e.g., for s3fs back-end.
-        for fn in file_list[1:]:
-            pfi = api.ParquetFile(sep.join([basepath, fn]),
-                                  open_with=open_with)
-            if pfi.schema != pf.schema:
+        for pf in pfs[1:]:
+            if pf.schema != pfs[0].schema:
                 raise ValueError('Incompatible schemas')
 
-    fmd = pf.fmd  # we inherit "created by" field
+    fmd = thrift_copy(pfs[0].fmd)  # we inherit "created by" field
+    fmd.row_groups = []
 
-    for rg in pf.row_groups:
-        for chunk in rg.columns:
-            chunk.file_path = file_list[0]
-
-    for fn in file_list[1:]:
-        pf = api.ParquetFile(sep.join([basepath, fn]), open_with=open_with)
+    for pf, fn in zip(pfs, file_list):
         if pf.file_scheme != 'simple':
             raise ValueError('Cannot merge multi-file input', fn)
         for rg in pf.row_groups:
+            rg = thrift_copy(rg)
             for chunk in rg.columns:
                 chunk.file_path = fn
             fmd.row_groups.append(rg)
@@ -882,9 +869,11 @@ def merge(file_list, verify_schema=True, open_with=default_open):
 
     out_file = sep.join([basepath, '_metadata'])
     write_common_metadata(out_file, fmd, open_with, no_row_groups=False)
+    out = api.ParquetFile(out_file, open_with=open_with)
 
     out_file = sep.join([basepath, '_common_metadata'])
     write_common_metadata(out_file, fmd, open_with)
+    return out
 
 
 def analyse_paths(file_list, sep):

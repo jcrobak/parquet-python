@@ -523,13 +523,39 @@ def test_merge(tempdir, dirs, row_groups):
     fn1 = os.sep.join([fn, dirs[1], 'out1.parq'])
     write(fn1, df1, row_group_offsets=row_groups)
 
-    writer.merge([fn0, fn1])
-    pf = ParquetFile(fn)
+    # with file-names
+    pf = writer.merge([fn0, fn1])
     assert len(pf.row_groups) == 2 * len(row_groups)
     out = pf.to_pandas().a.tolist()
     assert out == [1, 2, 3, 4, 5, 6, 7, 8]
     if "cat=1" in dirs:
         assert 'cat' in pf.cats
+
+    # with instances
+    pf = writer.merge([ParquetFile(fn0), ParquetFile(fn1)])
+    assert len(pf.row_groups) == 2 * len(row_groups)
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
+    if "cat=1" in dirs:
+        assert 'cat' in pf.cats
+
+
+def test_merge_s3(tempdir, s3):
+    fn = str(tempdir)
+
+    df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
+    fn0 = TEST_DATA + '/out0.parq'
+    write(fn0, df0, open_with=s3.open)
+
+    df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
+    fn1 = TEST_DATA + '/out1.parq'
+    write(fn1, df1, open_with=s3.open)
+
+    # with file-names
+    pf = writer.merge([fn0, fn1], open_with=s3.open)
+    assert len(pf.row_groups) == 2
+    out = pf.to_pandas().a.tolist()
+    assert out == [1, 2, 3, 4, 5, 6, 7, 8]
 
 
 def test_merge_fail(tempdir):

@@ -2,3 +2,4 @@ pandas
 numpy
 numba
 thriftpy>=0.3.6
+pytest
