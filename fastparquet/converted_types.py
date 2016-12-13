@@ -28,13 +28,17 @@ logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
 try:
     from bson import BSON
-    unbson = lambda s: BSON(s).decode()
+    unbson = bson.BSON.decode
+    tobson = bson.BSON.encode
 except ImportError:
     try:
         import bson
         unbson = bson.loads
+        tobson = bson.dumps
     except:
-        def BSON(x):
+        def unbson(x):
+            raise ImportError("BSON not found")
+        def tobson(x):
             raise ImportError("BSON not found")
 
 DAYS_TO_MILLIS = 86400000000000
