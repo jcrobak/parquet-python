@@ -45,24 +45,13 @@ revmap = {parquet_thrift.Type.INT32: np.int32,
           parquet_thrift.Type.FLOAT: np.float32}
 
 
-def find_type(data, convert=False, fixed_text=None):
+def find_type(data, fixed_text=None, object_encoding=None):
     """ Get appropriate typecodes for column dtype
 
-    Data conversion may happen here, only at write time.
+    Data conversion do not happen here, see convert().
 
     The user is expected to transform their data into the appropriate dtype
     before saving to parquet, we will not make any assumptions for them.
-
-    If the dtype is "object" the first ten items will be examined, and is str
-    or bytes, will be stored as variable or fixed length byte strings;
-    if dict or list, (nested data) will be stored with JSON encoding.
-
-    In the case of catagoricals, the data type refers to the labels; the data
-    (codes) will be stored as int. The labels are usually variable length
-    strings.
-
-    BOOLs will be bitpacked using np.packbits. To instead keep the default numpy
-    representation of one byte per value, change to int8 or uint8 type
 
     Known types that cannot be represented (must be first converted another
     type or to raw binary): float128, complex
@@ -70,11 +59,12 @@ def find_type(data, convert=False, fixed_text=None):
     Parameters
     ----------
     data: pd.Series
-    convert: bool (False)
-        Whether to actually perform the conversion, or just infer types
     fixed_text: int or None
         For str and bytes, the fixed-string length to use. If None, object
         column will remain variable length.
+    object_encoding: None or bytes|utf8\json|bson
+        How to encode object type into bytes. If None, bytes is assumed;
+        if 'infer'
 
     Returns
     -------
@@ -87,74 +77,92 @@ def find_type(data, convert=False, fixed_text=None):
     dtype = data.dtype
     if dtype.name in typemap:
         type, converted_type, width = typemap[dtype.name]
-        if type in revmap and convert:
-            out = data.values.astype(revmap[type], copy=False)
-        elif type == parquet_thrift.Type.BOOLEAN and convert:
-            padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
-                                'constant', constant_values=(0, 0))
-            out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
-        elif convert:
-            out = data.values
     elif "S" in str(dtype)[:2] or "U" in str(dtype)[:2]:
-        # TODO: check effect of unicode
         type, converted_type, width = (parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY,
                                        None, dtype.itemsize)
-        if convert:
-            out = data.values
     elif dtype == "O":
-        head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
-        if all(isinstance(i, str) for i in head):
-            if fixed_text:
-                width = fixed_text
-                if convert:
-                    out = data.str.encode('utf8').values.astype('S%i' % width)
-                type, converted_type = (
-                    parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY,
-                    parquet_thrift.ConvertedType.UTF8)
-            else:
-                type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
-                                               parquet_thrift.ConvertedType.UTF8, None)
-                if convert:
-                    out = data.str.encode('utf8').values
-        elif all(isinstance(i, bytes) for i in head):
-            if fixed_text:
-                width = fixed_text
-                if convert:
-                    out = data.values.astype('S%i' % width)
-                type, converted_type = (
-                    parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY, None)
-            else:
-                type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
-                if convert:
-                    out = data.values
-        elif all(isinstance(i, (list, dict)) for i in head):
+        if object_encoding == 'infer':
+            object_encoding = infer_object_encoding(data)
+
+        if object_encoding == 'utf8':
+            type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
+                                           parquet_thrift.ConvertedType.UTF8, None)
+        elif object_encoding in ['bytes', None]:
+            type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
+        elif object_encoding == 'json':
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.JSON, None)
-            if convert:
-                out = data.map(json.dumps).str.encode('utf8').values
-        else:
-            raise ValueError("Data type conversion unknown: %s" % dtype)
+        elif object_encoding == 'bson':
+            type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
+                                           parquet_thrift.ConvertedType.BSON, None)
+        if fixed_text:
+            width = fixed_text
+            type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     elif str(dtype).startswith("datetime64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
-        if convert:
-            out = np.empty(len(data), 'int64')
-            time_shift(data.values.view('int64'), out)
     elif str(dtype).startswith("timedelta64"):
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
-        if convert:
-            out = np.empty(len(data), 'int64')
-            time_shift(data.values.view('int64'), out)
     else:
         raise ValueError("Don't know how to convert data type: %s" % dtype)
-    # TODO: pandas has no explicit support for Decimal
-    se = parquet_thrift.SchemaElement(name=data.name, type_length=width,
-                                      converted_type=converted_type, type=type,
-                                      repetition_type=parquet_thrift.FieldRepetitionType.REQUIRED)
-    return se, type, out
+    se = parquet_thrift.SchemaElement(
+            name=data.name, type_length=width,
+            converted_type=converted_type, type=type,
+            repetition_type=parquet_thrift.FieldRepetitionType.REQUIRED)
+    return se, type
+
+
+def convert(data, se):
+    """Convert data according to the schema encoding"""
+    dtype = data.dtype
+    type = se.type
+    converted_type = se.converted_type
+    if dtype.name in typemap:
+        if type in revmap:
+            out = data.values.astype(revmap[type], copy=False)
+        elif type == parquet_thrift.Type.BOOLEAN:
+            padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
+                                'constant', constant_values=(0, 0))
+            out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
+        elif dtype.name in typemap:
+            out = data.values
+    elif "S" in str(dtype)[:2] or "U" in str(dtype)[:2]:
+        out = data.values
+    elif dtype == "O":
+        if converted_type == parquet_thrift.ConvertedType.UTF8:
+            out = data.str.encode('utf8').values
+        elif converted_type is None:
+            out = data.values
+        elif converted_type == parquet_thrift.ConvertedType.JSON:
+            out = data.map(json.dumps).str.encode('utf8').values
+        elif converted_type == parquet_thrift.ConvertedType.BSON:
+            out = data.map(tobson).values
+        if type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
+            out = data.values.astype('S%i' % se.type_length)
+    elif converted_type == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
+        out = np.empty(len(data), 'int64')
+        time_shift(data.values.view('int64'), out)
+    elif converted_type == parquet_thrift.ConvertedType.TIME_MICROS:
+        out = np.empty(len(data), 'int64')
+        time_shift(data.values.view('int64'), out)
+    else:
+        raise ValueError("Don't know how to convert data type: %s" % dtype)
+    return out
+
+
+def infer_object_encoding(data):
+    head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
+    if all(isinstance(i, str) for i in head):
+        return "utf8"
+    if all(isinstance(i, bytes) for i in head):
+        return 'bytes'
+    if all(isinstance(i, (list, dict)) for i in head):
+        return 'json'
+    else:
+        raise ValueError("Data type conversion unknown: %s" % dtype)
 
 
 @numba.njit(nogil=True)
@@ -203,9 +211,9 @@ def write_thrift(fobj, thrift):
     return fobj.tell() - t0
 
 
-def encode_plain(data, se, fixed_text=None):
+def encode_plain(data, se):
     """PLAIN encoding; returns byte representation"""
-    se, type, out = find_type(data, True, fixed_text=fixed_text)
+    out = convert(data, se)
     if se.type == parquet_thrift.Type.BYTE_ARRAY:
         return b''.join([struct.pack('<l', len(x)) + x for x in out])
     else:
@@ -321,7 +329,7 @@ def encode_rle(data, se, fixed_text=None):
         return o.so_far().tostring()
 
 
-def encode_dict(data, se, _):
+def encode_dict(data, se):
     """ The data part of dictionary encoding is always int8, with RLE/bitpack
     """
     width = data.values.dtype.itemsize * 8
@@ -353,8 +361,8 @@ def make_definitions(data, no_nulls):
         block = struct.pack('<i', temp.loc) + temp.so_far().tostring()
         out = data
     else:
-        # bitpack bools
-        out = encode_plain(data.notnull(), None)
+        se = parquet_thrift.SchemaElement(type=parquet_thrift.Type.BOOLEAN)
+        out = encode_plain(data.notnull(), se)
 
         encode_unsigned_varint(len(out) << 1 | 1, temp)
         head = temp.so_far().tostring()
@@ -364,7 +372,8 @@ def make_definitions(data, no_nulls):
     return block, out
 
 
-def write_column(f, data, selement, encoding='PLAIN', compression=None):
+def write_column(f, data, selement, compression=None,
+                 object_encoding=None):
     """
     Write a single column of data to an open Parquet file
 
@@ -374,11 +383,9 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     data: pandas Series or numpy (1d) array
     selement: thrift SchemaElement
         produced by ``find_type``
-    encoding: one of ``parquet_thift.Encoding``
-        if the dtype is categorical, this is ignored and dictionary encoding
-        automatically used
     compression: str or None
         if not None, must be one of the keys in ``compression.compress``
+    object_encoding: None|bytes|utf8|json|bson|infer
 
     Returns
     -------
@@ -386,8 +393,8 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
 
     """
     has_nulls = selement.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    fixed_text = selement.type_length
     tot_rows = len(data)
+    encoding = "PLAIN"
 
     if has_nulls:
         if str(data.dtype) == 'category':
@@ -411,8 +418,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         dph = parquet_thrift.DictionaryPageHeader(
                 num_values=len(data.cat.categories),
                 encoding=parquet_thrift.Encoding.PLAIN)
-        bdata = encode['PLAIN'](pd.Series(data.cat.categories), selement,
-                                fixed_text=fixed_text)
+        bdata = encode['PLAIN'](pd.Series(data.cat.categories), selement)
         l0 = len(bdata)
         if compression:
             bdata = compress_data(bdata, compression)
@@ -431,10 +437,8 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         try:
             if num_nulls == 0:
                 max, min = data.values.max(), data.values.min()
-                max = encode['PLAIN'](pd.Series([max]), selement,
-                                      fixed_text=fixed_text)
-                min = encode['PLAIN'](pd.Series([min]), selement,
-                                      fixed_text=fixed_text)
+                max = encode['PLAIN'](pd.Series([max]), selement)
+                min = encode['PLAIN'](pd.Series([min]), selement)
         except TypeError:
             pass
         data = data.cat.codes
@@ -444,15 +448,13 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
         encoding = "RLE"
 
     start = f.tell()
-    bdata = definition_data + repetition_data + encode[encoding](data, selement,
-                                                                 fixed_text)
+    bdata = definition_data + repetition_data + encode[encoding](
+            data, selement)
     try:
         if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
             max, min = data.values.max(), data.values.min()
-            max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement,
-                                  fixed_text=fixed_text)
-            min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement,
-                                  fixed_text=fixed_text)
+            max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement)
+            min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement)
     except TypeError:
         pass
 
@@ -513,8 +515,7 @@ def write_column(f, data, selement, encoding='PLAIN', compression=None):
     return chunk
 
 
-def make_row_group(f, data, schema, file_path=None, compression=None,
-                   encoding='PLAIN'):
+def make_row_group(f, data, schema, compression=None):
     """ Make a single row group of a Parquet file """
     rows = len(data)
     if rows == 0:
@@ -532,21 +533,19 @@ def make_row_group(f, data, schema, file_path=None, compression=None,
             else:
                 comp = compression
             chunk = write_column(f, data[column.name], column,
-                                 compression=comp, encoding=encoding)
+                                 compression=comp)
             rg.columns.append(chunk)
     rg.total_byte_size = sum([c.meta_data.total_uncompressed_size for c in
                               rg.columns])
     return rg
 
 
-def make_part_file(f, data, schema, compression=None, encoding='PLAIN',
-                   fixed_text=None):
+def make_part_file(f, data, schema, compression=None):
     if len(data) == 0:
         return
     with f as f:
         f.write(MARKER)
-        rg = make_row_group(f, data, schema, compression=compression,
-                            encoding=encoding)
+        rg = make_row_group(f, data, schema, compression=compression)
         fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                           schema=schema,
                                           version=1,
@@ -558,7 +557,8 @@ def make_part_file(f, data, schema, compression=None, encoding='PLAIN',
     return rg
 
 
-def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
+def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
+                  object_encoding=None):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
@@ -568,16 +568,20 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
                                       created_by='fastparquet-python',
                                       row_groups=[])
 
+    object_encoding = object_encoding or {}
     for column in data.columns:
         if column in ignore_columns:
             continue
+        oencoding = (object_encoding if isinstance(object_encoding, str) else
+                     object_encoding.get(column, None))
         fixed = None if fixed_text is None else fixed_text.get(column, None)
         if str(data[column].dtype) == 'category':
-            se, type, _ = find_type(data[column].cat.categories,
-                                    fixed_text=fixed)
+            se, type = find_type(data[column].cat.categories,
+                                 fixed_text=fixed, object_encoding=oencoding)
             se.name = column
         else:
-            se, type, _ = find_type(data[column], fixed_text=fixed)
+            se, type = find_type(data[column], fixed_text=fixed,
+                                 object_encoding=oencoding)
         if has_nulls is None:
             se.repetition_type = type == parquet_thrift.Type.BYTE_ARRAY
         else:
@@ -590,7 +594,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None):
     return fmd
 
 
-def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
+def write_simple(fn, data, fmd, row_group_offsets, compression,
                  open_with, has_nulls, append=False):
     """
     Write to one single file (for file_scheme='simple')
@@ -612,9 +616,10 @@ def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
         else:
             f.write(MARKER)
         for i, start in enumerate(row_group_offsets):
-            end = row_group_offsets[i+1] if i < (len(row_group_offsets) - 1) else None
+            end = (row_group_offsets[i+1] if i < (len(row_group_offsets) - 1)
+                   else None)
             rg = make_row_group(f, data[start:end], fmd.schema,
-                                compression=compression, encoding=encoding)
+                                compression=compression)
             if rg is not None:
                 fmd.row_groups.append(rg)
 
@@ -623,10 +628,11 @@ def write_simple(fn, data, fmd, row_group_offsets, encoding, compression,
         f.write(MARKER)
 
 
-def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
+def write(filename, data, row_group_offsets=50000000,
           compression=None, file_scheme='simple', open_with=default_open,
           mkdirs=default_mkdirs, has_nulls=None, write_index=None,
-          partition_on=[], fixed_text=None, append=False):
+          partition_on=[], fixed_text=None, append=False,
+          object_encoding='infer'):
     """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
@@ -640,9 +646,6 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         In int, row-groups will be approximately this many rows, rounded down
         to make row groups about the same size; if a list, the explicit index
         values to start new row groups.
-    encoding: single value from parquet_thrift.Encoding, if applied to all
-        columns, or dict of name:parquet_thrift.Encoding for a different
-        encoding per column.
     compression: str, dict
         compression to apply to each column, e.g. GZIP or SNAPPY
     file_scheme: 'simple'|'hive'
@@ -679,6 +682,12 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         If False, construct data-set from scratch; if True, add new row-group(s)
         to existing data-set. In the latter case, the data-set must exist,
         and the schema must match the input data.
+    object_encoding: str or {col: type}
+        For object columns, this gives the data type, so that the values can
+        be encoded to bytes. Possible values are bytes|utf8|json|bson, where
+        bytes is assumed if not specified (i.e., no conversion). The special
+        value 'infer' will cause the type to be guessed from the first ten
+        values.
 
     Examples
     --------
@@ -694,10 +703,10 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
         data = data.reset_index()
     ignore = partition_on if file_scheme != 'simple' else []
     fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
-                        fixed_text=fixed_text)
+                        fixed_text=fixed_text, object_encoding=object_encoding)
 
     if file_scheme == 'simple':
-        write_simple(filename, data, fmd, row_group_offsets, encoding,
+        write_simple(filename, data, fmd, row_group_offsets,
                      compression, open_with, has_nulls, append)
     elif file_scheme == 'hive':
         if append:
@@ -719,15 +728,14 @@ def write(filename, data, row_group_offsets=50000000, encoding="PLAIN",
             if partition_on:
                 partition_on_columns(
                     data[start:end], partition_on, filename, part, fmd,
-                    sep, compression, encoding, open_with, mkdirs
+                    sep, compression, open_with, mkdirs
                 )
                 rg = None
             else:
                 partname = sep.join([filename, part])
                 with open_with(partname, 'wb') as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
-                                        compression=compression,
-                                        encoding=encoding)
+                                        compression=compression)
                 for chunk in rg.columns:
                     chunk.file_path = part
 
@@ -756,7 +764,7 @@ def find_max_part(row_groups):
 
 
 def partition_on_columns(data, columns, root_path, partname, fmd, sep,
-                         compression, encoding, open_with, mkdirs):
+                         compression, open_with, mkdirs):
     """
     Split each row-group by the given columns
 
@@ -776,8 +784,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         fullname = sep.join([root_path, path, partname])
         with open_with(fullname, 'wb') as f2:
             rg = make_part_file(f2, df, fmd.schema,
-                                compression=compression,
-                                encoding=encoding)
+                                compression=compression)
         if rg is not None:
             for chunk in rg.columns:
                 chunk.file_path = relname
