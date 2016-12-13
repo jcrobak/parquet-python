@@ -15,7 +15,7 @@ import thriftpy
 
 from .core import read_thrift
 from .thrift_structures import parquet_thrift
-from . import core, schema, converted_types, encoding, writer
+from . import core, schema, converted_types, encoding, writer, df_empty
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
         ensure_bytes)
 
@@ -120,21 +120,23 @@ class ParquetFile(object):
             return self.fn
 
 
-    def read_row_group_file(self, rg, columns, categories, index=None):
+    def read_row_group_file(self, rg, columns, categories, index=None,
+                            assign=None):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
         return core.read_row_group_file(
                 fn, rg, columns, categories, self.helper, self.cats,
-                open=self.open, selfmade=self.selfmade, index=index)
+                open=self.open, selfmade=self.selfmade, index=index,
+                assign=assign)
 
     def read_row_group(self, rg, columns, categories, infile=None,
-                       index=None):
+                       index=None, assign=None):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
         return core.read_row_group(
                 infile, rg, columns, categories, self.helper, self.cats,
-                self.selfmade, index=index)
+                self.selfmade, index=index, assign=assign)
 
     def grab_cats(self, columns, row_group_index=0):
         """ Read dictionaries of first row_group
@@ -187,7 +189,7 @@ class ParquetFile(object):
                 not(filter_out_cats(rg, filters))]
 
     def iter_row_groups(self, columns=None, categories=None, filters=[],
-                        index=None):
+                        index=None, assign=None):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -206,6 +208,9 @@ class ParquetFile(object):
         index: string or None
             Column to assign to the index. If None, index is simple sequential
             integers.
+        assign: dict {cols: array}
+            Pre-allocated memory to write to. If None, will allocate memory
+            here.
 
         Returns
         -------
@@ -213,15 +218,28 @@ class ParquetFile(object):
         """
         columns = columns or self.columns
         rgs = self.filter_row_groups(filters)
+        columns = columns or self.columns
+        cols = [c for c in columns if index != c]
+        dtypes = [self.dtypes[c] for c in cols]
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
             with self.open(self.fn) as f:
                 for rg in rgs:
-                    yield self.read_row_group(rg, columns, categories, infile=f,
-                                           index=index)
+                    df, views = df_empty.empty(
+                            dtypes, rg.num_rows, cols=cols, index_name=index,
+                            index_type=self.dtypes[index])
+
+                    self.read_row_group(rg, columns, categories, infile=f,
+                                        index=index, assign=views)
+                    yield df
         else:
             for rg in rgs:
-                yield self.read_row_group_file(rg, columns, categories, index)
+                df, views = df_empty.empty(
+                        dtypes, rg.num_rows, cols=cols, index_name=index,
+                        index_type=self.dtypes[index])
+                self.read_row_group_file(rg, columns, categories, index,
+                                         assign=views)
+                yield df
 
     def to_pandas(self, columns=None, categories=None, filters=[],
                   index=None):
@@ -236,7 +254,9 @@ class ParquetFile(object):
         categories: list of names or `None`
             If a column is encoded using dictionary encoding in every row-group
             and its name is also in this list, it will generate a Pandas
-            Category-type column, potentially saving memory and time.
+            Category-type column, potentially saving memory and time. If a
+            column is listed here, but any part is NOT in dictionary encoding,
+            an error will occur.
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
@@ -248,19 +268,32 @@ class ParquetFile(object):
         -------
         Pandas data-frame
         """
-        tot = self.iter_row_groups(columns, categories, filters, index)
-        num_row_groups = len(self.filter_row_groups(filters))
+        rgs = self.filter_row_groups(filters)
+        size = sum(rg.num_rows for rg in rgs)
         columns = columns or self.columns
-
-        # TODO: if categories vary from one rg to next, need
-        # pandas.types.concat.union_categoricals
-        try:
-            if num_row_groups > 1:
-                return pd.concat(tot, ignore_index=index is None, copy=False)
-            else:
-                return next(iter(tot))
-        except (ValueError, StopIteration):
-            return pd.DataFrame(columns=columns + list(self.cats))
+        cols = [c for c in columns if index != c]
+        dtypes = ['category' if c in categories else self.dtypes[c]
+                  for c in cols]
+        index_type = self.dtypes.get(index, None)
+        df, views = df_empty.empty(dtypes, size, cols=cols, index_name=index,
+                                   index_type=index_type)
+        start = 0
+        if self.file_scheme == 'simple':
+            with self.open(self.fn) as f:
+                for rg in rgs:
+                    parts = {name: v[start:start + rg.num_rows]
+                             for (name, v) in views.items()}
+                    self.read_row_group(rg, columns, categories, infile=f,
+                                        index=index, assign=parts)
+                    start += rg.num_rows
+        else:
+            for rg in rgs:
+                parts = {name: v[start:start + rg.num_rows]
+                         for (name, v) in views.items()}
+                self.read_row_group_file(rg, columns, categories, index,
+                                         assign=parts)
+                start += rg.num_rows
+        return df
 
     @property
     def count(self):

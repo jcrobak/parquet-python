@@ -10,6 +10,7 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 from . import encoding
 from .compression import decompress_data
 from .converted_types import convert, typemap
+from .df_empty import empty
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .util import val_to_num
@@ -222,7 +223,11 @@ def read_col(column, schema_helper, infile, use_cat=False,
             break
         ph = read_thrift(infile, parquet_thrift.PageHeader)
 
-    all_dict = use_cat and all(_[3] for _ in out)
+    all_dict = all(_[3] for _ in out)
+    if use_cat and not all_dict:
+        raise ValueError('Returning category type requires all chunks to'
+                         'use dictionary encoding; column: %s',
+                         cmd.path_in_schema)
     any_def = any(_[0] is not None for _ in out)
     do_convert = True
     if all_dict:
@@ -273,14 +278,14 @@ def read_col(column, schema_helper, infile, use_cat=False,
 
 
 def read_row_group_file(fn, columns, *args, open=open, selfmade=False,
-                        index=None):
+                        index=None, assign=None):
     with open(fn, mode='rb') as f:
         return read_row_group(f, columns, *args, selfmade=selfmade,
-                              index=index)
+                              index=index, assign=assign)
 
 
 def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
-                          selfmade=False):
+                          selfmade=False, assign=None):
     """
     Read a row group and return as a dict of arrays
 
@@ -288,7 +293,7 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
     will be pandas Categorical objects: the codes and the category labels
     are arrays.
     """
-    out = {}
+    out = assign
 
     for column in rg.columns:
         name = ".".join(column.meta_data.path_in_schema)
@@ -298,41 +303,28 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
         use = name in categories if categories is not None else False
         s = read_col(column, schema_helper, file, use_cat=use,
                      selfmade=selfmade)
-        out[name] = s
-    return out
+        if str(s.dtype) == 'category':
+            out[name][:] = s.codes
+        else:
+            out[name][:] = s
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
-                   selfmade=False, index=None):
+                   selfmade=False, index=None, assign=None):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
-    out = read_row_group_arrays(file, rg, columns, categories, schema_helper,
-                                cats, selfmade)
+    if assign is None:
+        raise RuntimeError('Going with pre-allocation!')
+    read_row_group_arrays(file, rg, columns, categories, schema_helper,
+                          cats, selfmade, assign=assign)
 
-    i = out.pop(index, None)
-    dtypes = {str(d.dtype) for d in out.values()}
-    if len(out) == 1 and dtypes != {'category'}:
-        c = list(out)[0]
-        out = pd.DataFrame(out[c].reshape(-1, 1), columns=[c], index=i)
-    elif len(dtypes) == 1 and dtypes != {'category'}:
-        columns = list(sorted(out))
-        out = pd.DataFrame(np.hstack([out[k].reshape(-1, 1) for k in columns]),
-                           columns=columns)
-    else:
-        out = pd.DataFrame(out, index=i)
-    if i is not None:
-        out.index.name = index
-
-    # apply categories
     for cat in cats:
         # *Hard assumption*: all chunks in a row group have the
         # same partition (correct for spark/hive)
         partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
                                 rg.columns[0].file_path)
         val = [p[1] for p in partitions if p[0] == cat][0]
-        codes = np.empty(rg.num_rows, dtype=np.int16)
-        codes[:] = cats[cat].index(val)
-        out[cat] = pd.Categorical.from_codes(
-                codes, [val_to_num(c) for c in cats[cat]])
-    return out
+        assign[cat] = cats[cat].index(val)
+        # out[cat] = pd.Categorical.from_codes(
+        #         codes, [val_to_num(c) for c in cats[cat]])
