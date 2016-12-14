@@ -303,7 +303,7 @@ class ParquetFile(object):
         cols.extend(self.cats)
         dtypes.extend(['category'] * len(self.cats))
         df, views = df_empty.empty(dtypes, size, cols=cols, index_name=index,
-                                   index_type=index_type, cats=self.cats)
+                                   index_type=index_type, cats=cats)
         return df, views
 
     @property
