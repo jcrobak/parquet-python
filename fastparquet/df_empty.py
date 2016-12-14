@@ -42,7 +42,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     for t, col in zip(types, cols):
         if str(t) == 'category':
             if cats is None or col not in cats:
-                df[str(col)] = Categorical([], categories=range(2**10),
+                df[str(col)] = Categorical([], categories=range(2**16),
                                            fastpath=True)
             elif isinstance(cats[col], int):
                 df[str(col)] = Categorical([], categories=range(cats[col]),
@@ -76,7 +76,6 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
 
     # allocate and create blocks
     blocks = []
-    codes = []
     for block, col in zip(df._data.blocks, df.columns):
         if isinstance(block.dtype, CategoricalDtype):
             categories = block.values.categories
@@ -90,25 +89,24 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
         new_block = block.make_block_same_class(
                 values=values, placement=block.mgr_locs.as_array)
         blocks.append(new_block)
-        if isinstance(block.dtype, CategoricalDtype):
-            codes.append((code, new_block.values))
 
     # create block manager
     df = DataFrame(BlockManager(blocks, axes))
 
     # create views
-    for col in df:
-        dtype = df[col].dtype
-        if str(dtype) == 'category':
-            views[col], views[col+'-catdef'] = codes.pop(0)
-        else:
-            these_blocks = [b for b in blocks if b.dtype == dtype]
-            ind = [col for col, dt in df.dtypes.iteritems()
-                   if dt == dtype].index(col)
-            if len(these_blocks) > 1:
-                views[col] = these_blocks[ind].values
+    for block in df._data.blocks:
+        dtype = block.dtype
+        inds = block.mgr_locs.indexer
+        if isinstance(inds, slice):
+            inds = list(range(inds.start, inds.stop, inds.step))
+        for i, ind in enumerate(inds):
+            col = df.columns[ind]
+            if str(dtype) == 'category':
+                views[col] = block.values._codes
+                views[col+'-catdef'] = block.values
             else:
-                views[col] = these_blocks[0].values[ind, :]
+                views[col] = block.values[i]
+
     df.index.name = index_name
     if str(index_type) == 'category':
         views[index_name+'-catdef'] = df._data.axes[1].values

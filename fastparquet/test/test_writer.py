@@ -211,7 +211,7 @@ def test_datetime_roundtrip(tempdir, df, capsys):
     if 'x' in df:
         df['x'] = df.x.dt.tz_convert(None)
 
-    pd.util.testing.assert_frame_equal(df, df2)
+    pd.util.testing.assert_frame_equal(df, df2, check_categorical=False)
 
 
 def test_nulls_roundtrip(tempdir):
@@ -364,7 +364,7 @@ def test_write_compression_dict(tempdir, compression):
     r = ParquetFile(fn)
     df2 = r.to_pandas()
 
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
 
 def test_write_compression_schema(tempdir):
@@ -423,7 +423,7 @@ def test_text_convert(tempdir):
     assert pf.schema[2].type_length == 2
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df)
     pf = ParquetFile(fn)
@@ -431,7 +431,7 @@ def test_text_convert(tempdir):
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df, fixed_text={'a': 1})
     pf = ParquetFile(fn)
@@ -439,7 +439,7 @@ def test_text_convert(tempdir):
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.statistics['max']['a'] == ['a']
     df2 = pf.to_pandas()
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
 
 def test_null_time(tempdir):
@@ -482,7 +482,7 @@ def test_auto_null(tempdir):
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     assert pf.schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     df2 = pf.to_pandas(categories=['e'])
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df, has_nulls=None)
     pf = ParquetFile(fn)
@@ -490,7 +490,7 @@ def test_auto_null(tempdir):
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     assert pf.schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     df2= pf.to_pandas(categories=['e'])
-    tm.assert_frame_equal(df, df2)
+    tm.assert_frame_equal(df, df2, check_categorical=False)
 
 
 @pytest.mark.parametrize('n', (10, 127, 2**8 + 1, 2**16 + 1))
@@ -503,9 +503,9 @@ def test_many_categories(tempdir, n):
 
     write(fn, df, has_nulls=False)
     pf = ParquetFile(fn)
-    out = pf.to_pandas(categories=['x'])
+    out = pf.to_pandas(categories={'x': n})
 
-    tm.assert_frame_equal(df, out)
+    tm.assert_frame_equal(df, out, check_categorical=False)
 
 
 @pytest.mark.parametrize('row_groups', ([0], [0, 2]))
@@ -622,7 +622,8 @@ def test_append_simple(tempdir):
 
     pf = ParquetFile(fn)
     expected = pd.concat([df, df], ignore_index=True)
-    pd.util.testing.assert_frame_equal(pf.to_pandas(), expected)
+    pd.util.testing.assert_frame_equal(pf.to_pandas(), expected,
+                                       check_categorical=False)
 
 
 @pytest.mark.parametrize('row_groups', ([0], [0, 2]))

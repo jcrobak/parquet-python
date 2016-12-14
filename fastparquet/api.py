@@ -199,10 +199,12 @@ class ParquetFile(object):
         columns: list of names or `None`
             Column to load (see `ParquetFile.columns`). Any columns in the
             data not in this list will be ignored. If `None`, read all columns.
-        categories: list of names or `None`
+        categories: list, dict or `None`
             If a column is encoded using dictionary encoding in every row-group
             and its name is also in this list, it will generate a Pandas
-            Category-type column, potentially saving memory and time.
+            Category-type column, potentially saving memory and time. If a
+            dict {col: int}, the value indicates the number of categories,
+            so that the optimal data-dtype can be allocated.
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
@@ -247,12 +249,12 @@ class ParquetFile(object):
         columns: list of names or `None`
             Column to load (see `ParquetFile.columns`). Any columns in the
             data not in this list will be ignored. If `None`, read all columns.
-        categories: list of names or `None`
+        categories: list, dict or `None`
             If a column is encoded using dictionary encoding in every row-group
             and its name is also in this list, it will generate a Pandas
             Category-type column, potentially saving memory and time. If a
-            column is listed here, but any part is NOT in dictionary encoding,
-            an error will occur.
+            dict {col: int}, the value indicates the number of categories,
+            so that the optimal data-dtype can be allocated.
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
@@ -290,7 +292,10 @@ class ParquetFile(object):
 
     def pre_allocate(self, size, columns, categories, index):
         cols = [c for c in columns if index != c]
-        categories = categories or []
+        categories = categories or {}
+        cats = self.cats.copy()
+        if isinstance(categories, dict):
+            cats.update(categories)
         dtypes = ['category' if c in categories else self.dtypes[c]
                   for c in cols]
         index_type = ('category' if index in categories
