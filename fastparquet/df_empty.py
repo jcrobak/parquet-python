@@ -53,7 +53,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
         else:
             df[str(col)] = np.empty(0, dtype=t)
 
-    if index_type is not None:
+    if index_type not in [None, False]:
         if index_name is None:
             raise ValueError('If using an index, must give an index name')
         if str(index_type) == 'category':
@@ -107,7 +107,8 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
             else:
                 views[col] = block.values[i]
 
-    df.index.name = index_name
+    if index_name not in [None, False]:
+        df.index.name = index_name
     if str(index_type) == 'category':
         views[index_name+'-catdef'] = df._data.axes[1].values
     return df, views
