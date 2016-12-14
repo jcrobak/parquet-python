@@ -42,7 +42,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     for t, col in zip(types, cols):
         if str(t) == 'category':
             if cats is None or col not in cats:
-                df[str(col)] = Categorical([], categories=range(2**16),
+                df[str(col)] = Categorical([], categories=range(2**14),
                                            fastpath=True)
             elif isinstance(cats[col], int):
                 df[str(col)] = Categorical([], categories=range(cats[col]),

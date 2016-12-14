@@ -9,6 +9,11 @@ def test_empty():
     assert df.dtypes.tolist() == ['category']
     assert views['c'].dtype == 'int16'
 
+    df, views = empty('category', size=n, cols=['c'], cats={'c': 2**20})
+    assert df.shape == (n, 1)
+    assert df.dtypes.tolist() == ['category']
+    assert views['c'].dtype == 'int32'
+
     df, views = empty('category', size=n, cols=['c'],
                       cats={'c': ['one', 'two']})
     views['c'][0] = 1
