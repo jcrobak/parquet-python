@@ -125,14 +125,16 @@ class ParquetFile(object):
                             assign=None):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
+        ret = False
         if assign is None:
-            df, views = self.pre_allocate(rg.num_rows, columns,
-                                          categories, index)
+            df, assign = self.pre_allocate(rg.num_rows, columns,
+                                           categories, index)
+            ret = True
         core.read_row_group_file(
                 fn, rg, columns, categories, self.helper, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
-                assign=views)
-        if assign is None:
+                assign=assign)
+        if ret:
             return df
 
     def read_row_group(self, rg, columns, categories, infile=None,
@@ -140,13 +142,15 @@ class ParquetFile(object):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
+        ret = False
         if assign is None:
-            df, views = self.pre_allocate(rg.num_rows, columns,
-                                          categories, index)
+            df, assign = self.pre_allocate(rg.num_rows, columns,
+                                           categories, index)
+            ret = True
         core.read_row_group(
                 infile, rg, columns, categories, self.helper, self.cats,
                 self.selfmade, index=index, assign=assign)
-        if assign is None:
+        if ret:
             return df
 
     def grab_cats(self, columns, row_group_index=0):
