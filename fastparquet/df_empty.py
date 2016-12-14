@@ -1,5 +1,5 @@
 import numpy as np
-from pandas.core.index import _ensure_index
+from pandas.core.index import _ensure_index, CategoricalIndex
 from pandas.core.internals import BlockManager
 from pandas.core.generic import NDFrame
 from pandas.core.frame import DataFrame
@@ -34,6 +34,8 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
         to this.
     """
     df = DataFrame()
+    views = {}
+
     cols = cols or range(cols)
     if isinstance(types, str):
         types = types.split(',')
@@ -54,7 +56,20 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     if index_type is not None:
         if index_name is None:
             raise ValueError('If using an index, must give an index name')
-        index = np.empty(size, dtype=index_type)
+        if str(index_type) == 'category':
+            vals = np.empty(size, dtype='int8')
+            if cats is None or index_name not in cats:
+                c = range(2**10)
+            elif isinstance(cats[index_name], int):
+                c = range(cats[index_name])
+            else:  # explicit labels list
+                c = cats[index_name]
+            index = CategoricalIndex(vals, categories=c, fastpath=True)
+            views[index_name] = vals
+        else:
+            index = np.empty(size, dtype=index_type)
+            views[index_name] = index
+
         axes = [df.columns.values.tolist(), index]
     else:
         axes = [df.columns.values.tolist(), RangeIndex(size)]
@@ -82,7 +97,6 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     df = DataFrame(BlockManager(blocks, axes))
 
     # create views
-    views = {}
     for col in df:
         dtype = df[col].dtype
         if str(dtype) == 'category':
@@ -95,7 +109,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
                 views[col] = these_blocks[ind].values
             else:
                 views[col] = these_blocks[0].values[ind, :]
-    if index_type is not None:
-        views[index_name] = index
     df.index.name = index_name
+    if str(index_type) == 'category':
+        views[index_name+'-catdef'] = df._data.axes[1].values
     return df, views
