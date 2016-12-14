@@ -230,7 +230,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
                          cmd.path_in_schema)
     any_def = any(_[0] is not None for _ in out)
     do_convert = True
-    if all_dict:
+    if use_cat:
         dtype = np.int64
         my_nan = -1
         do_convert = False
@@ -248,7 +248,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
             my_nan = None
     if len(out) == 1 and not any_def:
         defi, rep, val, d = out[0]
-        if d and not all_dict:
+        if d and not use_cat:
             final = dic[val]
         elif do_convert:
             final = convert(val, se)
@@ -258,7 +258,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
         final = np.empty(cmd.num_values, dtype)
         start = 0
         for defi, rep, val, d in out:
-            if d and not all_dict:
+            if d and not use_cat:
                 cval = dic[val]
             elif do_convert:
                 cval = convert(val, se)
@@ -272,7 +272,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
             else:
                 final[start:start+len(val)] = cval
                 start += len(val)
-    if all_dict:
+    if use_cat:
         final = pd.Categorical(final, categories=dic, fastpath=True)
     return final
 
@@ -305,6 +305,7 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
                      selfmade=selfmade)
         if str(s.dtype) == 'category':
             out[name][:] = s.codes
+            out[name+'-catdef']._categories = pd.Index(s.categories)
         else:
             out[name][:] = s
 
@@ -320,11 +321,7 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
                           cats, selfmade, assign=assign)
 
     for cat in cats:
-        # *Hard assumption*: all chunks in a row group have the
-        # same partition (correct for spark/hive)
         partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
                                 rg.columns[0].file_path)
-        val = [p[1] for p in partitions if p[0] == cat][0]
-        assign[cat] = cats[cat].index(val)
-        # out[cat] = pd.Categorical.from_codes(
-        #         codes, [val_to_num(c) for c in cats[cat]])
+        val = val_to_num([p[1] for p in partitions if p[0] == cat][0])
+        assign[cat][:] = cats[cat].index(val)

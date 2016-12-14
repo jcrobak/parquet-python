@@ -17,7 +17,7 @@ from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, writer, df_empty
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
-        ensure_bytes)
+                   ensure_bytes)
 
 
 class ParquetFile(object):
@@ -110,7 +110,8 @@ class ParquetFile(object):
                                         col.file_path or "")
                 for key, val in partitions:
                     cats.setdefault(key, set()).add(val)
-        self.cats = {key: list(v) for key, v in cats.items()}
+        self.cats = {key: list([val_to_num(x) for x in v])
+                     for key, v in cats.items()}
 
     def row_group_filename(self, rg):
         if rg.columns[0].file_path:
@@ -219,24 +220,19 @@ class ParquetFile(object):
         columns = columns or self.columns
         rgs = self.filter_row_groups(filters)
         columns = columns or self.columns
-        cols = [c for c in columns if index != c]
-        dtypes = [self.dtypes[c] for c in cols]
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
             with self.open(self.fn) as f:
                 for rg in rgs:
-                    df, views = df_empty.empty(
-                            dtypes, rg.num_rows, cols=cols, index_name=index,
-                            index_type=self.dtypes[index])
-
+                    df, views = self.pre_allocate(rg.num_rows, columns,
+                                                  categories, index)
                     self.read_row_group(rg, columns, categories, infile=f,
                                         index=index, assign=views)
                     yield df
         else:
             for rg in rgs:
-                df, views = df_empty.empty(
-                        dtypes, rg.num_rows, cols=cols, index_name=index,
-                        index_type=self.dtypes[index])
+                df, views = self.pre_allocate(rg.num_rows, columns,
+                                              categories, index)
                 self.read_row_group_file(rg, columns, categories, index,
                                          assign=views)
                 yield df
@@ -271,29 +267,39 @@ class ParquetFile(object):
         rgs = self.filter_row_groups(filters)
         size = sum(rg.num_rows for rg in rgs)
         columns = columns or self.columns
-        cols = [c for c in columns if index != c]
-        dtypes = ['category' if c in categories else self.dtypes[c]
-                  for c in cols]
-        index_type = self.dtypes.get(index, None)
-        df, views = df_empty.empty(dtypes, size, cols=cols, index_name=index,
-                                   index_type=index_type)
+        df, views = self.pre_allocate(size, columns, categories, index)
         start = 0
         if self.file_scheme == 'simple':
             with self.open(self.fn) as f:
                 for rg in rgs:
-                    parts = {name: v[start:start + rg.num_rows]
+                    parts = {name: (v if name.endswith('-catdef')
+                                    else v[start:start + rg.num_rows])
                              for (name, v) in views.items()}
                     self.read_row_group(rg, columns, categories, infile=f,
                                         index=index, assign=parts)
                     start += rg.num_rows
         else:
             for rg in rgs:
-                parts = {name: v[start:start + rg.num_rows]
+                parts = {name: (v if name.endswith('-catdef')
+                                else v[start:start + rg.num_rows])
                          for (name, v) in views.items()}
                 self.read_row_group_file(rg, columns, categories, index,
                                          assign=parts)
                 start += rg.num_rows
         return df
+
+    def pre_allocate(self, size, columns, categories, index):
+        cols = [c for c in columns if index != c]
+        categories = categories or []
+        dtypes = ['category' if c in categories else self.dtypes[c]
+                  for c in cols]
+        index_type = ('category' if index in categories
+                      else self.dtypes.get(index, None))
+        cols.extend(self.cats)
+        dtypes.extend(['category'] * len(self.cats))
+        df, views = df_empty.empty(dtypes, size, cols=cols, index_name=index,
+                                   index_type=index_type, cats=self.cats)
+        return df, views
 
     @property
     def count(self):
@@ -311,6 +317,18 @@ class ParquetFile(object):
         """ Implied types of the columns in the schema """
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None}
+        for col, dt in dtype.copy().items():
+            if dt.kind == 'i':
+                num_nulls = 0
+                for rg in self.row_groups:
+                    chunks = [c for c in rg.columns
+                              if c.meta_data.path_in_schema[-1] == col]
+                    for chunk in chunks:
+                        if chunk.meta_data.statistics is not None:
+                            num_nulls += (
+                                chunk.meta_data.statistics.null_count or 0)
+                if num_nulls:
+                    dtype[col] = np.dtype('f')
         for cat in self.cats:
             dtype[cat] = "category"
             # pd.Series(self.cats[cat]).map(val_to_num).dtype

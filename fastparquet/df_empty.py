@@ -68,7 +68,6 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
             code = np.zeros(shape=size, dtype=block.values.codes.dtype)
             values = Categorical(values=code, categories=categories,
                                  fastpath=True)
-            codes.append(code)
         else:
             new_shape = (block.values.shape[0], size)
             values = np.empty(shape=new_shape, dtype=block.values.dtype)
@@ -76,6 +75,8 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
         new_block = block.make_block_same_class(
                 values=values, placement=block.mgr_locs.as_array)
         blocks.append(new_block)
+        if isinstance(block.dtype, CategoricalDtype):
+            codes.append((code, new_block.values))
 
     # create block manager
     df = DataFrame(BlockManager(blocks, axes))
@@ -85,12 +86,15 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     for col in df:
         dtype = df[col].dtype
         if str(dtype) == 'category':
-            views[col] = codes.pop(0)
+            views[col], views[col+'-catdef'] = codes.pop(0)
         else:
+            these_blocks = [b for b in blocks if b.dtype == dtype]
             ind = [col for col, dt in df.dtypes.iteritems()
                    if dt == dtype].index(col)
-            views[col] = ([b for b in blocks
-                          if b.dtype == dtype][0].values[ind, :])
+            if len(these_blocks) > 1:
+                views[col] = these_blocks[ind].values
+            else:
+                views[col] = these_blocks[0].values[ind, :]
     if index_type is not None:
         views[index_name] = index
     df.index.name = index_name
