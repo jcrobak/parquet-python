@@ -36,7 +36,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     df = DataFrame()
     views = {}
 
-    cols = cols or range(cols)
+    cols = cols if cols is not None else range(cols)
     if isinstance(types, str):
         types = types.split(',')
     for t, col in zip(types, cols):

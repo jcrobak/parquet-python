@@ -304,20 +304,8 @@ class ParquetFile(object):
         return df
 
     def pre_allocate(self, size, columns, categories, index):
-        cols = [c for c in columns if index != c]
-        categories = categories or {}
-        cats = self.cats.copy()
-        if isinstance(categories, dict):
-            cats.update(categories)
-        dtypes = ['category' if c in categories else self.dtypes[c]
-                  for c in cols]
-        index_type = ('category' if index in categories
-                      else self.dtypes.get(index, None))
-        cols.extend(self.cats)
-        dtypes.extend(['category'] * len(self.cats))
-        df, views = dataframe.empty(dtypes, size, cols=cols, index_name=index,
-                                    index_type=index_type, cats=cats)
-        return df, views
+        return _pre_allocate(size, columns, categories, index, self.cats,
+                             self.dtypes)
 
     @property
     def count(self):
@@ -356,6 +344,23 @@ class ParquetFile(object):
         return "<Parquet File: %s>" % self.info
 
     __repr__ = __str__
+
+
+def _pre_allocate(size, columns, categories, index, cs, dt):
+    cols = [c for c in columns if index != c]
+    categories = categories or {}
+    cats = cs.copy()
+    if isinstance(categories, dict):
+        cats.update(categories)
+    dtypes = ['category' if c in categories else dt[c]
+              for c in cols]
+    index_type = ('category' if index in categories
+                  else dt.get(index, None))
+    cols.extend(cs)
+    dtypes.extend(['category'] * len(cs))
+    df, views = dataframe.empty(dtypes, size, cols=cols, index_name=index,
+                                index_type=index_type, cats=cats)
+    return df, views
 
 
 def filter_out_stats(rg, filters, helper):

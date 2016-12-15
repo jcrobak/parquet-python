@@ -276,11 +276,11 @@ def read_col(column, schema_helper, infile, use_cat=False,
     return final
 
 
-def read_row_group_file(fn, columns, *args, open=open, selfmade=False,
-                        index=None, assign=None):
+def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
+                        open=open, selfmade=False, index=None, assign=None):
     with open(fn, mode='rb') as f:
-        return read_row_group(f, columns, *args, selfmade=selfmade,
-                              index=index, assign=assign)
+        return read_row_group(f, rg, columns, categories, schema_helper, cats,
+                              selfmade=selfmade, index=index, assign=assign)
 
 
 def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
