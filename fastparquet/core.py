@@ -10,7 +10,6 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 from . import encoding
 from .compression import decompress_data
 from .converted_types import convert, typemap
-from .df_empty import empty
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .util import val_to_num

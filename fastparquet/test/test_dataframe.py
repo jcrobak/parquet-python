@@ -1,5 +1,5 @@
 import pandas as pd
-from fastparquet.df_empty import empty
+from fastparquet.dataframe import empty
 
 
 def test_empty():

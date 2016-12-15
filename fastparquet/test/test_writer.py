@@ -498,7 +498,7 @@ def test_many_categories(tempdir, n):
     tmp = str(tempdir)
     cats = np.arange(n)
     codes = np.random.randint(0, n, size=1000000)
-    df = pd.DataFrame({'x': pd.Categorical.from_codes(codes, cats)})
+    df = pd.DataFrame({'x': pd.Categorical.from_codes(codes, cats), 'y': 1})
     fn = os.path.join(tmp, "test.parq")
 
     write(fn, df, has_nulls=False)
@@ -506,6 +506,14 @@ def test_many_categories(tempdir, n):
     out = pf.to_pandas(categories={'x': n})
 
     tm.assert_frame_equal(df, out, check_categorical=False)
+
+    df.set_index('x', inplace=True)
+    write(fn, df, has_nulls=False, write_index=True)
+    pf = ParquetFile(fn)
+    out = pf.to_pandas(categories={'x': n}, index='x')
+
+    assert (out.index == df.index).all()
+    assert (out.y == df.y).all()
 
 
 @pytest.mark.parametrize('row_groups', ([0], [0, 2]))

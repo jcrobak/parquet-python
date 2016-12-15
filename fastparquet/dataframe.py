@@ -1,6 +1,6 @@
 import numpy as np
 from pandas.core.index import _ensure_index, CategoricalIndex
-from pandas.core.internals import BlockManager
+from pandas.core.internals import BlockManager, _block_shape
 from pandas.core.generic import NDFrame
 from pandas.core.frame import DataFrame
 from pandas.core.index import RangeIndex, Index
@@ -42,11 +42,13 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     for t, col in zip(types, cols):
         if str(t) == 'category':
             if cats is None or col not in cats:
-                df[str(col)] = Categorical([], categories=range(2**14),
-                                           fastpath=True)
+                df[str(col)] = Categorical(
+                        [], categories=RangeIndex(0, 2**14),
+                        fastpath=True)
             elif isinstance(cats[col], int):
-                df[str(col)] = Categorical([], categories=range(cats[col]),
-                                           fastpath=True)
+                df[str(col)] = Categorical(
+                        [], categories=RangeIndex(0, cats[col]),
+                        fastpath=True)
             else:  # explicit labels list
                 df[str(col)] = Categorical([], categories=cats[col],
                                            fastpath=True)
@@ -57,27 +59,34 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
         if index_name is None:
             raise ValueError('If using an index, must give an index name')
         if str(index_type) == 'category':
-            vals = np.empty(size, dtype='int8')
             if cats is None or index_name not in cats:
-                c = range(2**10)
+                c = Categorical(
+                        [], categories=RangeIndex(0, 2**14),
+                        fastpath=True)
             elif isinstance(cats[index_name], int):
-                c = range(cats[index_name])
+                c = Categorical(
+                        [], categories=RangeIndex(0, cats[index_name]),
+                        fastpath=True)
             else:  # explicit labels list
-                c = cats[index_name]
-            index = CategoricalIndex(vals, categories=c, fastpath=True)
+                c = Categorical([], categories=cats[index_name],
+                                           fastpath=True)
+            print(cats, index_name, c)
+            vals = np.empty(size, dtype=c.codes.dtype)
+            index = CategoricalIndex(c)
+            index._data._codes = vals
             views[index_name] = vals
         else:
             index = np.empty(size, dtype=index_type)
             views[index_name] = index
 
-        axes = [df.columns.values.tolist(), index]
+        axes = [df._data.axes[0], index]
     else:
-        axes = [df.columns.values.tolist(), RangeIndex(size)]
+        axes = [df._data.axes[0], RangeIndex(size)]
 
     # allocate and create blocks
     blocks = []
-    for block, col in zip(df._data.blocks, df.columns):
-        if isinstance(block.dtype, CategoricalDtype):
+    for block in df._data.blocks:
+        if block.is_categorical:
             categories = block.values.categories
             code = np.zeros(shape=size, dtype=block.values.codes.dtype)
             values = Categorical(values=code, categories=categories,
@@ -86,8 +95,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
             new_shape = (block.values.shape[0], size)
             values = np.empty(shape=new_shape, dtype=block.values.dtype)
 
-        new_block = block.make_block_same_class(
-                values=values, placement=block.mgr_locs.as_array)
+        new_block = block.make_block_same_class(values=values)
         blocks.append(new_block)
 
     # create block manager
