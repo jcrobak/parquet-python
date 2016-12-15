@@ -91,7 +91,6 @@ def convert(data, se):
     data: pandas series of primitive type
     se: a schema element.
     """
-    #data = np.asarray(data, dtype=simple[se.type])
     ctype = se.converted_type
     if ctype is None:
         return data
@@ -155,8 +154,8 @@ def convert(data, se):
     return data
 
 
-@numba.njit()
-def time_shift(indata, outdata, factor=1000):
+@numba.njit(nogil=True)
+def time_shift(indata, outdata, factor=1000):  # pragma: no cover
     for i in range(len(indata)):
         if indata[i] == nat:
             outdata[i] = nat

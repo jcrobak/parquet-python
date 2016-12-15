@@ -168,8 +168,8 @@ def test_dir_partition():
     pf = fastparquet.ParquetFile(os.path.join(TEST_DATA, "split"))
     out = pf.to_pandas()
     for cat, catnum in product(['fred', 'freda'], [1, 2, 3]):
-        assert (df.num[(df.cat==cat) & (df.catnum==catnum)].tolist()) ==\
-               out.num[(out.cat==cat) & (out.catnum==catnum)].tolist()
+        assert (df.num[(df.cat == cat) & (df.catnum == catnum)].tolist()) ==\
+                out.num[(out.cat == cat) & (out.catnum == catnum)].tolist()
     assert out.cat.dtype == 'category'
     assert out.catnum.dtype == 'category'
     assert out.catnum.cat.categories.dtype == 'int64'
@@ -293,7 +293,7 @@ def test_index(tempdir):
         fastparquet.write(tempdir, d2, file_scheme='hive', write_index=True)
         pf = fastparquet.ParquetFile(tempdir)
         out = pf.to_pandas(index=column, categories=['b'])
-        pd.util.testing.assert_frame_equal(out, d2)
+        pd.util.testing.assert_frame_equal(out, d2, check_categorical=False)
 
 
 def test_skip_length():

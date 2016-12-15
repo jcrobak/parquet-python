@@ -166,7 +166,7 @@ def infer_object_encoding(data):
 
 
 @numba.njit(nogil=True)
-def time_shift(indata, outdata, factor=1000):
+def time_shift(indata, outdata, factor=1000):  # pragma: no cover
     for i in range(len(indata)):
         if indata[i] == nat:
             outdata[i] = nat
@@ -221,7 +221,7 @@ def encode_plain(data, se):
 
 
 @numba.njit(nogil=True)
-def encode_unsigned_varint(x, o):
+def encode_unsigned_varint(x, o):  # pragma: no cover
     while x > 127:
         o.write_byte((x & 0x7F) | 0x80)
         x >>= 7
@@ -229,13 +229,13 @@ def encode_unsigned_varint(x, o):
 
 
 @numba.jit(nogil=True)
-def zigzag(n):
+def zigzag(n):  # pragma: no cover
     " 32-bit only "
     return (n << 1) ^ (n >> 31)
 
 
 @numba.njit(nogil=True)
-def encode_bitpacked_inv(values, width, o):
+def encode_bitpacked_inv(values, width, o):  # pragma: no cover
     bit = 16 - width
     right_byte_mask = 0b11111111
     left_byte_mask = right_byte_mask << 8
@@ -252,7 +252,7 @@ def encode_bitpacked_inv(values, width, o):
 
 
 @numba.njit(nogil=True)
-def encode_bitpacked(values, width, o):
+def encode_bitpacked(values, width, o):  # pragma: no cover
     """
     Write values packed into width-bits each (which can be >8)
 
