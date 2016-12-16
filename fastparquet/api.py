@@ -330,11 +330,15 @@ class ParquetFile(object):
                     chunks = [c for c in rg.columns
                               if c.meta_data.path_in_schema[-1] == col]
                     for chunk in chunks:
-                        if chunk.meta_data.statistics is not None:
-                            num_nulls += (
-                                chunk.meta_data.statistics.null_count or 0)
+                        if chunk.meta_data.statistics is None:
+                            num_nulls = True
+                            break
+                        if chunk.meta_data.statistics.null_count is None:
+                            num_nulls = True
+                            break
+                        num_nulls += chunk.meta_data.statistics.null_count
                 if num_nulls:
-                    dtype[col] = np.dtype('f')
+                    dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
         for cat in self.cats:
             dtype[cat] = "category"
             # pd.Series(self.cats[cat]).map(val_to_num).dtype
