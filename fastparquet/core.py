@@ -167,7 +167,7 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
 
 
 def read_col(column, schema_helper, infile, use_cat=False,
-             grab_dict=False, selfmade=False):
+             grab_dict=False, selfmade=False, assign=None, catdef=None):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -200,14 +200,14 @@ def read_col(column, schema_helper, infile, use_cat=False,
         dic = convert(dic, se)
     if grab_dict:
         return dic
+    if use_cat:
+        catdef._categories = pd.Index(dic)
 
     rows = cmd.num_values
 
     out = []
     num = 0
     while True:
-        # TODO: under assumption such as all_dict, could allocate once
-        # and fill arrays, i.e., merge this loop and the next
         if (selfmade and hasattr(cmd, 'statistics') and
                 getattr(cmd.statistics, 'null_count', 1) == 0):
             skip_nulls = True
@@ -216,21 +216,20 @@ def read_col(column, schema_helper, infile, use_cat=False,
         defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
                                         skip_nulls, selfmade=selfmade)
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
+        if use_cat and not d:
+            raise ValueError('Returning category type requires all chunks to'
+                             'use dictionary encoding; column: %s',
+                             cmd.path_in_schema)
+
         out.append((defi, rep, val, d))
         num += len(defi) if defi is not None else len(val)
         if num >= rows:
             break
         ph = read_thrift(infile, parquet_thrift.PageHeader)
 
-    all_dict = all(_[3] for _ in out)
-    if use_cat and not all_dict:
-        raise ValueError('Returning category type requires all chunks to'
-                         'use dictionary encoding; column: %s',
-                         cmd.path_in_schema)
     any_def = any(_[0] is not None for _ in out)
     do_convert = True
     if use_cat:
-        dtype = np.int64
         my_nan = -1
         do_convert = False
     else:
@@ -248,13 +247,12 @@ def read_col(column, schema_helper, infile, use_cat=False,
     if len(out) == 1 and not any_def:
         defi, rep, val, d = out[0]
         if d and not use_cat:
-            final = dic[val]
+            assign[:] = dic[val]
         elif do_convert:
-            final = convert(val, se)
+            assign[:] = convert(val, se)
         else:
-            final = val
+            assign[:] = val
     else:
-        final = np.empty(cmd.num_values, dtype)
         start = 0
         for defi, rep, val, d in out:
             if d and not use_cat:
@@ -264,16 +262,13 @@ def read_col(column, schema_helper, infile, use_cat=False,
             else:
                 cval = val
             if defi is not None:
-                part = final[start:start+len(defi)]
+                part = assign[start:start+len(defi)]
                 part[defi != 1] = my_nan
                 part[defi == 1] = cval
                 start += len(defi)
             else:
-                final[start:start+len(val)] = cval
+                assign[start:start+len(val)] = cval
                 start += len(val)
-    if use_cat:
-        final = pd.Categorical(final, categories=dic, fastpath=True)
-    return final
 
 
 def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
@@ -300,13 +295,9 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
             continue
 
         use = name in categories if categories is not None else False
-        s = read_col(column, schema_helper, file, use_cat=use,
-                     selfmade=selfmade)
-        if str(s.dtype) == 'category':
-            out[name][:] = s.codes
-            out[name+'-catdef']._categories = pd.Index(s.categories)
-        else:
-            out[name][:] = s
+        read_col(column, schema_helper, file, use_cat=use,
+                 selfmade=selfmade, assign=out[name],
+                 catdef=out[name+'-catdef'] if use else None)
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
