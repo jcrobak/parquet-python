@@ -325,19 +325,23 @@ class ParquetFile(object):
                  for f in self.schema if f.num_children is None}
         for col, dt in dtype.copy().items():
             if dt.kind == 'i':
+                # int columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
                     chunks = [c for c in rg.columns
                               if c.meta_data.path_in_schema[-1] == col]
                     for chunk in chunks:
-                        if chunk.meta_data.statistics is not None:
-                            num_nulls += (
-                                chunk.meta_data.statistics.null_count or 0)
+                        if chunk.meta_data.statistics is None:
+                            num_nulls = True
+                            break
+                        if chunk.meta_data.statistics.null_count is None:
+                            num_nulls = True
+                            break
+                        num_nulls += chunk.meta_data.statistics.null_count
                 if num_nulls:
-                    dtype[col] = np.dtype('f')
+                    dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
         for cat in self.cats:
             dtype[cat] = "category"
-            # pd.Series(self.cats[cat]).map(val_to_num).dtype
         return dtype
 
     def __str__(self):
@@ -464,7 +468,7 @@ def statistics(obj):
                 for name in ['min', 'max']:
                     d[name][column] = (
                         [None] if d[name][column] is None or None in d[name][column]
-                        else list(converted_types.convert(d[name][column], se))
+                        else list(converted_types.convert(np.array(d[name][column]), se))
                         )
         return d
 

@@ -399,6 +399,8 @@ def write_column(f, data, selement, compression=None,
     if has_nulls:
         if str(data.dtype) == 'category':
             num_nulls = (data.cat.codes == -1).sum()
+        elif data.dtype.kind == 'i':
+            num_nulls = 0
         else:
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
