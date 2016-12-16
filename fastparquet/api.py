@@ -325,6 +325,7 @@ class ParquetFile(object):
                  for f in self.schema if f.num_children is None}
         for col, dt in dtype.copy().items():
             if dt.kind == 'i':
+                # int columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
                     chunks = [c for c in rg.columns
@@ -341,7 +342,6 @@ class ParquetFile(object):
                     dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
         for cat in self.cats:
             dtype[cat] = "category"
-            # pd.Series(self.cats[cat]).map(val_to_num).dtype
         return dtype
 
     def __str__(self):
