@@ -468,7 +468,7 @@ def statistics(obj):
                 for name in ['min', 'max']:
                     d[name][column] = (
                         [None] if d[name][column] is None or None in d[name][column]
-                        else list(converted_types.convert(d[name][column], se))
+                        else list(converted_types.convert(np.array(d[name][column]), se))
                         )
         return d
 
