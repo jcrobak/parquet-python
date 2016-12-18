@@ -50,9 +50,8 @@ def read_plain_int64(file_obj, count):
 
 def read_plain_int96(file_obj, count):
     """Read `count` 96-bit ints using the plain encoding."""
-    items = struct.unpack(b"<qi" * count, file_obj.read(12) * count)
-    args = [iter(items)] * 2
-    return [q << 32 | i for (q, i) in zip(*args)]
+    items = struct.unpack(b"<" + b"qi" * count, file_obj.read(12 * count))
+    return [q << 32 | i for (q, i) in zip(items[0::2], items[1::2])]
 
 
 def read_plain_float(file_obj, count):
