@@ -60,5 +60,6 @@ def main(argv=None):
     if not args.no_data:
         parquet.dump(args.file, args)
 
+
 if __name__ == '__main__':
     main()
