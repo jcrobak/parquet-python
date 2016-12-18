@@ -28,9 +28,9 @@ class TestPlain(unittest.TestCase):
     def test_int96(self):
         """Test reading bytes containing int96 data."""
         self.assertEqual(
-            999,
+            [999, 1 << 32 | 1000],
             parquet.encoding.read_plain_int96(
-                io.BytesIO(struct.pack(b"<qi", 0, 999)), 1)[0])
+                io.BytesIO(struct.pack(b"<qiqi", 0, 999, 1, 1000)), 2))
 
     def test_float(self):
         """Test reading bytes containing float data."""
