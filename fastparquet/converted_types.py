@@ -103,7 +103,14 @@ def convert(data, se):
         return out
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale
-        return data * scale_factor
+        if data.dtype.kind in ['i', 'f']:
+            return data * scale_factor
+        else:  # byte-string
+            # NB: general but slow method
+            # could optimize when data.dtype.itemsize <= 8
+            # NB: `from_bytes` may be py>=3.4 only
+            return np.array([int.from_bytes(d, byteorder='big', signed=True)
+                             for d in data]) * scale_factor
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:

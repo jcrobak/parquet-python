@@ -127,3 +127,22 @@ def test_uint64():
         converted_type=pt.ConvertedType.UINT_64
     )
     assert convert(pd.Series([-6884376]), schema)[0] == 18446744073702667240
+
+
+def test_big_decimal():
+    schema = pt.SchemaElement(
+        type=pt.Type.FIXED_LEN_BYTE_ARRAY,
+        name="test",
+        converted_type=pt.ConvertedType.DECIMAL,
+        type_length=32,
+        scale=1,
+        precision=38
+    )
+    data = np.array([
+    b'', b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1e\\',
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1d\\',
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\r{',
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x19)'],
+            dtype='|S32')
+    assert np.isclose(convert(data, schema),
+                      np.array([0., 777.2, 751.6, 345.1, 644.1])).all()
