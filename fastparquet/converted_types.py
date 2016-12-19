@@ -109,8 +109,8 @@ def convert(data, se):
             # NB: general but slow method
             # could optimize when data.dtype.itemsize <= 8
             # NB: `from_bytes` may be py>=3.4 only
-            return np.array([int.from_bytes(d, byteorder='big', signed=True)
-                             for d in data]) * scale_factor
+            return np.array([int.from_bytes(d, byteorder='big', signed=True) *
+                             scale_factor for d in data])
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
