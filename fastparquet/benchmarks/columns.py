@@ -94,11 +94,11 @@ def time_text():
                 if isinstance(df.iloc[0, 0], bytes):
                     t = "bytes"
                 else:
-                    t = 'str'
+                    t = 'utf8'
                 write(fn, df)
                 with measure('%s: write, fixed: %s' % (t, fixed), result):
                     write(fn, df, has_nulls=False, write_index=False,
-                          fixed_text={col: fixed})
+                          fixed_text={col: fixed}, object_encoding=t)
 
                 pf = ParquetFile(fn)
                 pf.to_pandas()  # warm-up
