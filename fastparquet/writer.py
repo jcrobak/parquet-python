@@ -133,15 +133,16 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = data.str.encode('utf8').values
+            out = np.array([x.encode() for x in data], dtype="O")
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
-            out = data.map(json.dumps).str.encode('utf8').values
+            out = np.array([x.encode() for x in data.map(json.dumps)],
+                           dtype="O")
         elif converted_type == parquet_thrift.ConvertedType.BSON:
             out = data.map(tobson).values
         if type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
-            out = data.values.astype('S%i' % se.type_length)
+            out = out.astype('S%i' % se.type_length)
     elif converted_type == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
         out = np.empty(len(data), 'int64')
         time_shift(data.values.view('int64'), out)

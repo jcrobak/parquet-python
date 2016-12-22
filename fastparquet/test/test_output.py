@@ -472,7 +472,7 @@ def test_auto_null(tempdir):
     df['e'] = df['d'].astype('category')
     fn = os.path.join(tmp, "test.parq")
 
-    with pytest.raises(TypeError):
+    with pytest.raises((TypeError, AttributeError)):
         ## TODO: this should be a nicer error?
         write(fn, df, has_nulls=False)
 
