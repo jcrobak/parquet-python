@@ -98,12 +98,12 @@ def find_type(data, fixed_text=None, object_encoding=None):
         if fixed_text:
             width = fixed_text
             type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
-    elif str(dtype).startswith("datetime64"):
+    elif dtype.kind == "M":
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
-    elif str(dtype).startswith("timedelta64"):
+    elif dtype.kind == "m":
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
     else:
@@ -133,11 +133,11 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = np.array([x.encode() for x in data], dtype="O")
+            out = np.array([x.encode('utf8') for x in data], dtype="O")
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
-            out = np.array([x.encode() for x in data.map(json.dumps)],
+            out = np.array([json.dumps(x).encode('utf8') for x in data],
                            dtype="O")
         elif converted_type == parquet_thrift.ConvertedType.BSON:
             out = data.map(tobson).values
