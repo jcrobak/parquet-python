@@ -98,12 +98,12 @@ def find_type(data, fixed_text=None, object_encoding=None):
         if fixed_text:
             width = fixed_text
             type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
-    elif str(dtype).startswith("datetime64"):
+    elif dtype.kind == "M":
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
-    elif str(dtype).startswith("timedelta64"):
+    elif dtype.kind == "m":
         type, converted_type, width = (parquet_thrift.Type.INT64,
                                        parquet_thrift.ConvertedType.TIME_MICROS, None)
     else:
@@ -133,15 +133,16 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = data.str.encode('utf8').values
+            out = np.array([x.encode('utf8') for x in data], dtype="O")
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
-            out = data.map(json.dumps).str.encode('utf8').values
+            out = np.array([json.dumps(x).encode('utf8') for x in data],
+                           dtype="O")
         elif converted_type == parquet_thrift.ConvertedType.BSON:
             out = data.map(tobson).values
         if type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
-            out = data.values.astype('S%i' % se.type_length)
+            out = out.astype('S%i' % se.type_length)
     elif converted_type == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
         out = np.empty(len(data), 'int64')
         time_shift(data.values.view('int64'), out)

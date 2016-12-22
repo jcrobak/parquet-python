@@ -137,6 +137,14 @@ def convert(data, se):
         return data.astype(np.uint32)
     elif ctype == parquet_thrift.ConvertedType.UINT_64:
         return data.astype(np.uint64)
+    elif ctype == parquet_thrift.ConvertedType.INT_8:
+        return data.astype(np.int8)
+    elif ctype == parquet_thrift.ConvertedType.INT_16:
+        return data.astype(np.int16)
+    elif ctype == parquet_thrift.ConvertedType.INT_32:
+        return data.astype(np.int32)
+    elif ctype == parquet_thrift.ConvertedType.INT_64:
+        return data.astype(np.int64)
     elif ctype == parquet_thrift.ConvertedType.JSON:
         if isinstance(data, list) or data.dtype != "O":
             out = np.empty(len(data), dtype="O")
