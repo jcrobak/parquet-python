@@ -79,9 +79,38 @@ def time_column():
         return result
 
 
+def time_text():
+    with tmpdir() as tempdir:
+        result = {}
+        fn = os.path.join(tempdir, 'temp.parq')
+        n = 1000000
+        d = pd.DataFrame({
+            'a': np.random.choice(['hi', 'you', 'people'], size=n),
+            'b': np.random.choice([b'hi', b'you', b'people'], size=n)})
+
+        for col in d.columns:
+            for fixed in [None, 6]:
+                df = d[[col]]
+                if isinstance(df.iloc[0, 0], bytes):
+                    t = "bytes"
+                else:
+                    t = 'str'
+                write(fn, df)
+                with measure('%s: write, fixed: %s' % (t, fixed), result):
+                    write(fn, df, has_nulls=False, write_index=False,
+                          fixed_text={col: fixed})
+
+                pf = ParquetFile(fn)
+                pf.to_pandas()  # warm-up
+
+                with measure('%s: read, fixed: %s' % (t, fixed), result):
+                    pf.to_pandas()
+        return result
+
+
 if __name__ == '__main__':
     result = {}
-    for f in [time_column]:
+    for f in [time_column, time_text]:
         result.update(f())
     for k in sorted(result):
         print(k, result[k])
