@@ -11,7 +11,7 @@ Categoricals
 ------------
 
 When writing a data-frame with a column of pandas type ``Category``, the
-data will be encoded using parquet "dictionary encoding". This stores all
+data will be encoded using Parquet "dictionary encoding". This stores all
 the possible values of the column (typically strings) separately, and the
 index corresponding to each value as a data set of integers. If there
 is a significant performance gain to be made, such as long labels, but low
@@ -22,16 +22,16 @@ category type:
 
     df[col] = df[col].astype('category')
 
-The efficiently load a column as a categorical type, include it in the optional
+To efficiently load a column as a categorical type, include it in the optional
 keyword parameter ``categories``; however it must be encoded as dictionary
 throughout the dataset (as it will, if written by fastparquet).
 
 .. code-block:: python
 
-    pf = ParquetFile('input.parq)
+    pf = ParquetFile('input.parq')
     df = pf.to_pandas(categories={'cat': 12})
 
-Where we provide a hint that the column `cat` has up to 12 possible values.
+Where we provide a hint that the column ``cat`` has up to 12 possible values.
 ``categories`` can also take a list, in which case up to 32767 (2**15 - 1)
 labels are assumed.
 Columns that are encoded as dictionary but not included in ``categories`` will
@@ -62,7 +62,7 @@ Such an encoding will be the fastest to read, especially if the values are
 bytes type, as opposed to UTF8 strings. The values will be converted back
 to objects upon loading.
 
-Fixed-length byte arrays are not supported by `spark`, so
+Fixed-length byte arrays are not supported by `Spark`, so
 files written using this may not be portable.
 
 Short-type Integers
@@ -108,7 +108,7 @@ is encountered in a column not in the list, this will raise an exception.
 Data Types
 ----------
 
-There is fairly good correspondence between pandas data-types and parquet
+There is fairly good correspondence between pandas data-types and Parquet
 simple and logical data types. The `types documentation <https://github.com/Parquet/parquet-format/blob/master/LogicalTypes.md>`_
 gives details of the implementation spec.
 
@@ -129,7 +129,7 @@ A couple of caveats should be noted:
 Partitions and row-groups
 -------------------------
 
-The parquet format allows for partitioning the data by the values of some
+The Parquet format allows for partitioning the data by the values of some
 (low-cardinality) columns and by row sequence number. Both of these can be
 in operation at the same time, and, in situations where only certain sections
 of the data need to be loaded, can produce great performance benefits in
@@ -156,7 +156,7 @@ split data data on the values of those columns. This is done by writing a
 directory structure with *key=value* names. Multiple partition columns can
 be chosen, leading to a multi-level directory tree.
 
-Consider the following directory tree from this `spark example <http://spark.apache.org/docs/latest/sql-programming-guide.html#partition-discovery>`_:
+Consider the following directory tree from this `Spark example <http://Spark.apache.org/docs/latest/sql-programming-guide.html#partition-discovery>`_:
 
     table/
         gender=male/
@@ -207,17 +207,17 @@ To get the first row-group only, one would go:
 
     first = next(iter(pf.iter_row_groups()))
 
-Connection to dask
+Connection to Dask
 ------------------
 
-dask usage is still in development. Expect the features to lag behind
+Dask usage is still in development. Expect the features to lag behind
 those in fastparquet, and sometimes to become incompatible, if a change has
 been made in the one but not the other.
 
-`dask <http://dask.pydata.org/>`_ provides a pandas-like dataframe interface to
+`Dask <http://dask.pydata.org/>`_ provides a pandas-like dataframe interface to
 larger-than-memory and distributed datasets, as part of a general parallel
 computation engine. In this context, it allows the parallel loading and
-processing of the component pieces of a parquet dataset across the cored of
+processing of the component pieces of a Parquet dataset across the cored of
 a CPU and/or the nodes of a distributed cluster.
 
 Dask will provide two simple end-user functions:
@@ -225,9 +225,8 @@ Dask will provide two simple end-user functions:
 - ``dask.dataframe.read_parquet`` with keyword options similar to
   ``ParquetFile.to_pandas``. The URL parameter, however, can point to
   various filesystems, such as S3 or HDFS. Loading is *lazy*, only happening
-  on demand. Currently available as ``dask.dataframe.io.parquet.read_parquet``.
+  on demand.
 - ``dask.dataframe.DataFrame.to_parquet`` with keyword options similar to
   ``fastparquet.write``. One row-group/file will be generated for each division
   of the dataframe, or, if using partitioning, up to one row-group/file per
-  division per partition combination. Currently available as
-  ``dask.dataframe.io.parquet.to_parquet``.
+  division per partition combination.
