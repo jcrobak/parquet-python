@@ -679,3 +679,10 @@ def test_append_fail(tempdir):
     with pytest.raises(ValueError) as e:
         write(fn2, df1, file_scheme='hive', append=True)
     assert 'existing file scheme' in str(e)
+
+
+def test_bad_object_encoding(tempdir):
+    df = pd.DataFrame({'x': ['a', 'ab']})
+    with pytest.raises(ValueError) as e:
+        write(str(tempdir), df, object_encoding='utf-8')
+    assert "utf-8" in str(e)
