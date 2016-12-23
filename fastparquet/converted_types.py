@@ -28,8 +28,8 @@ logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
 try:
     from bson import BSON
-    unbson = bson.BSON.decode
-    tobson = bson.BSON.encode
+    unbson = BSON.decode
+    tobson = BSON.encode
 except ImportError:
     try:
         import bson

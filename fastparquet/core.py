@@ -244,31 +244,22 @@ def read_col(column, schema_helper, infile, use_cat=False,
             my_nan = -9223372036854775808  # int64 version of NaT
         else:
             my_nan = None
-    if len(out) == 1 and not any_def:
-        defi, rep, val, d = out[0]
+    start = 0
+    for defi, rep, val, d in out:
         if d and not use_cat:
-            assign[:] = dic[val]
+            cval = dic[val]
         elif do_convert:
-            assign[:] = convert(val, se)
+            cval = convert(val, se)
         else:
-            assign[:] = val
-    else:
-        start = 0
-        for defi, rep, val, d in out:
-            if d and not use_cat:
-                cval = dic[val]
-            elif do_convert:
-                cval = convert(val, se)
-            else:
-                cval = val
-            if defi is not None:
-                part = assign[start:start+len(defi)]
-                part[defi != 1] = my_nan
-                part[defi == 1] = cval
-                start += len(defi)
-            else:
-                assign[start:start+len(val)] = cval
-                start += len(val)
+            cval = val
+        if defi is not None:
+            part = assign[start:start+len(defi)]
+            part[defi != 1] = my_nan
+            part[defi == 1] = cval
+            start += len(defi)
+        else:
+            assign[start:start+len(val)] = cval
+            start += len(val)
 
 
 def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
