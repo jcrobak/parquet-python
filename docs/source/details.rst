@@ -62,7 +62,7 @@ Such an encoding will be the fastest to read, especially if the values are
 bytes type, as opposed to UTF8 strings. The values will be converted back
 to objects upon loading.
 
-Fixed-length byte arrays are not supported by `Spark`, so
+Fixed-length byte arrays are not supported by Spark, so
 files written using this may not be portable.
 
 Short-type Integers

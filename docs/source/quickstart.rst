@@ -4,7 +4,7 @@ Quickstart
 Reading
 -------
 
-To open and read the content of a Parquet file:
+To open and read the contents of a Parquet file:
 
 .. code-block:: python
 
