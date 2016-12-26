@@ -644,20 +644,21 @@ def write(filename, data, row_group_offsets=50000000,
     Parameters
     ----------
     filename: string
-        File contains everything (if file_scheme='same'), else contains the
-        metadata only
+        Parquet collection to write to, either a single file (if file_scheme
+        is simple) or a directory containing the metadata and data-files.
     data: pandas dataframe
         The table to write
     row_group_offsets: int or list of ints
-        In int, row-groups will be approximately this many rows, rounded down
+        If int, row-groups will be approximately this many rows, rounded down
         to make row groups about the same size; if a list, the explicit index
         values to start new row groups.
     compression: str, dict
-        compression to apply to each column, e.g. GZIP or SNAPPY
+        compression to apply to each column, e.g. GZIP or SNAPPY or
+        {col1: "SNAPPY", col2: None} to specify per column.
     file_scheme: 'simple'|'hive'
         If simple: all goes in a single file
-        If hive: each row group is in a separate file, and filename contains
-        only the metadata
+        If hive: each row group is in a separate file, and a separate file
+        (called "_metadata") contains the metadata.
     open_with: function
         When called with a f(path, mode), returns an open file-like object
     mkdirs: function
@@ -683,7 +684,8 @@ def write(filename, data, row_group_offsets=50000000,
         For bytes or str columns, values will be converted
         to fixed-length strings of the given length for the given columns
         before writing, potentially providing a large speed
-        boost.
+        boost. The length applies to the binary representation *after*
+        conversion for utf8, json or bson.
     append: bool (False)
         If False, construct data-set from scratch; if True, add new row-group(s)
         to existing data-set. In the latter case, the data-set must exist,

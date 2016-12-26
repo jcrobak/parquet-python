@@ -11,9 +11,9 @@ Categoricals
 ------------
 
 When writing a data-frame with a column of pandas type ``Category``, the
-data will be encoded using parquet "dictionary encoding". This stores all
+data will be encoded using Parquet "dictionary encoding". This stores all
 the possible values of the column (typically strings) separately, and the
-index corresponding to each value as a data set of int32 numbers. If there
+index corresponding to each value as a data set of integers. If there
 is a significant performance gain to be made, such as long labels, but low
 cardinality, users are suggested to turn their object columns into the
 category type:
@@ -22,12 +22,20 @@ category type:
 
     df[col] = df[col].astype('category')
 
-When loading, only columns which have dictionary encoding for every row-group,
-and are also included in the optional keyword parameter ``categories`` will
-result in categorical-type columns in the output. Other columns will be
-converted to object type, which is potentially expensive. On the other hand,
-if most entries in the column are NULL (see below), then converting to/from
-category type is probably unnecessary.
+To efficiently load a column as a categorical type, include it in the optional
+keyword parameter ``categories``; however it must be encoded as dictionary
+throughout the dataset (as it will, if written by fastparquet).
+
+.. code-block:: python
+
+    pf = ParquetFile('input.parq')
+    df = pf.to_pandas(categories={'cat': 12})
+
+Where we provide a hint that the column ``cat`` has up to 12 possible values.
+``categories`` can also take a list, in which case up to 32767 (2**15 - 1)
+labels are assumed.
+Columns that are encoded as dictionary but not included in ``categories`` will
+be de-referenced on load which is potentially expensive.
 
 Note that before loading, it is not possible to know whether the above condition
 will be met, so the ``dtypes`` attribute of a ``ParquetFile`` will show the
@@ -37,14 +45,12 @@ Byte Arrays
 -----------
 
 Often, information in a column can be encoded in a small number of characters,
-perhaps a single character. Given that dictionary encoding (above) requires
-four bytes per value, plus additional space and processing to create the
-encoding, it can be much more efficient to store the code characters directly.
-Conversely, variable-length byte arrays are also slow and inefficient, since
-the length of each value needs to be stored.
+perhaps a single character. Variable-length byte arrays are also slow and
+inefficient, however, since the length of each value needs to be stored.
 
 Fixed-length byte arrays provide the best of both, and will probably be the
-most efficient storage where the values are 1-4 `bytes`. To automatically
+most efficient storage where the values are 1-4 bytes long, especially if the
+cardinality is relatively high for dictionary encoding. To automatically
 convert string values to fixed-length when writing, use the ``fixed_text``
 optional keyword, with a predetermined length.
 
@@ -52,11 +58,21 @@ optional keyword, with a predetermined length.
 
     write('out.parq', df, fixed_text={'char_code': 1})
 
-Such an encoding will be the fastest to read, especially if there is no need
-to decode to UTF8 strings.
+Such an encoding will be the fastest to read, especially if the values are
+bytes type, as opposed to UTF8 strings. The values will be converted back
+to objects upon loading.
 
-Fixed-length byte arrays are not supported by `spark`, so
+Fixed-length byte arrays are not supported by Spark, so
 files written using this may not be portable.
+
+Short-type Integers
+-------------------
+
+Types like 1-byte ints (signed or unsigned) are stored using bitpacking for
+optimized space and speed. Unfortunately, Spark is known not to be
+able to handle these types. If you want to generate files for reading by
+Spark, be sure to transform integer columns to a minimum of 4 bytes (numpy
+``int32`` or ``uint32``) before saving.
 
 Nulls
 -----
@@ -68,6 +84,11 @@ as missing values, and if querying the resultant files using other frameworks,
 this should be born in mind. With ``has_nulls=None`` (the default) on writing,
 float and time fields will not write separate NULLs information, and
 the metadata will give num_nulls=0.
+
+Using ``has_nulls=True`` (which can
+also be specified for some specific subset of columns using a list) will force
+the writing of NULLs information, making the output more transferable, but
+comes with a performance penalty.
 
 Because of the ``NaN`` encoding for NULLs, pandas is unable to represent missing
 data in an integer field. In practice, this means that fastparquet will never
@@ -87,7 +108,7 @@ is encountered in a column not in the list, this will raise an exception.
 Data Types
 ----------
 
-There is fairly good correspondence between pandas data-types and parquet
+There is fairly good correspondence between pandas data-types and Parquet
 simple and logical data types. The `types documentation <https://github.com/Parquet/parquet-format/blob/master/LogicalTypes.md>`_
 gives details of the implementation spec.
 
@@ -108,7 +129,7 @@ A couple of caveats should be noted:
 Partitions and row-groups
 -------------------------
 
-The parquet format allows for partitioning the data by the values of some
+The Parquet format allows for partitioning the data by the values of some
 (low-cardinality) columns and by row sequence number. Both of these can be
 in operation at the same time, and, in situations where only certain sections
 of the data need to be loaded, can produce great performance benefits in
@@ -135,7 +156,7 @@ split data data on the values of those columns. This is done by writing a
 directory structure with *key=value* names. Multiple partition columns can
 be chosen, leading to a multi-level directory tree.
 
-Consider the following directory tree from this `spark example <http://spark.apache.org/docs/latest/sql-programming-guide.html#partition-discovery>`_:
+Consider the following directory tree from this `Spark example <http://Spark.apache.org/docs/latest/sql-programming-guide.html#partition-discovery>`_:
 
     table/
         gender=male/
@@ -160,17 +181,43 @@ directory would contain (up to) two files, for a total of eight. If a
 row-group happens to contain no data for one of the field value combinations,
 that data file is omitted.
 
-Connection to dask
+
+Iteration
+---------
+
+For data-sets too big to fit conveniently into memory, it is possible to
+iterate through the row-groups in a similar way to reading by chunks from
+CSV with pandas.
+
+.. code-block:: python
+
+    pf = ParquetFile('myfile.parq')
+    for df in pf.iter_row_groups():
+        print(df.shape)
+        # process sub-data-frame df
+
+Thus only one row-group is in memory at a time. The same set of options
+are available as in ``to_pandas`` allowing, for instance, reading only
+specific columns, loading to
+categoricals or to ignore some row-groups using filtering.
+
+To get the first row-group only, one would go:
+
+.. code-block:: python
+
+    first = next(iter(pf.iter_row_groups()))
+
+Connection to Dask
 ------------------
 
-*Warning*: dask usage is experimental. Expect the features to lag behind
+Dask usage is still in development. Expect the features to lag behind
 those in fastparquet, and sometimes to become incompatible, if a change has
 been made in the one but not the other.
 
-`dask <http://dask.pydata.org/>`_ provides a pandas-like dataframe interface to
+`Dask <http://dask.pydata.org/>`_ provides a pandas-like dataframe interface to
 larger-than-memory and distributed datasets, as part of a general parallel
 computation engine. In this context, it allows the parallel loading and
-processing of the component pieces of a parquet dataset across the cored of
+processing of the component pieces of a Parquet dataset across the cored of
 a CPU and/or the nodes of a distributed cluster.
 
 Dask will provide two simple end-user functions:
