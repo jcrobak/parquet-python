@@ -9,9 +9,9 @@ except ImportError:
 
 setup(
     name='fastparquet',
-    version='0.0.3',
+    version='0.0.4',
     description='Python support for Parquet file format',
-    author='Joe Crobak, Martin Durant',
+    author='Martin Durant',
     author_email='mdurant@continuum.io',
     url='https://github.com/martindurant/fastparquet/',
     license='Apache License 2.0',
