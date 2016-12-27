@@ -17,7 +17,7 @@ install:
   # Install dependencies
   - conda create -n test python=$TRAVIS_PYTHON_VERSION pytest
   - source activate test
-  - conda install numpy pandas numba thriftpy python-snappy cython
+  - conda install numpy pandas numba thriftpy python-snappy cython setuptools
   - pip install bson
 
 script:

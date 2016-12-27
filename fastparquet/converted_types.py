@@ -99,16 +99,8 @@ def convert(data, se):
         return data
     if ctype == parquet_thrift.ConvertedType.UTF8:
         if isinstance(data, list) or data.dtype != "O":
-            out = np.array(data, dtype="O")
-        else:
-            out = data
-        out = array_decode_utf8(out)
-        #if isinstance(data, list) or data.dtype != "O":
-            #out = np.empty(len(data), dtype="O")
-        #else:
-            #out = data
-        #out[:] = [s.decode('utf8') for s in data]
-        return out
+            data = np.array(data, dtype="O")
+        return array_decode_utf8(data)
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale
         if data.dtype.kind in ['i', 'f']:
