@@ -21,7 +21,7 @@ install:
   - pip install bson
 
 script:
-  - pip install .
+  - pip install -e .
   - py.test -x -vv --pyargs fastparquet
 
 notifications:
