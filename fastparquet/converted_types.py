@@ -24,6 +24,9 @@ import sys
 from decimal import Decimal
 
 from .thrift_structures import parquet_thrift
+from .speedups import array_decode_utf8
+
+
 logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
 try:
@@ -96,10 +99,15 @@ def convert(data, se):
         return data
     if ctype == parquet_thrift.ConvertedType.UTF8:
         if isinstance(data, list) or data.dtype != "O":
-            out = np.empty(len(data), dtype="O")
+            out = np.array(data, dtype="O")
         else:
             out = data
-        out[:] = [s.decode('utf8') for s in data]
+        out = array_decode_utf8(out)
+        #if isinstance(data, list) or data.dtype != "O":
+            #out = np.empty(len(data), dtype="O")
+        #else:
+            #out = data
+        #out[:] = [s.decode('utf8') for s in data]
         return out
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale

@@ -1,4 +1,7 @@
 *.pyc
+*.so
+*.dll
+fastparquet/speedups.c
 .coverage
 cover
 build

@@ -3,14 +3,23 @@
 import os
 
 try:
-    from setuptools import setup
+    from setuptools import setup, Extension
 except ImportError:
-    from distutils.core import setup
+    from distutils.core import setup, Extension
+
+from Cython.Build import cythonize
+
+cython_modules = [Extension('fastparquet.speedups',
+                            ['fastparquet/speedups.pyx'])]
+
+ext_modules = cythonize(cython_modules)
+
 
 setup(
     name='fastparquet',
     version='0.0.3',
     description='Python support for Parquet file format',
+    ext_modules=ext_modules,
     author='Joe Crobak, Martin Durant',
     author_email='mdurant@continuum.io',
     url='https://github.com/martindurant/fastparquet/',
