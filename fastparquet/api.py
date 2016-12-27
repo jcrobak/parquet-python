@@ -59,7 +59,6 @@ class ParquetFile(object):
             self.file_scheme = 'mixed'
         self.open = open_with
         self.sep = sep
-        self._read_partitions()
 
     def _parse_header(self, f, verify=True):
         try:
@@ -92,6 +91,8 @@ class ParquetFile(object):
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
         self.helper = schema.SchemaHelper(self.schema)
         self.selfmade = self.created_by == "fastparquet-python"
+        self._read_partitions()
+        self._dtypes()
 
     @property
     def columns(self):
@@ -318,8 +319,7 @@ class ParquetFile(object):
         return {'name': self.fn, 'columns': self.columns,
                 'categories': list(self.cats), 'rows': self.count}
 
-    @property
-    def dtypes(self):
+    def _dtypes(self):
         """ Implied types of the columns in the schema """
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None}
@@ -342,7 +342,7 @@ class ParquetFile(object):
                     dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
         for cat in self.cats:
             dtype[cat] = "category"
-        return dtype
+        self.dtypes = dtype
 
     def __str__(self):
         return "<Parquet File: %s>" % self.info
