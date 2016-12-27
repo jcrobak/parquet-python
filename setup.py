@@ -1,13 +1,19 @@
 """setup.py - build script for parquet-python."""
 
 import os
+try:
+    from setuptools import setup, Extension
+except ImportError:
+    from distutils.core import setup, Extension
 
-from setuptools import setup, Extension
+import numpy as np
 
 from Cython.Build import cythonize
 
+
 cython_modules = [Extension('fastparquet.speedups',
-                            ['fastparquet/speedups.pyx'])]
+                            ['fastparquet/speedups.pyx'],
+                            include_dirs=[np.get_include()])]
 
 ext_modules = cythonize(cython_modules)
 
