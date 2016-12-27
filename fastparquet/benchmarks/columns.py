@@ -110,8 +110,7 @@ def time_text():
 
 if __name__ == '__main__':
     result = {}
-    #for f in [time_column, time_text]:
-    for f in [time_text]:
+    for f in [time_column, time_text]:
         result.update(f())
     for k in sorted(result):
         print(k, result[k])
