@@ -108,7 +108,7 @@ def pack_byte_array(list items):
         val = items[i]
         if not PyBytes_CheckExact(val):
             raise TypeError("expected list of bytes")
-        total_size += 4 + PyBytes_GET_SIZE(items[i])
+        total_size += 4 + PyBytes_GET_SIZE(val)
 
     out = PyBytes_FromStringAndSize(NULL, total_size)
     start = data = <unsigned char *> PyBytes_AS_STRING(out)
