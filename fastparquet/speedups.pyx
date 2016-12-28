@@ -41,7 +41,7 @@ def _check_1d_object_array(np.ndarray arr):
 def array_encode_utf8(inp):
     """
     utf-8 encode all elements of a 1d ndarray of "object" dtype.
-    A new ndarray is returned.
+    A new ndarray of bytes objects is returned.
     """
     cdef:
         Py_ssize_t i, n
@@ -54,6 +54,7 @@ def array_encode_utf8(inp):
     n = len(arr)
     result = np.empty(n, dtype=object)
     for i in range(n):
+        # Fast utf-8 encoding, avoiding method call and codec lookup indirection
         result[i] = PyUnicode_AsUTF8String(arr[i])
 
     return result
@@ -62,7 +63,7 @@ def array_encode_utf8(inp):
 def array_decode_utf8(inp):
     """
     utf-8 decode all elements of a 1d ndarray of "object" dtype.
-    A new ndarray is returned.
+    A new ndarray of unicode objects is returned.
     """
     cdef:
         Py_ssize_t i, n
@@ -79,6 +80,7 @@ def array_decode_utf8(inp):
         val = arr[i]
         if not PyBytes_CheckExact(val):
             raise TypeError("expected array of bytes")
+        # Fast utf-8 decoding, avoiding method call and codec lookup indirection
         result[i] = PyUnicode_DecodeUTF8(
             PyBytes_AS_STRING(val),
             PyBytes_GET_SIZE(val),
@@ -99,6 +101,7 @@ def pack_byte_array(list items):
         unsigned char *data
         object val, out
 
+    # Strategy: compute the total output size and allocate it in one go.
     n = len(items)
     total_size = 0
     for i in range(n):
@@ -110,6 +113,7 @@ def pack_byte_array(list items):
     out = PyBytes_FromStringAndSize(NULL, total_size)
     start = data = <unsigned char *> PyBytes_AS_STRING(out)
 
+    # Copy data to output.
     for i in range(n):
         val = items[i]
         # `itemlen` should be >= 0, so no signed extension issues
@@ -149,4 +153,3 @@ def unpack_byte_array(bytes raw_bytes, Py_ssize_t n):
 
     assert (data - start) <= len(raw_bytes)
     return out
-
