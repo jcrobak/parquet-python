@@ -21,8 +21,12 @@ def sep_from_open(opener):
 
 
 def default_mkdirs(f):
-    os.makedirs(f, exist_ok=True)
-
+    try:
+        os.makedirs(f, exist_ok=True)
+    except TypeError as e:
+        #Python2.7 equivalent
+        import subprocess
+        subprocess.call(['mkdir', '-p', f])
 
 def default_open(f, mode='rb'):
     return open(f, mode)

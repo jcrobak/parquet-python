@@ -96,8 +96,13 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
     """
     daph = header.data_page_header
     raw_bytes = _read_page(f, header, metadata)
-    io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
-                                           dtype=np.uint8))
+    try:
+        io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
+                                               dtype=np.uint8))
+    except AttributeError as e:
+        # Python2.7
+        io_obj = encoding.Numpy8(np.frombuffer(bytearray(raw_bytes),
+                                               dtype=np.uint8))
 
     if skip_nulls and not helper.is_required(metadata.path_in_schema[-1]):
         num_nulls = 0
