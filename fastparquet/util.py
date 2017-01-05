@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 import tempfile
 import thriftpy
+import sys
 
 
 class ParquetException(Exception):
@@ -21,12 +22,12 @@ def sep_from_open(opener):
 
 
 def default_mkdirs(f):
-    try:
-        os.makedirs(f, exist_ok=True)
-    except TypeError as e:
-        #Python2.7 equivalent
+    if is_v2():
         import subprocess
         subprocess.call(['mkdir', '-p', f])
+    else:
+        os.makedirs(f, exist_ok=True)
+
 
 def default_open(f, mode='rb'):
     return open(f, mode)
@@ -120,3 +121,10 @@ def check_column_names(columns, *args):
                 raise ValueError("Column name not in list.\n"
                                  "Requested %s\n"
                                  "Allowed %s" % (arg, columns))
+
+
+def is_v2():
+    """
+    Return True if Python version is 2.x
+    """
+    return (sys.version_info[0] == 2)

@@ -15,6 +15,7 @@ import sys
 
 from .speedups import unpack_byte_array
 from .thrift_structures import parquet_thrift
+from .util import is_v2
 
 
 def read_plain_boolean(raw_bytes, count):
@@ -34,21 +35,19 @@ DECODE_TYPEMAP = {
 def read_plain(raw_bytes, type_, count, width=0):
     if type_ in DECODE_TYPEMAP:
         dtype = DECODE_TYPEMAP[type_]
-        try:
-            fb = np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
-        except AttributeError as e:
-            # Python2.7
+        if is_v2():
             fb = np.frombuffer(bytearray(raw_bytes), dtype=dtype, count=count)
+        else:
+            fb = np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
         return fb
     if type_ == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
         if count == 1:
             width = len(raw_bytes)
         dtype = np.dtype('S%i' % width)
-        try:
-            fb = np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
-        except AttributeError as e:
-            # Python2.7
+        if is_v2():
             fb = np.frombuffer(bytearray(raw_bytes), dtype=dtype, count=count)
+        else:
+            fb = np.frombuffer(memoryview(raw_bytes), dtype=dtype, count=count)
         return fb
     if type_ == parquet_thrift.Type.BOOLEAN:
         return read_plain_boolean(raw_bytes, count)
