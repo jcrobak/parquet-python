@@ -1,6 +1,8 @@
 
 import gzip
 from .thrift_structures import parquet_thrift
+from .util import is_v2
+
 # TODO: use stream/direct-to-buffer conversions instead of memcopy
 
 # TODO: enable ability to pass kwargs to compressor
@@ -11,11 +13,7 @@ compressions = {
 decompressions = {
     'UNCOMPRESSED': lambda x: x
 }
-try:
-    compressions['GZIP'] = gzip.compress
-    decompressions['GZIP'] = gzip.decompress
-except AttributeError:
-    # Python2.7
+if is_v2():
     def gzip_compress(data, compresslevel=9):
         from io import BytesIO
         bio = BytesIO()
@@ -31,6 +29,9 @@ except AttributeError:
                                16+15)
     compressions['GZIP'] = gzip_compress
     decompressions['GZIP'] = gzip_decompress
+else:
+    compressions['GZIP'] = gzip.compress
+    decompressions['GZIP'] = gzip.decompress
 try:
     import snappy
     compressions['SNAPPY'] = snappy.compress

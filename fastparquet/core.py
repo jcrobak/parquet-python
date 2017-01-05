@@ -12,7 +12,7 @@ from .compression import decompress_data
 from .converted_types import convert, typemap
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
-from .util import val_to_num
+from .util import val_to_num, is_v2
 
 
 def read_thrift(file_obj, ttype):
@@ -96,12 +96,11 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
     """
     daph = header.data_page_header
     raw_bytes = _read_page(f, header, metadata)
-    try:
-        io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
-                                               dtype=np.uint8))
-    except AttributeError as e:
-        # Python2.7
+    if is_v2():
         io_obj = encoding.Numpy8(np.frombuffer(bytearray(raw_bytes),
+                                               dtype=np.uint8))
+    else:
+        io_obj = encoding.Numpy8(np.frombuffer(memoryview(raw_bytes),
                                                dtype=np.uint8))
 
     if skip_nulls and not helper.is_required(metadata.path_in_schema[-1]):
