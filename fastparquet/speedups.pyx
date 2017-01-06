@@ -133,23 +133,35 @@ def pack_byte_array(list items):
 def unpack_byte_array(bytes raw_bytes, Py_ssize_t n):
     """
     Unpack a variable length byte array column.
-    A list of bytes objects is returned.
+    A list of bytes objects is returned.  RuntimeError is raised
+    if *raw_bytes* contents don't exactly match *n*.
     """
     cdef:
-        Py_ssize_t i, itemlen
+        Py_ssize_t i, itemlen, remaining
         unsigned char *start
         unsigned char *data
         list out
 
     start = data = <unsigned char *> PyBytes_AS_STRING(raw_bytes)
+    remaining = PyBytes_GET_SIZE(raw_bytes)
     out = [None] * n
 
     for i in range(n):
+        remaining -= 4
+        # It is required to check this inside the loop to avoid
+        # out of bounds array accesses.
+        if remaining < 0:
+            break
         itemlen = (data[0] + (data[1] << 8) +
                    (data[2] << 16) + (data[3] << 24))
         data += 4
+
+        remaining -= itemlen
+        if remaining < 0:
+            break
         out[i] = PyBytes_FromStringAndSize(<char *> data, itemlen)
         data += itemlen
 
-    assert (data - start) <= len(raw_bytes)
+    if remaining != 0:
+        raise RuntimeError("invalid input size (corrupted?)")
     return out
