@@ -10,6 +10,7 @@ from thriftpy.protocol.compact import TCompactProtocolFactory
 from . import encoding
 from .compression import decompress_data
 from .converted_types import convert, typemap
+from .speedups import unpack_byte_array
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .util import val_to_num
@@ -153,10 +154,8 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
     """
     raw_bytes = _read_page(file_obj, page_header, column_metadata)
     if column_metadata.type == parquet_thrift.Type.BYTE_ARRAY:
-        # no faster way to read variable-length-strings?
-        fobj = io.BytesIO(raw_bytes)
-        values = [fobj.read(struct.unpack(b"<i", fobj.read(4))[0])
-                  for _ in range(page_header.dictionary_page_header.num_values)]
+        values = unpack_byte_array(raw_bytes,
+                                   page_header.dictionary_page_header.num_values)
     else:
         width = schema_helper.schema_element(
             column_metadata.path_in_schema[-1]).type_length

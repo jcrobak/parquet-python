@@ -21,6 +21,7 @@ from .compression import compress_data, decompress_data
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
                    ParquetException, thrift_copy, index_like)
+from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
 NaT = np.timedelta64(None).tobytes()  # require numpy version >= 1.7
@@ -136,7 +137,7 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = np.array([x.encode('utf8') for x in data], dtype="O")
+            out = array_encode_utf8(data)
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
@@ -219,7 +220,7 @@ def encode_plain(data, se):
     """PLAIN encoding; returns byte representation"""
     out = convert(data, se)
     if se.type == parquet_thrift.Type.BYTE_ARRAY:
-        return b''.join([struct.pack('<l', len(x)) + x for x in out])
+        return pack_byte_array(list(out))
     else:
         return out.tobytes()
 
