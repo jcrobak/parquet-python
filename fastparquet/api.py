@@ -15,7 +15,7 @@ import thriftpy
 
 from .core import read_thrift
 from .thrift_structures import parquet_thrift
-from . import core, schema, converted_types, encoding, writer, dataframe
+from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
                    ensure_bytes)
 
