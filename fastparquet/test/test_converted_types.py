@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 """test_converted_types.py - tests for decoding data to their logical data types."""
 from __future__ import absolute_import
 from __future__ import division
@@ -13,6 +13,7 @@ import pytest
 
 from fastparquet import parquet_thrift as pt
 from fastparquet.converted_types import convert
+from fastparquet.util import is_v2
 
 
 def test_int32():
@@ -84,7 +85,7 @@ def test_json():
     assert convert(pd.Series([b'{"foo": ["bar", "\\ud83d\\udc7e"]}']),
                           schema)[0] == {'foo': ['bar', '👾']}
 
-
+@pytest.mark.skipif(is_v2(),reason='BSON encoding not supported in Python 2.x')
 def test_bson():
     """Test bytes representing bson."""
     bson = pytest.importorskip('bson')

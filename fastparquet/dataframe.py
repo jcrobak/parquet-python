@@ -5,6 +5,7 @@ from pandas.core.generic import NDFrame
 from pandas.core.frame import DataFrame
 from pandas.core.index import RangeIndex, Index
 from pandas.core.categorical import Categorical, CategoricalDtype
+from .util import str_type
 
 
 def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
@@ -37,7 +38,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
     views = {}
 
     cols = cols if cols is not None else range(cols)
-    if isinstance(types, str):
+    if isinstance(types, str_type()):
         types = types.split(',')
     for t, col in zip(types, cols):
         if str(t) == 'category':
