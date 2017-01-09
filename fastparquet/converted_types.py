@@ -25,7 +25,7 @@ from decimal import Decimal
 
 from .thrift_structures import parquet_thrift
 from .speedups import array_decode_utf8
-
+from .util import is_v2
 
 logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
@@ -108,9 +108,16 @@ def convert(data, se):
         else:  # byte-string
             # NB: general but slow method
             # could optimize when data.dtype.itemsize <= 8
-            # NB: `from_bytes` may be py>=3.4 only
-            return np.array([int.from_bytes(d, byteorder='big', signed=True) *
-                             scale_factor for d in data])
+            if is_v2():
+                def from_bytes(d):
+                    return int(codecs.encode(d, 'hex'), 16) if len(d) else 0
+                return np.array([from_bytes(d) * scale_factor for d in data])
+            else:
+                # NB: `from_bytes` may be py>=3.4 only
+                return np.array([int.from_bytes(d, byteorder='big', signed=True) *
+                                 scale_factor for d in data])
+
+            return np.array([int(str(d).encode('hex'), 16) * scale_factor for d in data])
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
