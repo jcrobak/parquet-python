@@ -13,6 +13,7 @@ import os
 import struct
 import sys
 
+from .speedups import unpack_byte_array
 from .thrift_structures import parquet_thrift
 from .util import is_v2, byte_buffer
 
@@ -43,9 +44,7 @@ def read_plain(raw_bytes, type_, count, width=0):
     if type_ == parquet_thrift.Type.BOOLEAN:
         return read_plain_boolean(raw_bytes, count)
     # variable byte arrays (rare)
-    file_obj = io.BytesIO(raw_bytes)
-    return np.array([file_obj.read(struct.unpack('<i', file_obj.read(4))[0])
-                     for _ in range(count)], dtype="O")
+    return np.array(unpack_byte_array(raw_bytes, count), dtype='O')
 
 
 @numba.jit(nogil=True)

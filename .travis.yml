@@ -18,10 +18,11 @@ install:
   # Install dependencies
   - conda create -n test python=$TRAVIS_PYTHON_VERSION pytest
   - source activate test
-  - conda install numpy pandas numba thriftpy python-snappy
+  - conda install numpy pandas numba thriftpy python-snappy cython setuptools
   - pip install bson
 
 script:
+  - pip install -e .
   - py.test -x -vv --pyargs fastparquet
 
 notifications:
