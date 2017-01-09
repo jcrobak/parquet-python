@@ -21,7 +21,7 @@ from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
-                   ParquetException, thrift_copy, index_like, str_type)
+                   ParquetException, thrift_copy, index_like, str_type, is_v2)
 from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
@@ -138,7 +138,10 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = array_encode_utf8(data)
+            if is_v2():
+                out = np.array([x.encode('utf8') for x in data], dtype="O")
+            else:
+                out = array_encode_utf8(data)
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:

@@ -13,11 +13,12 @@ from fastparquet.speedups import (
     array_encode_utf8, array_decode_utf8,
     pack_byte_array, unpack_byte_array
     )
-
+from fastparquet.util import is_v2
 
 strings = ["abc", "a\x00c", "héhé", "プログラミング"]
 
 
+@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_array_encode_utf8():
     arr = np.array(strings, dtype='object')
     expected = [s.encode('utf-8') for s in strings]
@@ -49,6 +50,7 @@ def test_array_encode_utf8():
         array_encode_utf8(arr)
 
 
+@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_array_decode_utf8():
     bytestrings = [s.encode('utf-8') for s in strings]
 
@@ -75,6 +77,7 @@ def test_array_decode_utf8():
         array_decode_utf8(arr)
 
 
+@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_pack_byte_array():
     bytestrings = [b"foo", b"bar\x00" * 256 + b"z"]
 
@@ -97,6 +100,7 @@ def test_pack_byte_array():
         pack_byte_array(b"foo")
 
 
+@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_unpack_byte_array():
     bytestrings = [b"foo", b"bar\x00" * 256 + b"z"]
 
