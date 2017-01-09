@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 import numpy as np
 import os
@@ -10,7 +12,7 @@ import pytest
 import shutil
 import tempfile
 
-from fastparquet.util import tempdir
+from fastparquet.util import tempdir, default_mkdirs
 from fastparquet.test.test_read import s3
 from fastparquet.compression import compressions
 
@@ -521,12 +523,12 @@ def test_many_categories(tempdir, n):
 def test_merge(tempdir, dirs, row_groups):
     fn = str(tempdir)
 
-    os.makedirs(os.path.join(fn, dirs[0]), exist_ok=True)
+    default_mkdirs(os.path.join(fn, dirs[0]))
     df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
     fn0 = os.sep.join([fn, dirs[0], 'out0.parq'])
     write(fn0, df0, row_group_offsets=row_groups)
 
-    os.makedirs(os.path.join(fn, dirs[1]), exist_ok=True)
+    default_mkdirs(os.path.join(fn, dirs[1]))
     df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
     fn1 = os.sep.join([fn, dirs[1], 'out1.parq'])
     write(fn1, df1, row_group_offsets=row_groups)

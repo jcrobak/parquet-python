@@ -396,14 +396,12 @@ def filter_out_stats(rg, filters, helper):
             if column.meta_data.statistics is not None:
                 s = column.meta_data.statistics
                 if s.max is not None:
-                    b = s.max if isinstance(s.max, bytes) else bytes(
-                            s.max, 'ascii')
+                    b = ensure_bytes(s.max)
                     vmax = encoding.read_plain(b, column.meta_data.type, 1)
                     if se.converted_type:
                         vmax = converted_types.convert(vmax, se)
                 if s.min is not None:
-                    b = s.min if isinstance(s.min, bytes) else bytes(
-                            s.min, 'ascii')
+                    b = ensure_bytes(s.min)
                     vmin = encoding.read_plain(b, column.meta_data.type, 1)
                     if se.converted_type:
                         vmin = converted_types.convert(vmin, se)

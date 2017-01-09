@@ -58,8 +58,15 @@ def tempdir():
 
 
 def ensure_bytes(s):
+    if is_v2():
+        try:
+            b = bytes(s)
+        except UnicodeEncodeError as e:
+            u = u''.join((s)).encode('utf-8').strip()
+            b = bytes(u)
+        return b
     if hasattr(s, 'encode'):
-        return s.encode()
+        return s.encode('utf-8')
     else:
         return s
 
@@ -117,3 +124,9 @@ def is_v2():
     Return True if Python version is 2.x
     """
     return (sys.version_info[0] == 2)
+
+def byte_buffer(raw_bytes):
+    return bytearray(raw_bytes) if is_v2() else memoryview(raw_bytes)
+
+def str_type():
+    return basestring if is_v2() else str
