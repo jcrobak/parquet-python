@@ -1,5 +1,5 @@
 import ast
-import os
+import os, os.path
 import shutil
 import pandas as pd
 import pytest
@@ -23,8 +23,8 @@ def sep_from_open(opener):
 
 def default_mkdirs(f):
     if is_v2():
-        import subprocess
-        subprocess.call(['mkdir', '-p', f])
+        if not os.path.exists(f):
+            os.makedirs(f)
     else:
         os.makedirs(f, exist_ok=True)
 
