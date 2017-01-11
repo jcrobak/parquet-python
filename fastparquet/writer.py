@@ -705,8 +705,8 @@ def write(filename, data, row_group_offsets=50000000,
     sep = sep_from_open(open_with)
     if isinstance(row_group_offsets, int):
         l = len(data)
-        nparts = (l - 1) // row_group_offsets + 1
-        chunksize = (l - 1) // nparts + 1
+        nparts = max((l - 1) // row_group_offsets + 1, 1)
+        chunksize = max(min((l - 1) // nparts + 1, l), 1)
         row_group_offsets = list(range(0, l, chunksize))
     if write_index or write_index is None and index_like(data.index):
         data = data.reset_index()

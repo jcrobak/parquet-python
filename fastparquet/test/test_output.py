@@ -686,3 +686,14 @@ def test_bad_object_encoding(tempdir):
     with pytest.raises(ValueError) as e:
         write(str(tempdir), df, object_encoding='utf-8')
     assert "utf-8" in str(e)
+
+
+def test_empty_dataframe(tempdir):
+    df = pd.DataFrame({'a': [], 'b': []}, dtype=int)
+    fn = os.path.join(str(tempdir), 'test.parquet')
+    write(fn, df)
+    pf = ParquetFile(fn)
+    out = pf.to_pandas()
+    assert pf.count == 0
+    assert len(out) == 0
+    assert (out.columns == df.columns).all()
