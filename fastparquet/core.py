@@ -204,7 +204,18 @@ def read_col(column, schema_helper, infile, use_cat=False,
 
     rows = cmd.num_values
 
-    out = []
+    do_convert = True
+    if use_cat:
+        my_nan = -1
+        do_convert = False
+    else:
+        if assign.dtype.kind in ['f', 'i']:
+            my_nan = np.nan
+        elif assign.dtype.kind in ["M", 'm']:
+            my_nan = -9223372036854775808  # int64 version of NaT
+        else:
+            my_nan = None
+
     num = 0
     while True:
         if (selfmade and hasattr(cmd, 'statistics') and
@@ -220,45 +231,28 @@ def read_col(column, schema_helper, infile, use_cat=False,
                              'use dictionary encoding; column: %s',
                              cmd.path_in_schema)
 
-        out.append((defi, rep, val, d))
+        if defi is not None:
+            part = assign[num:num+len(defi)]
+            part[defi != 1] = my_nan
+            if d and not use_cat:
+                part[defi == 1] = dic[val]
+            elif do_convert:
+                part[defi == 1] = convert(val, se)
+            else:
+                part[defi == 1] = val
+        else:
+            piece = assign[num:num+len(val)]
+            if d and not use_cat:
+                piece[:] = dic[val]
+            elif do_convert:
+                piece[:] = convert(val, se)
+            else:
+                piece[:] = val
+
         num += len(defi) if defi is not None else len(val)
         if num >= rows:
             break
         ph = read_thrift(infile, parquet_thrift.PageHeader)
-
-    any_def = any(_[0] is not None for _ in out)
-    do_convert = True
-    if use_cat:
-        my_nan = -1
-        do_convert = False
-    else:
-        dtype = typemap(se)  # output dtype
-        if any_def and dtype.kind == 'i':
-            # integers cannot hold NULLs/NaNs
-            dtype = np.dtype('float64')
-            do_convert = False
-        if dtype.kind == 'f':
-            my_nan = np.nan
-        elif dtype.kind in ["M", 'm']:
-            my_nan = -9223372036854775808  # int64 version of NaT
-        else:
-            my_nan = None
-    start = 0
-    for defi, rep, val, d in out:
-        if d and not use_cat:
-            cval = dic[val]
-        elif do_convert:
-            cval = convert(val, se)
-        else:
-            cval = val
-        if defi is not None:
-            part = assign[start:start+len(defi)]
-            part[defi != 1] = my_nan
-            part[defi == 1] = cval
-            start += len(defi)
-        else:
-            assign[start:start+len(val)] = cval
-            start += len(val)
 
 
 def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
