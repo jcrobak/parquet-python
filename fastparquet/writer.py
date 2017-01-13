@@ -167,7 +167,7 @@ def infer_object_encoding(data):
     if all(isinstance(i, (list, dict)) for i in head):
         return 'json'
     else:
-        raise ValueError("Data type conversion unknown: %s" % dtype)
+        raise ValueError("Can't infer object conversion type: %s" % head)
 
 
 @numba.njit(nogil=True)

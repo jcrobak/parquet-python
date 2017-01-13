@@ -99,7 +99,7 @@ def convert(data, se):
         return data
     if ctype == parquet_thrift.ConvertedType.UTF8:
         if isinstance(data, list) or data.dtype != "O":
-            data = np.array(data, dtype="O")
+            data = np.asarray(data, dtype="O")
         return array_decode_utf8(data)
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
         scale_factor = 10**-se.scale
