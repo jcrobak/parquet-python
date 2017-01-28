@@ -126,7 +126,7 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
             num = (encoding.read_unsigned_var_int(io_obj) >> 1) * 8
             values = io_obj.read(num * bit_width // 8).view('int%i' % bit_width)
         elif bit_width:
-            values = encoding.Numpy32(np.zeros(daph.num_values,
+            values = encoding.Numpy32(np.empty(daph.num_values-num_nulls+7,
                                                dtype=np.int32))
             # length is simply "all data left in this page"
             encoding.read_rle_bit_packed_hybrid(

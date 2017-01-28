@@ -145,6 +145,7 @@ def read_rle_bit_packed_hybrid(io_obj, width, length=None, o=None):  # pragma: n
             read_rle(io_obj, header, width, o)
         else:
             read_bitpacked(io_obj, header, width, o)
+    io_obj.loc = start + length
     return o.so_far()
 
 
