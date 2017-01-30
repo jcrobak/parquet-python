@@ -118,3 +118,16 @@ def test_attributes(tempdir):
     assert fn in str(pf)
     for col in df:
         assert pf.dtypes[col] == df.dtypes[col]
+
+
+def test_zero_child_leaf(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df)
+
+    pf = ParquetFile(fn)
+    assert pf.columns == ['x']
+
+    pf.schema[1].num_children = 0
+    assert pf.columns == ['x']
