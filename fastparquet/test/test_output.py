@@ -697,3 +697,19 @@ def test_empty_dataframe(tempdir):
     assert pf.count == 0
     assert len(out) == 0
     assert (out.columns == df.columns).all()
+
+
+def test_hasnulls_ordering(tempdir):
+    fname = os.path.join(tempdir, 'temp.parq')
+    data = pd.DataFrame({'a': np.random.rand(100),
+                         'b': np.random.rand(100),
+                         'c': np.random.rand(100)})
+    writer.write(fname, data, has_nulls=['a', 'c'])
+
+    r = ParquetFile(fname)
+    assert r.schema[1].name == 'a'
+    assert r.schema[1].repetition_type == 1
+    assert r.schema[2].name == 'b'
+    assert r.schema[2].repetition_type == 0
+    assert r.schema[3].name == 'c'
+    assert r.schema[3].repetition_type == 1
