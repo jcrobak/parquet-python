@@ -591,12 +591,12 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
         else:
             se, type = find_type(data[column], fixed_text=fixed,
                                  object_encoding=oencoding)
+        col_has_nulls = has_nulls
         if has_nulls is None:
             se.repetition_type = type == parquet_thrift.Type.BYTE_ARRAY
-        else:
-            has_nulls = (has_nulls if has_nulls in [True, False]
-                         else column in has_nulls)
-        if has_nulls and data[column].dtype.kind != 'i':
+        elif has_nulls is not True and has_nulls is not False:
+            col_has_nulls = column in has_nulls
+        if col_has_nulls and data[column].dtype.kind != 'i':
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
