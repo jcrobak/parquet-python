@@ -97,7 +97,8 @@ class ParquetFile(object):
     @property
     def columns(self):
         """ Column names """
-        return [f.name for f in self.schema if f.num_children is None]
+        return [f.name for f in self.schema if f.num_children is None or
+                f.num_children == 0]
 
     @property
     def statistics(self):
@@ -322,7 +323,8 @@ class ParquetFile(object):
     def _dtypes(self):
         """ Implied types of the columns in the schema """
         dtype = {f.name: converted_types.typemap(f)
-                 for f in self.schema if f.num_children is None}
+                 for f in self.schema if f.num_children is None or
+                 f.num_children == 0}
         for col, dt in dtype.copy().items():
             if dt.kind == 'i':
                 # int columns that may have nulls become float columns
