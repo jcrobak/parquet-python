@@ -106,3 +106,13 @@ def index_like(index):
                 index._start == 0 and
                 index._stop == len(index) and
                 index._step == 1 and index.name is None)
+
+
+def check_column_names(columns, *args):
+    """Ensure that parameters listing column names have corresponding columns"""
+    for arg in args:
+        if isinstance(arg, (tuple, list)):
+            if set(arg) - set(columns):
+                raise ValueError("Column name not in list.\n"
+                                 "Requested %s\n"
+                                 "Allowed %s" % (arg, columns))

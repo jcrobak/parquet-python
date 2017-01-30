@@ -164,6 +164,13 @@ def test_bad_coltype(tempdir):
         assert "tuple" in str(e)
 
 
+def test_bad_col(tempdir):
+    df = pd.DataFrame({'x': [1, 2]})
+    fn = os.path.join(tempdir, 'temp.parq')
+    with pytest.raises(ValueError) as e:
+        write(fn, df, has_nulls=['y'])
+
+
 @pytest.mark.parametrize('scheme', ('simple', 'hive'))
 def test_roundtrip_complex(tempdir, scheme,):
     import datetime
