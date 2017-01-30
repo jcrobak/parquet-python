@@ -21,7 +21,8 @@ from .compression import compress_data, decompress_data
 from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
-                   ParquetException, thrift_copy, index_like)
+                   ParquetException, thrift_copy, index_like,
+                   check_column_names)
 from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
@@ -711,6 +712,8 @@ def write(filename, data, row_group_offsets=50000000,
         row_group_offsets = list(range(0, l, chunksize))
     if write_index or write_index is None and index_like(data.index):
         data = data.reset_index()
+    check_column_names(data.columns, partition_on, fixed_text, object_encoding,
+                       has_nulls)
     ignore = partition_on if file_scheme != 'simple' else []
     fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
                         fixed_text=fixed_text, object_encoding=object_encoding)

@@ -131,3 +131,14 @@ def test_zero_child_leaf(tempdir):
 
     pf.schema[1].num_children = 0
     assert pf.columns == ['x']
+
+
+def test_request_nonexistent_column(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df)
+
+    pf = ParquetFile(fn)
+    with pytest.raises(ValueError):
+        pf.to_pandas(columns=['y'])

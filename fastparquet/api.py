@@ -17,7 +17,7 @@ from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
-                   ensure_bytes)
+                   ensure_bytes, check_column_names)
 
 
 class ParquetFile(object):
@@ -235,6 +235,7 @@ class ParquetFile(object):
         -------
         Generator yielding one Pandas data-frame per row-group
         """
+        check_column_names(self.columns, columns, categories)
         columns = columns or self.columns
         rgs = self.filter_row_groups(filters)
         if all(column.file_path is None for rg in self.row_groups
@@ -281,6 +282,7 @@ class ParquetFile(object):
         -------
         Pandas data-frame
         """
+        check_column_names(self.columns, columns, categories)
         rgs = self.filter_row_groups(filters)
         size = sum(rg.num_rows for rg in rgs)
         columns = columns or self.columns
