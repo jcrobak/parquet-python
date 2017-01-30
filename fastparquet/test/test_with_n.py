@@ -57,6 +57,25 @@ def test_hybrid():
             assert (res == o.so_far()).all()
 
 
+def test_hybrid_extra_bytes():
+    results = np.empty(1000000, dtype=np.int32)
+    with open(os.path.join(here, 'hybrid')) as f:
+        for i, l in enumerate(f):
+            if i > count // 20:
+                break
+            (data, width, length, res) = eval(l)
+            if length is not None:
+                data = data + b'extra bytes'
+                length += len(b'extra bytes')
+            else:
+                continue
+            i = encoding.Numpy8(np.frombuffer(memoryview(data), dtype=np.uint8))
+            o = encoding.Numpy32(results)
+            encoding.read_rle_bit_packed_hybrid(i, width, length, o)
+            assert (res == o.so_far()[:len(res)]).all()
+            assert i.loc == len(data)
+
+
 def test_read_data():
     with open(os.path.join(here, 'read_data')) as f:
         for i, l in enumerate(f):
