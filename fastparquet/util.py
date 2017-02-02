@@ -136,8 +136,10 @@ def is_v2():
     """
     return (sys.version_info[0] == 2)
 
+
 def byte_buffer(raw_bytes):
     return bytearray(raw_bytes) if is_v2() else memoryview(raw_bytes)
+
 
 def str_type():
     return basestring if is_v2() else str

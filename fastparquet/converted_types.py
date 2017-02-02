@@ -24,8 +24,8 @@ import sys
 from decimal import Decimal
 
 from .thrift_structures import parquet_thrift
-from .speedups import array_decode_utf8
 from .util import is_v2
+from .speedups import array_decode_utf8
 
 logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
 
