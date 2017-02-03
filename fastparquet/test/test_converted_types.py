@@ -85,7 +85,7 @@ def test_json():
     assert convert(pd.Series([b'{"foo": ["bar", "\\ud83d\\udc7e"]}']),
                           schema)[0] == {'foo': ['bar', '👾']}
 
-@pytest.mark.skipif(PY2,reason='BSON encoding not supported in Python 2.x')
+
 def test_bson():
     """Test bytes representing bson."""
     bson = pytest.importorskip('bson')
