@@ -15,14 +15,12 @@ from fastparquet.speedups import (
     )
 from fastparquet.util import PY2, PY3
 
-strings = ["abc", "a\x00c", "héhé", "プログラミング"]
-strings_v2 = [u"abc", u"a\x00c", u"héhé", u"プログラミング"]
+strings = [u"abc", u"a\x00c", u"héhé", u"プログラミング"]
 
 
 def test_array_encode_utf8():
-    strs = strings_v2 if PY2 else strings
-    arr = np.array(strs, dtype='object')
-    expected = [s.encode('utf-8') for s in strs]
+    arr = np.array(strings, dtype='object')
+    expected = [s.encode('utf-8') for s in strings]
     got = array_encode_utf8(arr)
 
     assert got.dtype == np.dtype('object')
@@ -35,7 +33,7 @@ def test_array_encode_utf8():
     assert list(got) == expected
 
     # Wrong array type
-    arr = np.array(strs, dtype='U')
+    arr = np.array(strings, dtype='U')
     with pytest.raises((TypeError, ValueError)):
         array_encode_utf8(arr)
 
@@ -43,7 +41,7 @@ def test_array_encode_utf8():
     if PY3:
         # Non-encodable string (lone surrogate)
         invalid_string = "\uDE80"
-        arr = np.array(strs + [invalid_string], dtype='object')
+        arr = np.array(strings + [invalid_string], dtype='object')
         with pytest.raises(UnicodeEncodeError):
             array_encode_utf8(arr)
 
@@ -54,11 +52,10 @@ def test_array_encode_utf8():
 
 
 def test_array_decode_utf8():
-    strs = strings_v2 if PY2 else strings
-    bytestrings = [s.encode('utf-8') for s in strs]
+    bytestrings = [s.encode('utf-8') for s in strings]
 
     arr = np.array(bytestrings, dtype='object')
-    expected = list(strs)
+    expected = list(strings)
     got = array_decode_utf8(arr)
 
     assert got.dtype == np.dtype('object')
