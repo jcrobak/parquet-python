@@ -13,7 +13,7 @@ import pytest
 
 from fastparquet import parquet_thrift as pt
 from fastparquet.converted_types import convert
-from fastparquet.util import is_v2
+from fastparquet.util import PY2
 
 
 def test_int32():
@@ -85,7 +85,7 @@ def test_json():
     assert convert(pd.Series([b'{"foo": ["bar", "\\ud83d\\udc7e"]}']),
                           schema)[0] == {'foo': ['bar', '👾']}
 
-@pytest.mark.skipif(is_v2(),reason='BSON encoding not supported in Python 2.x')
+@pytest.mark.skipif(PY2,reason='BSON encoding not supported in Python 2.x')
 def test_bson():
     """Test bytes representing bson."""
     bson = pytest.importorskip('bson')

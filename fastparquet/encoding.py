@@ -15,7 +15,7 @@ import sys
 
 from .speedups import unpack_byte_array
 from .thrift_structures import parquet_thrift
-from .util import is_v2, byte_buffer
+from .util import byte_buffer
 
 
 def read_plain_boolean(raw_bytes, count):

@@ -24,7 +24,7 @@ import sys
 from decimal import Decimal
 
 from .thrift_structures import parquet_thrift
-from .util import is_v2
+from .util import PY2
 from .speedups import array_decode_utf8
 
 logger = logging.getLogger('parquet')  # pylint: disable=invalid-name
@@ -108,7 +108,7 @@ def convert(data, se):
         else:  # byte-string
             # NB: general but slow method
             # could optimize when data.dtype.itemsize <= 8
-            if is_v2():
+            if PY2:
                 def from_bytes(d):
                     return int(codecs.encode(d, 'hex'), 16) if len(d) else 0
                 return np.array([from_bytes(d) * scale_factor for d in data])

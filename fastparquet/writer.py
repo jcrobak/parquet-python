@@ -22,7 +22,7 @@ from .compression import compress_data, decompress_data
 from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
-                   ParquetException, thrift_copy, index_like, str_type, is_v2,
+                   ParquetException, thrift_copy, index_like, str_type, PY2,
                    check_column_names)
 from .speedups import array_encode_utf8, pack_byte_array
 
@@ -140,7 +140,7 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            if is_v2():
+            if PY2:
                 out = np.array([x.encode('utf8') for x in data], dtype="O")
             else:
                 out = array_encode_utf8(data)

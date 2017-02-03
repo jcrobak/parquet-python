@@ -8,6 +8,10 @@ import thriftpy
 import sys
 
 
+PY2 = sys.version_info[0] == 2
+PY3 = sys.version_info[0] == 3
+
+
 class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
      reading parquet file."""
@@ -22,7 +26,7 @@ def sep_from_open(opener):
 
 
 def default_mkdirs(f):
-    if is_v2():
+    if PY2:
         if not os.path.exists(f):
             os.makedirs(f)
     else:
@@ -58,7 +62,7 @@ def tempdir():
 
 
 def ensure_bytes(s):
-    if is_v2():
+    if PY2:
         try:
             b = bytes(s)
         except UnicodeEncodeError as e:
@@ -130,16 +134,9 @@ def check_column_names(columns, *args):
                                  "Allowed %s" % (arg, columns))
 
 
-def is_v2():
-    """
-    Return True if Python version is 2.x
-    """
-    return (sys.version_info[0] == 2)
-
-
 def byte_buffer(raw_bytes):
-    return bytearray(raw_bytes) if is_v2() else memoryview(raw_bytes)
+    return bytearray(raw_bytes) if PY2 else memoryview(raw_bytes)
 
 
 def str_type():
-    return basestring if is_v2() else str
+    return basestring if PY2 else str

@@ -13,7 +13,7 @@ from .converted_types import convert, typemap
 from .speedups import unpack_byte_array
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
-from .util import val_to_num, is_v2, byte_buffer
+from .util import val_to_num, byte_buffer
 
 
 def read_thrift(file_obj, ttype):

@@ -1,7 +1,7 @@
 
 import gzip
 from .thrift_structures import parquet_thrift
-from .util import is_v2
+from .util import PY2
 
 # TODO: use stream/direct-to-buffer conversions instead of memcopy
 
@@ -13,7 +13,7 @@ compressions = {
 decompressions = {
     'UNCOMPRESSED': lambda x: x
 }
-if is_v2():
+if PY2:
     def gzip_compress(data, compresslevel=9):
         from io import BytesIO
         bio = BytesIO()
