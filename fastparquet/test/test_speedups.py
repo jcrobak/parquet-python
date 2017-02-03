@@ -13,15 +13,16 @@ from fastparquet.speedups import (
     array_encode_utf8, array_decode_utf8,
     pack_byte_array, unpack_byte_array
     )
-from fastparquet.util import is_v2
+from fastparquet.util import PY2, PY3
 
 strings = ["abc", "a\x00c", "héhé", "プログラミング"]
+strings_v2 = [u"abc", u"a\x00c", u"héhé", u"プログラミング"]
 
 
-@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_array_encode_utf8():
-    arr = np.array(strings, dtype='object')
-    expected = [s.encode('utf-8') for s in strings]
+    strs = strings_v2 if PY2 else strings
+    arr = np.array(strs, dtype='object')
+    expected = [s.encode('utf-8') for s in strs]
     got = array_encode_utf8(arr)
 
     assert got.dtype == np.dtype('object')
@@ -33,29 +34,31 @@ def test_array_encode_utf8():
     assert got.dtype == np.dtype('object')
     assert list(got) == expected
 
-    # Non-encodable string (lone surrogate)
-    invalid_string = "\uDE80"
-    arr = np.array(strings + [invalid_string], dtype='object')
-    with pytest.raises(UnicodeEncodeError):
-        array_encode_utf8(arr)
-
     # Wrong array type
-    arr = np.array(strings, dtype='U')
+    arr = np.array(strs, dtype='U')
     with pytest.raises((TypeError, ValueError)):
         array_encode_utf8(arr)
 
-    # Wrong object type
-    arr = np.array([b"foo"], dtype='object')
-    with pytest.raises(TypeError):
-        array_encode_utf8(arr)
+    # Disabled for v2
+    if PY3:
+        # Non-encodable string (lone surrogate)
+        invalid_string = "\uDE80"
+        arr = np.array(strs + [invalid_string], dtype='object')
+        with pytest.raises(UnicodeEncodeError):
+            array_encode_utf8(arr)
+
+        # Wrong object type
+        arr = np.array([b"foo"], dtype='object')
+        with pytest.raises(TypeError):
+            array_encode_utf8(arr)
 
 
-@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_array_decode_utf8():
-    bytestrings = [s.encode('utf-8') for s in strings]
+    strs = strings_v2 if PY2 else strings
+    bytestrings = [s.encode('utf-8') for s in strs]
 
     arr = np.array(bytestrings, dtype='object')
-    expected = list(strings)
+    expected = list(strs)
     got = array_decode_utf8(arr)
 
     assert got.dtype == np.dtype('object')
@@ -71,13 +74,14 @@ def test_array_decode_utf8():
     with pytest.raises((TypeError, ValueError)):
         array_decode_utf8(arr)
 
-    # Wrong object type
-    arr = np.array(["foo"], dtype='object')
-    with pytest.raises(TypeError):
-        array_decode_utf8(arr)
+    # Disabled for v2
+    if PY3:
+        # Wrong object type
+        arr = np.array(["foo"], dtype='object')
+        with pytest.raises(TypeError):
+            array_decode_utf8(arr)
 
 
-@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_pack_byte_array():
     bytestrings = [b"foo", b"bar\x00" * 256 + b"z"]
 
@@ -93,14 +97,15 @@ def test_pack_byte_array():
     with pytest.raises(TypeError):
         pack_byte_array(tuple(bytestrings))
 
-    with pytest.raises(TypeError):
-        pack_byte_array(bytestrings + ["foo"])
+    # disable for v2
+    if PY3:
+        with pytest.raises(TypeError):
+            pack_byte_array(bytestrings + ["foo"])
 
     with pytest.raises(TypeError):
         pack_byte_array(b"foo")
 
 
-@pytest.mark.skipif(is_v2(), reason='Speedups not supported in Python2')
 def test_unpack_byte_array():
     bytestrings = [b"foo", b"bar\x00" * 256 + b"z"]
 
