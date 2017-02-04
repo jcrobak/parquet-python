@@ -116,8 +116,6 @@ def convert(data, se):
                 # NB: `from_bytes` may be py>=3.4 only
                 return np.array([int.from_bytes(d, byteorder='big', signed=True) *
                                  scale_factor for d in data])
-
-            return np.array([int(str(d).encode('hex'), 16) * scale_factor for d in data])
     elif ctype == parquet_thrift.ConvertedType.DATE:
         return (data * DAYS_TO_MILLIS).view('datetime64[ns]')
     elif ctype == parquet_thrift.ConvertedType.TIME_MILLIS:
