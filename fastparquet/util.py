@@ -6,11 +6,12 @@ import pytest
 import tempfile
 import thriftpy
 import sys
+import six
 
 
-PY2 = sys.version_info[0] == 2
-PY3 = sys.version_info[0] == 3
-
+PY2 = six.PY2
+PY3 = six.PY3
+STR_TYPE = six.string_types[0] # 'str' for Python3, 'basestring' for Python2
 
 class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
@@ -25,11 +26,12 @@ def sep_from_open(opener):
         return '/'
 
 
-def default_mkdirs(f):
-    if PY2:
+if PY2:
+    def default_mkdirs(f):
         if not os.path.exists(f):
             os.makedirs(f)
-    else:
+else:
+    def default_mkdirs(f):
         os.makedirs(f, exist_ok=True)
 
 
@@ -60,19 +62,12 @@ def tempdir():
     if os.path.exists(d):
         shutil.rmtree(d, ignore_errors=True)
 
-
-def ensure_bytes(s):
-    if PY2:
-        try:
-            b = bytes(s)
-        except UnicodeEncodeError as e:
-            u = u''.join((s)).encode('utf-8').strip()
-            b = bytes(u)
-        return b
-    if hasattr(s, 'encode'):
-        return s.encode('utf-8')
-    else:
-        return s
+if PY2:
+    def ensure_bytes(s):
+        return s.encode('utf-8') if isinstance(s, unicode) else s
+else:
+    def ensure_bytes(s):
+        return s.encode('utf-8') if isinstance(s, str) else s
 
 
 def thrift_print(structure, offset=0):
@@ -135,8 +130,4 @@ def check_column_names(columns, *args):
 
 
 def byte_buffer(raw_bytes):
-    return bytearray(raw_bytes) if PY2 else memoryview(raw_bytes)
-
-
-def str_type():
-    return basestring if PY2 else str
+    return buffer(raw_bytes) if PY2 else memoryview(raw_bytes)

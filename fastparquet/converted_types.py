@@ -22,6 +22,7 @@ import pandas as pd
 import struct
 import sys
 from decimal import Decimal
+import binascii
 
 from .thrift_structures import parquet_thrift
 from .util import PY2
@@ -110,7 +111,7 @@ def convert(data, se):
             # could optimize when data.dtype.itemsize <= 8
             if PY2:
                 def from_bytes(d):
-                    return int(codecs.encode(d, 'hex'), 16) if len(d) else 0
+                    return int(binascii.b2a_hex(d), 16) if len(d) else 0
                 return np.array([from_bytes(d) * scale_factor for d in data])
             else:
                 # NB: `from_bytes` may be py>=3.4 only

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import numpy as np
 import os
@@ -420,7 +419,7 @@ def test_naive_index(tempdir):
 
 
 def test_text_convert(tempdir):
-    df = pd.DataFrame({'a': ['π'] * 100,
+    df = pd.DataFrame({'a': [u'π'] * 100,
                        'b': [b'a'] * 100})
     fn = os.path.join(tempdir, 'tmp.parq')
 
@@ -430,7 +429,7 @@ def test_text_convert(tempdir):
     assert pf.schema[1].type_length == 2
     assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     assert pf.schema[2].type_length == 1
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -438,7 +437,7 @@ def test_text_convert(tempdir):
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -446,7 +445,7 @@ def test_text_convert(tempdir):
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 

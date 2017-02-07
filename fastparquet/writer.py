@@ -22,7 +22,7 @@ from .compression import compress_data, decompress_data
 from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
-                   ParquetException, thrift_copy, index_like, str_type, PY2,
+                   ParquetException, thrift_copy, index_like, PY2, STR_TYPE,
                    check_column_names)
 from .speedups import array_encode_utf8, pack_byte_array
 
@@ -166,8 +166,7 @@ def convert(data, se):
 
 def infer_object_encoding(data):
     head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
-    stype = str_type()
-    if all(isinstance(i, stype) for i in head):
+    if all(isinstance(i, STR_TYPE) for i in head):
         return "utf8"
     if all(isinstance(i, bytes) for i in head):
         return 'bytes'
@@ -534,11 +533,10 @@ def make_row_group(f, data, schema, compression=None):
     rows = len(data)
     if rows == 0:
         return
-    stype = str_type()
-    if any(not isinstance(c, (bytes, stype)) for c in data):
+    if any(not isinstance(c, (bytes, STR_TYPE)) for c in data):
         raise ValueError('Column names must be str or bytes:',
                          {c: type(c) for c in data.columns
-                          if not isinstance(c, (bytes, stype))})
+                          if not isinstance(c, (bytes, STR_TYPE))})
     rg = parquet_thrift.RowGroup(num_rows=rows, total_byte_size=0, columns=[])
 
     for column in schema:
@@ -584,11 +582,10 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
                                       row_groups=[])
 
     object_encoding = object_encoding or {}
-    stype = str_type()
     for column in data.columns:
         if column in ignore_columns:
             continue
-        oencoding = (object_encoding if isinstance(object_encoding, stype) else
+        oencoding = (object_encoding if isinstance(object_encoding, STR_TYPE) else
                      object_encoding.get(column, None))
         fixed = None if fixed_text is None else fixed_text.get(column, None)
         if str(data[column].dtype) == 'category':
