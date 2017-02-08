@@ -1,4 +1,5 @@
 
+import datetime
 import numpy as np
 import os
 import pandas as pd
@@ -90,7 +91,8 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
                          'bhello': np.random.choice([b'hello', b'you',
-                            b'people'], size=1000).astype("O")})
+                            b'people'], size=1000).astype("O"),
+                         't': [datetime.datetime.now()]*1000})
 
     data['hello'] = data.bhello.str.decode('utf8')
     data.loc[100, 'f'] = np.nan
@@ -99,12 +101,18 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp)
+          compression=comp, times='mr')
 
     df = sql.read.parquet(fname)
     ddf = df.toPandas()
     for col in data:
-        assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
+        if data[col].dtype.kind == "M":
+            # pyspark auto-converts timezones
+            offset = round((datetime.datetime.utcnow() -
+                            datetime.datetime.now()).seconds / 3600)
+            ddf[col] + datetime.timedelta(hours=offset) == data[col]
+        else:
+            assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
 def test_roundtrip_s3(s3):
