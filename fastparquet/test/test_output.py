@@ -94,6 +94,7 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
                             b'people'], size=1000).astype("O"),
                          't': [datetime.datetime.now()]*1000})
 
+    data['t'] += pd.to_timedelta('1ns')
     data['hello'] = data.bhello.str.decode('utf8')
     data.loc[100, 'f'] = np.nan
     data['bcat'] = data.bhello.astype('category')

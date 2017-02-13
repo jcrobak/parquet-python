@@ -111,9 +111,11 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int'):
             type, converted_type, width = (
                 parquet_thrift.Type.INT64,
                 parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
-        else:
+        elif times == 'mr':
             type, converted_type, width = (parquet_thrift.Type.INT96, None,
                                            None)
+        else:
+            raise ValueError("Parameter times must be [int|mr], not %s" % times)
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
     elif dtype.kind == "m":
