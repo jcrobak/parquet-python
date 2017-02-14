@@ -48,7 +48,7 @@ revmap = {parquet_thrift.Type.INT32: np.int32,
           parquet_thrift.Type.FLOAT: np.float32}
 
 
-def find_type(data, fixed_text=None, object_encoding=None, times='int'):
+def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
     """ Get appropriate typecodes for column dtype
 
     Data conversion do not happen here, see convert().
@@ -68,7 +68,7 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int'):
     object_encoding: None or bytes|utf8\json|bson
         How to encode object type into bytes. If None, bytes is assumed;
         if 'infer'
-    times: 'int'|'mr'
+    times: 'int64'|'int96'
         Normal integers or 12-byte encoding for timestamps.
 
     Returns
@@ -107,15 +107,16 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int'):
             width = fixed_text
             type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     elif dtype.kind == "M":
-        if times == 'int':
+        if times == 'int64':
             type, converted_type, width = (
                 parquet_thrift.Type.INT64,
                 parquet_thrift.ConvertedType.TIMESTAMP_MICROS, None)
-        elif times == 'mr':
+        elif times == 'int96':
             type, converted_type, width = (parquet_thrift.Type.INT96, None,
                                            None)
         else:
-            raise ValueError("Parameter times must be [int|mr], not %s" % times)
+            raise ValueError(
+                    "Parameter times must be [int64|int96], not %s" % times)
         if hasattr(dtype, 'tz') and str(dtype.tz) != 'UTC':
             warnings.warn('Coercing datetimes to UTC')
     elif dtype.kind == "m":
@@ -583,7 +584,7 @@ def make_part_file(f, data, schema, compression=None):
 
 
 def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
-                  object_encoding=None, times='int'):
+                  object_encoding=None, times='int64'):
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
@@ -658,7 +659,7 @@ def write(filename, data, row_group_offsets=50000000,
           compression=None, file_scheme='simple', open_with=default_open,
           mkdirs=default_mkdirs, has_nulls=None, write_index=None,
           partition_on=[], fixed_text=None, append=False,
-          object_encoding='infer', times='int'):
+          object_encoding='infer', times='int64'):
     """ Write Pandas DataFrame to filename as Parquet Format
 
     Parameters
@@ -716,11 +717,11 @@ def write(filename, data, row_group_offsets=50000000,
         bytes is assumed if not specified (i.e., no conversion). The special
         value 'infer' will cause the type to be guessed from the first ten
         values.
-    times: 'int' (default), or 'mr':
-        In "int" mode, datetimes are written as 8-byte integers, us resolution;
-        in "mr" mode, they are written as 12-byte blocks, with the first 8 bytes
-        as ns within the day, the next 4 bytes the julian day. 'mr' mode is
-        included only for compatibility.
+    times: 'int64' (default), or 'int96':
+        In "int64" mode, datetimes are written as 8-byte integers, us
+        resolution; in "int96" mode, they are written as 12-byte blocks, with
+        the first 8 bytes as ns within the day, the next 4 bytes the julian day.
+        'int96' mode is included only for compatibility.
 
     Examples
     --------

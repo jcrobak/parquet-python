@@ -306,9 +306,9 @@ def test_skip_length():
         assert len(block) == MockIO.loc
 
 
-def test_mr_times():
+def test_timestamp96():
     pf = fastparquet.ParquetFile(os.path.join(TEST_DATA, 'mr_times.parq'))
-    out = pf.to_pandas(mr_times=['date_added'])
+    out = pf.to_pandas(timestamp96=['date_added'])
     expected = pd.to_datetime(
             ["2016-08-01 23:08:01", "2016-08-02 23:08:02",
              "2016-08-03 23:08:03", "2016-08-04 23:08:04",

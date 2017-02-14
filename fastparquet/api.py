@@ -123,34 +123,37 @@ class ParquetFile(object):
             return self.fn
 
     def read_row_group_file(self, rg, columns, categories, index=None,
-                            assign=None, mr_times=[]):
+                            assign=None, timestamp96=[]):
         """ Open file for reading, and process it as a row-group """
         fn = self.row_group_filename(rg)
         ret = False
         if assign is None:
-            df, assign = self.pre_allocate(rg.num_rows, columns,
-                                           categories, index, mr_times=mr_times)
+            df, assign = self.pre_allocate(
+                    rg.num_rows, columns, categories, index,
+                    timestamp96=timestamp96)
             ret = True
         core.read_row_group_file(
                 fn, rg, columns, categories, self.helper, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
-                assign=assign, mr_times=mr_times)
+                assign=assign, timestamp96=timestamp96)
         if ret:
             return df
 
     def read_row_group(self, rg, columns, categories, infile=None,
-                       index=None, assign=None, mr_times=[]):
+                       index=None, assign=None, timestamp96=[]):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(rg.num_rows, columns,
-                                           categories, index, mr_times=mr_times)
+                                           categories, index,
+                                           timestamp96=timestamp96)
             ret = True
         core.read_row_group(
                 infile, rg, columns, categories, self.helper, self.cats,
-                self.selfmade, index=index, assign=assign, mr_times=mr_times)
+                self.selfmade, index=index, assign=assign,
+                timestamp96=timestamp96)
         if ret:
             return df
 
@@ -255,7 +258,7 @@ class ParquetFile(object):
                 yield df
 
     def to_pandas(self, columns=None, categories=None, filters=[],
-                  index=None, mr_times=[]):
+                  index=None, timestamp96=[]):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -281,12 +284,12 @@ class ParquetFile(object):
         -------
         Pandas data-frame
         """
-        check_column_names(self.columns, columns, categories, mr_times)
+        check_column_names(self.columns, columns, categories, timestamp96)
         rgs = self.filter_row_groups(filters)
         size = sum(rg.num_rows for rg in rgs)
         columns = columns or self.columns
         df, views = self.pre_allocate(size, columns, categories, index,
-                                      mr_times=mr_times)
+                                      timestamp96=timestamp96)
         start = 0
         if self.file_scheme == 'simple':
             with self.open(self.fn) as f:
@@ -296,7 +299,7 @@ class ParquetFile(object):
                              for (name, v) in views.items()}
                     self.read_row_group(rg, columns, categories, infile=f,
                                         index=index, assign=parts,
-                                        mr_times=mr_times)
+                                        timestamp96=timestamp96)
                     start += rg.num_rows
         else:
             for rg in rgs:
@@ -304,13 +307,13 @@ class ParquetFile(object):
                                 else v[start:start + rg.num_rows])
                          for (name, v) in views.items()}
                 self.read_row_group_file(rg, columns, categories, index,
-                                         assign=parts, mr_times=mr_times)
+                                         assign=parts, timestamp96=timestamp96)
                 start += rg.num_rows
         return df
 
-    def pre_allocate(self, size, columns, categories, index, mr_times=[]):
+    def pre_allocate(self, size, columns, categories, index, timestamp96=[]):
         return _pre_allocate(size, columns, categories, index, self.cats,
-                             self.dtypes, mr_times=mr_times)
+                             self.dtypes, timestamp96=timestamp96)
 
     @property
     def count(self):
@@ -355,7 +358,7 @@ class ParquetFile(object):
     __repr__ = __str__
 
 
-def _pre_allocate(size, columns, categories, index, cs, dt, mr_times=[]):
+def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
     cols = [c for c in columns if index != c]
     categories = categories or {}
     cats = cs.copy()
@@ -365,7 +368,7 @@ def _pre_allocate(size, columns, categories, index, cs, dt, mr_times=[]):
     def get_type(name):
         if name in categories:
             return 'category'
-        if name in mr_times:
+        if name in timestamp96:
             return 'M8[ns]'
         return dt.get(name, None)
 

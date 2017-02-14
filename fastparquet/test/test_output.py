@@ -102,7 +102,7 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp, times='mr')
+          compression=comp, times='int96')
 
     df = sql.read.parquet(fname)
     ddf = df.toPandas()
