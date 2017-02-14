@@ -23,3 +23,10 @@ def test_errors():
 
     assert 'not-an-algorithm' in str(e)
     assert 'gzip' in str(e).lower()
+
+
+def test_not_installed():
+    compressions.pop('BROTLI', None)
+    with pytest.raises(RuntimeError) as e:
+        compress_data(b'123', algorithm=4)
+    assert 'brotli' in str(e.value).lower()
