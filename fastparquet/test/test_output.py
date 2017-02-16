@@ -143,6 +143,7 @@ def test_roundtrip_s3(s3):
 def test_roundtrip(tempdir, scheme, row_groups, comp):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
+                         'u64': np.arange(1000, dtype=np.uint64),
                          'f': np.arange(1000, dtype=np.float64),
                          'bhello': np.random.choice([b'hello', b'you',
                             b'people'], size=1000).astype("O")})
