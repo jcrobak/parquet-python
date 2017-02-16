@@ -151,10 +151,7 @@ def convert(data, se):
         out = data.values
     elif dtype == "O":
         if converted_type == parquet_thrift.ConvertedType.UTF8:
-            if PY2:
-                out = np.array([x.encode('utf8') for x in data], dtype="O")
-            else:
-                out = array_encode_utf8(data)
+            out = array_encode_utf8(data)
         elif converted_type is None:
             out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
@@ -184,8 +181,12 @@ def convert(data, se):
 
 def infer_object_encoding(data):
     head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
-    if all(isinstance(i, STR_TYPE) for i in head):
+    if all(isinstance(i, STR_TYPE) for i in head) and not PY2:
         return "utf8"
+    if PY2 and all(isinstance(i, unicode) for i in head):
+        return "utf8"
+    if all(isinstance(i, STR_TYPE) for i in head) and PY2:
+        return "bytes"
     if all(isinstance(i, bytes) for i in head):
         return 'bytes'
     if all(isinstance(i, (list, dict)) for i in head):
