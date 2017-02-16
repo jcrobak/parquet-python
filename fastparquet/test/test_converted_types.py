@@ -86,6 +86,7 @@ def test_json():
                           schema)[0] == {'foo': ['bar', u'👾']}
 
 
+@pytest.mark.skipif(PY2,reason='BSON unicode may not be supported in Python 2')
 def test_bson():
     """Test bytes representing bson."""
     bson = pytest.importorskip('bson')
