@@ -3,7 +3,6 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from __future__ import unicode_literals
 
 import datetime
 from decimal import Decimal
@@ -72,7 +71,7 @@ def test_utf8():
         converted_type=pt.ConvertedType.UTF8
     )
     data = b'\xc3\x96rd\xc3\xb6g'
-    assert convert(pd.Series([data]), schema)[0] == "Ördög"
+    assert convert(pd.Series([data]), schema)[0] == u"Ördög"
 
 
 def test_json():
@@ -83,7 +82,7 @@ def test_json():
         converted_type=pt.ConvertedType.JSON
     )
     assert convert(pd.Series([b'{"foo": ["bar", "\\ud83d\\udc7e"]}']),
-                          schema)[0] == {'foo': ['bar', '👾']}
+                          schema)[0] == {'foo': ['bar', u'👾']}
 
 
 def test_bson():
@@ -97,7 +96,7 @@ def test_bson():
     assert convert(pd.Series(
             [b'&\x00\x00\x00\x04foo\x00\x1c\x00\x00\x00\x020'
              b'\x00\x04\x00\x00\x00bar\x00\x021\x00\x05\x00\x00\x00\xf0\x9f\x91\xbe\x00\x00\x00']),
-            schema)[0] == {'foo': ['bar', '👾']}
+            schema)[0] == {'foo': ['bar', u'👾']}
 
 
 def test_uint16():
