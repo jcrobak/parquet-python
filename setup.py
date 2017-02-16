@@ -20,7 +20,7 @@ ext_modules = cythonize(cython_modules)
 
 setup(
     name='fastparquet',
-    version='0.0.4post1',
+    version='0.0.5',
     description='Python support for Parquet file format',
     ext_modules=ext_modules,
     author='Martin Durant',
