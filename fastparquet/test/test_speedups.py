@@ -40,15 +40,16 @@ def test_array_encode_utf8():
     # Disabled for v2
     if PY3:
         # Non-encodable string (lone surrogate)
-        invalid_string = "\uDE80"
+        # on py2 this works anyway
+        invalid_string = u"\uDE80"
         arr = np.array(strings + [invalid_string], dtype='object')
         with pytest.raises(UnicodeEncodeError):
             array_encode_utf8(arr)
 
-        # Wrong object type
-        arr = np.array([b"foo"], dtype='object')
-        with pytest.raises(TypeError):
-            array_encode_utf8(arr)
+    # Wrong object type
+    arr = np.array([b"foo"], dtype='object')
+    with pytest.raises(TypeError):
+        array_encode_utf8(arr)
 
 
 def test_array_decode_utf8():
@@ -71,12 +72,10 @@ def test_array_decode_utf8():
     with pytest.raises((TypeError, ValueError)):
         array_decode_utf8(arr)
 
-    # Disabled for v2
-    if PY3:
-        # Wrong object type
-        arr = np.array(["foo"], dtype='object')
-        with pytest.raises(TypeError):
-            array_decode_utf8(arr)
+    # Wrong object type
+    arr = np.array([u"foo"], dtype='object')
+    with pytest.raises(TypeError):
+        array_decode_utf8(arr)
 
 
 def test_pack_byte_array():
@@ -94,10 +93,8 @@ def test_pack_byte_array():
     with pytest.raises(TypeError):
         pack_byte_array(tuple(bytestrings))
 
-    # disable for v2
-    if PY3:
-        with pytest.raises(TypeError):
-            pack_byte_array(bytestrings + ["foo"])
+    with pytest.raises(TypeError):
+        pack_byte_array(bytestrings + [u"foo"])
 
     with pytest.raises(TypeError):
         pack_byte_array(b"foo")
