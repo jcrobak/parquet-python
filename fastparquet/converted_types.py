@@ -87,15 +87,20 @@ def typemap(se):
     return np.dtype("O")
 
 
-def convert(data, se):
+def convert(data, se, timestamp96=False):
     """Convert known types from primitive to rich.
 
     Parameters
     ----------
     data: pandas series of primitive type
     se: a schema element.
+    timestamp96: convert int96 as if it were written by mr-parquet
     """
     ctype = se.converted_type
+    if se.type == parquet_thrift.Type.INT96 and timestamp96:
+        data2 = data.view([('ns', 'i8'), ('day', 'i4')])
+        return ((data2['day'] - 2440588) * 86400000000000 +
+                data2['ns']).view('M8[ns]')
     if ctype is None:
         return data
     if ctype == parquet_thrift.ConvertedType.UTF8:

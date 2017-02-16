@@ -166,7 +166,8 @@ def read_dictionary_page(file_obj, schema_helper, page_header, column_metadata):
 
 
 def read_col(column, schema_helper, infile, use_cat=False,
-             grab_dict=False, selfmade=False, assign=None, catdef=None):
+             grab_dict=False, selfmade=False, assign=None, catdef=None,
+             timestamp96=False):
     """Using the given metadata, read one column in one row-group.
 
     Parameters
@@ -183,6 +184,9 @@ def read_col(column, schema_helper, infile, use_cat=False,
     grab_dict: bool (False)
         Short-cut mode to return the dictionary values only - skips the actual
         data.
+    timestamp96: bool
+        If True, and if this is an int96 field, interpret as a timestamp as
+        used in MapReduce-based tools.
     """
     cmd = column.meta_data
     se = schema_helper.schema_element(cmd.path_in_schema[-1])
@@ -196,7 +200,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
     if ph.type == parquet_thrift.PageType.DICTIONARY_PAGE:
         dic = np.array(read_dictionary_page(infile, schema_helper, ph, cmd))
         ph = read_thrift(infile, parquet_thrift.PageHeader)
-        dic = convert(dic, se)
+        dic = convert(dic, se, timestamp96=timestamp96)
     if grab_dict:
         return dic
     if use_cat:
@@ -237,7 +241,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
             if d and not use_cat:
                 part[defi == 1] = dic[val]
             elif do_convert:
-                part[defi == 1] = convert(val, se)
+                part[defi == 1] = convert(val, se, timestamp96=timestamp96)
             else:
                 part[defi == 1] = val
         else:
@@ -245,7 +249,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
             if d and not use_cat:
                 piece[:] = dic[val]
             elif do_convert:
-                piece[:] = convert(val, se)
+                piece[:] = convert(val, se, timestamp96=timestamp96)
             else:
                 piece[:] = val
 
@@ -256,14 +260,16 @@ def read_col(column, schema_helper, infile, use_cat=False,
 
 
 def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
-                        open=open, selfmade=False, index=None, assign=None):
+                        open=open, selfmade=False, index=None, assign=None,
+                        timestamp96=[]):
     with open(fn, mode='rb') as f:
         return read_row_group(f, rg, columns, categories, schema_helper, cats,
-                              selfmade=selfmade, index=index, assign=assign)
+                              selfmade=selfmade, index=index, assign=assign,
+                              timestamp96=timestamp96)
 
 
 def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
-                          selfmade=False, assign=None):
+                          selfmade=False, assign=None, timestamp96=[]):
     """
     Read a row group and return as a dict of arrays
 
@@ -279,20 +285,22 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
             continue
 
         use = name in categories if categories is not None else False
+        mr = name in timestamp96
         read_col(column, schema_helper, file, use_cat=use,
                  selfmade=selfmade, assign=out[name],
-                 catdef=out[name+'-catdef'] if use else None)
+                 catdef=out[name+'-catdef'] if use else None,
+                 timestamp96=mr)
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
-                   selfmade=False, index=None, assign=None):
+                   selfmade=False, index=None, assign=None, timestamp96=[]):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
     if assign is None:
         raise RuntimeError('Going with pre-allocation!')
     read_row_group_arrays(file, rg, columns, categories, schema_helper,
-                          cats, selfmade, assign=assign)
+                          cats, selfmade, assign=assign, timestamp96=timestamp96)
 
     for cat in cats:
         partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
