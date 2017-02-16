@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import datetime
 from decimal import Decimal
@@ -95,7 +96,8 @@ def test_bson():
     )
     assert convert(pd.Series(
             [b'&\x00\x00\x00\x04foo\x00\x1c\x00\x00\x00\x020'
-             b'\x00\x04\x00\x00\x00bar\x00\x021\x00\x05\x00\x00\x00\xf0\x9f\x91\xbe\x00\x00\x00']),
+             b'\x00\x04\x00\x00\x00bar\x00\x021\x00\x05\x00'
+             b'\x00\x00\xf0\x9f\x91\xbe\x00\x00\x00']),
             schema)[0] == {'foo': ['bar', u'👾']}
 
 
