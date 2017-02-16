@@ -1,15 +1,43 @@
 
 import gzip
 from .thrift_structures import parquet_thrift
+from .util import PY2
+
 # TODO: use stream/direct-to-buffer conversions instead of memcopy
 
 # TODO: enable ability to pass kwargs to compressor
 
-compressions = {'GZIP': gzip.compress,
-                'UNCOMPRESSED': lambda x: x}
+compressions = {
+    'UNCOMPRESSED': lambda x: x
+}
+decompressions = {
+    'UNCOMPRESSED': lambda x: x
+}
 
-decompressions = {'GZIP': gzip.decompress,
-                  'UNCOMPRESSED': lambda x: x}
+# Gzip is present regardless
+COMPRESSION_LEVEL = 9
+if PY2:
+    def gzip_compress_v2(data, compresslevel=COMPRESSION_LEVEL):
+        from io import BytesIO
+        bio = BytesIO()
+        f = gzip.GzipFile(mode='wb',
+                          compresslevel=compresslevel,
+                          fileobj=bio)
+        f.write(data)
+        f.close()
+        return bio.getvalue()
+    def gzip_decompress_v2(data):
+        import zlib
+        return zlib.decompress(data,
+                               16+15)
+    compressions['GZIP'] = gzip_compress_v2
+    decompressions['GZIP'] = gzip_decompress_v2
+else:
+    def gzip_compress_v3(data, compresslevel=COMPRESSION_LEVEL):
+        return gzip.compress(data, compresslevel=compresslevel)
+    compressions['GZIP'] = gzip_compress_v3
+    decompressions['GZIP'] = gzip.decompress
+
 try:
     import snappy
     compressions['SNAPPY'] = snappy.compress

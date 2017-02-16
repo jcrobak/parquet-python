@@ -4,7 +4,9 @@ language: python
 
 matrix:
   include:
+    - python: 2.7
     - python: 3.5
+    - python: 3.6
 
 install:
   # Install conda
@@ -17,7 +19,8 @@ install:
   # Install dependencies
   - conda create -n test python=$TRAVIS_PYTHON_VERSION pytest
   - source activate test
-  - conda install numpy pandas numba thriftpy python-snappy cython setuptools
+  - conda install -c conda-forge thriftpy python-snappy
+  - conda install numpy pandas numba cython setuptools
   - pip install bson
 
 script:

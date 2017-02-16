@@ -1,5 +1,6 @@
 recursive-include fastparquet *.thrift
 recursive-include fastparquet *.py
+recursive-include fastparquet *.pyx
 recursive-include docs *.rst
 
 include setup.py

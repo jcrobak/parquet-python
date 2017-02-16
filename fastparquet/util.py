@@ -1,11 +1,17 @@
 import ast
-import os
+import os, os.path
 import shutil
 import pandas as pd
 import pytest
 import tempfile
 import thriftpy
+import sys
+import six
 
+
+PY2 = six.PY2
+PY3 = six.PY3
+STR_TYPE = six.string_types[0] # 'str' for Python3, 'basestring' for Python2
 
 class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
@@ -20,8 +26,13 @@ def sep_from_open(opener):
         return '/'
 
 
-def default_mkdirs(f):
-    os.makedirs(f, exist_ok=True)
+if PY2:
+    def default_mkdirs(f):
+        if not os.path.exists(f):
+            os.makedirs(f)
+else:
+    def default_mkdirs(f):
+        os.makedirs(f, exist_ok=True)
 
 
 def default_open(f, mode='rb'):
@@ -51,12 +62,12 @@ def tempdir():
     if os.path.exists(d):
         shutil.rmtree(d, ignore_errors=True)
 
-
-def ensure_bytes(s):
-    if hasattr(s, 'encode'):
-        return s.encode()
-    else:
-        return s
+if PY2:
+    def ensure_bytes(s):
+        return s.encode('utf-8') if isinstance(s, unicode) else s
+else:
+    def ensure_bytes(s):
+        return s.encode('utf-8') if isinstance(s, str) else s
 
 
 def thrift_print(structure, offset=0):
@@ -116,3 +127,7 @@ def check_column_names(columns, *args):
                 raise ValueError("Column name not in list.\n"
                                  "Requested %s\n"
                                  "Allowed %s" % (arg, columns))
+
+
+def byte_buffer(raw_bytes):
+    return buffer(raw_bytes) if PY2 else memoryview(raw_bytes)

@@ -38,10 +38,12 @@ Required:
 - numba
 - numpy
 - pandas
+- cython
+- six
 
 Optional (compression algorithms; gzip is always available):
 
-- snappy
+- snappy (aka python-snappy)
 - lzo
 - brotli
 

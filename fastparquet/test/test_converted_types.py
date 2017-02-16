@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 """test_converted_types.py - tests for decoding data to their logical data types."""
 from __future__ import absolute_import
 from __future__ import division
@@ -13,6 +13,7 @@ import pytest
 
 from fastparquet import parquet_thrift as pt
 from fastparquet.converted_types import convert
+from fastparquet.util import PY2
 
 
 def test_int32():
@@ -71,7 +72,7 @@ def test_utf8():
         converted_type=pt.ConvertedType.UTF8
     )
     data = b'\xc3\x96rd\xc3\xb6g'
-    assert convert(pd.Series([data]), schema)[0] == "Ördög"
+    assert convert(pd.Series([data]), schema)[0] == u"Ördög"
 
 
 def test_json():
@@ -82,9 +83,10 @@ def test_json():
         converted_type=pt.ConvertedType.JSON
     )
     assert convert(pd.Series([b'{"foo": ["bar", "\\ud83d\\udc7e"]}']),
-                          schema)[0] == {'foo': ['bar', '👾']}
+                          schema)[0] == {'foo': ['bar', u'👾']}
 
 
+@pytest.mark.skipif(PY2,reason='BSON unicode may not be supported in Python 2')
 def test_bson():
     """Test bytes representing bson."""
     bson = pytest.importorskip('bson')
@@ -95,8 +97,9 @@ def test_bson():
     )
     assert convert(pd.Series(
             [b'&\x00\x00\x00\x04foo\x00\x1c\x00\x00\x00\x020'
-             b'\x00\x04\x00\x00\x00bar\x00\x021\x00\x05\x00\x00\x00\xf0\x9f\x91\xbe\x00\x00\x00']),
-            schema)[0] == {'foo': ['bar', '👾']}
+             b'\x00\x04\x00\x00\x00bar\x00\x021\x00\x05\x00'
+             b'\x00\x00\xf0\x9f\x91\xbe\x00\x00\x00']),
+            schema)[0] == {'foo': ['bar', u'👾']}
 
 
 def test_uint16():

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 import datetime
 import numpy as np
@@ -11,7 +12,7 @@ import pytest
 import shutil
 import tempfile
 
-from fastparquet.util import tempdir
+from fastparquet.util import tempdir, default_mkdirs
 from fastparquet.test.test_read import s3
 from fastparquet.compression import compressions
 
@@ -428,7 +429,7 @@ def test_naive_index(tempdir):
 
 
 def test_text_convert(tempdir):
-    df = pd.DataFrame({'a': ['π'] * 100,
+    df = pd.DataFrame({'a': [u'π'] * 100,
                        'b': [b'a'] * 100})
     fn = os.path.join(tempdir, 'tmp.parq')
 
@@ -438,7 +439,7 @@ def test_text_convert(tempdir):
     assert pf.schema[1].type_length == 2
     assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     assert pf.schema[2].type_length == 1
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -446,7 +447,7 @@ def test_text_convert(tempdir):
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -454,7 +455,7 @@ def test_text_convert(tempdir):
     pf = ParquetFile(fn)
     assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
     assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
-    assert pf.statistics['max']['a'] == ['π']
+    assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -538,12 +539,12 @@ def test_many_categories(tempdir, n):
 def test_merge(tempdir, dirs, row_groups):
     fn = str(tempdir)
 
-    os.makedirs(os.path.join(fn, dirs[0]), exist_ok=True)
+    default_mkdirs(os.path.join(fn, dirs[0]))
     df0 = pd.DataFrame({'a': [1, 2, 3, 4]})
     fn0 = os.sep.join([fn, dirs[0], 'out0.parq'])
     write(fn0, df0, row_group_offsets=row_groups)
 
-    os.makedirs(os.path.join(fn, dirs[1]), exist_ok=True)
+    default_mkdirs(os.path.join(fn, dirs[1]))
     df1 = pd.DataFrame({'a': [5, 6, 7, 8]})
     fn1 = os.sep.join([fn, dirs[1], 'out1.parq'])
     write(fn1, df1, row_group_offsets=row_groups)

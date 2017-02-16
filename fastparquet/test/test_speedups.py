@@ -13,9 +13,9 @@ from fastparquet.speedups import (
     array_encode_utf8, array_decode_utf8,
     pack_byte_array, unpack_byte_array
     )
+from fastparquet.util import PY2, PY3
 
-
-strings = ["abc", "a\x00c", "héhé", "プログラミング"]
+strings = [u"abc", u"a\x00c", u"héhé", u"プログラミング"]
 
 
 def test_array_encode_utf8():
@@ -32,16 +32,19 @@ def test_array_encode_utf8():
     assert got.dtype == np.dtype('object')
     assert list(got) == expected
 
-    # Non-encodable string (lone surrogate)
-    invalid_string = "\uDE80"
-    arr = np.array(strings + [invalid_string], dtype='object')
-    with pytest.raises(UnicodeEncodeError):
-        array_encode_utf8(arr)
-
     # Wrong array type
     arr = np.array(strings, dtype='U')
     with pytest.raises((TypeError, ValueError)):
         array_encode_utf8(arr)
+
+    # Disabled for v2
+    if PY3:
+        # Non-encodable string (lone surrogate)
+        # on py2 this works anyway
+        invalid_string = u"\uDE80"
+        arr = np.array(strings + [invalid_string], dtype='object')
+        with pytest.raises(UnicodeEncodeError):
+            array_encode_utf8(arr)
 
     # Wrong object type
     arr = np.array([b"foo"], dtype='object')
@@ -70,7 +73,7 @@ def test_array_decode_utf8():
         array_decode_utf8(arr)
 
     # Wrong object type
-    arr = np.array(["foo"], dtype='object')
+    arr = np.array([u"foo"], dtype='object')
     with pytest.raises(TypeError):
         array_decode_utf8(arr)
 
@@ -91,7 +94,7 @@ def test_pack_byte_array():
         pack_byte_array(tuple(bytestrings))
 
     with pytest.raises(TypeError):
-        pack_byte_array(bytestrings + ["foo"])
+        pack_byte_array(bytestrings + [u"foo"])
 
     with pytest.raises(TypeError):
         pack_byte_array(b"foo")
