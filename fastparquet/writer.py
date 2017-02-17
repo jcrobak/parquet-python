@@ -39,7 +39,7 @@ typemap = {  # primitive type, converted type, bit width
     'uint8': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_8, 8),
     'uint16': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_16, 16),
     'uint32': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_32, 32),
-    'uint64': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_64, 32),
+    'uint64': (parquet_thrift.Type.INT64, parquet_thrift.ConvertedType.UINT_64, 64),
     'float32': (parquet_thrift.Type.FLOAT, None, 32),
     'float64': (parquet_thrift.Type.DOUBLE, None, 64),
     'float16': (parquet_thrift.Type.FLOAT, None, 16),
