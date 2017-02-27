@@ -17,16 +17,18 @@ project.
 Introduction
 ------------
 
-**This software is alpha, expect frequent API changes and breakages.**
+Details of this project can be found in the documentation_.
 
-A list of expected features and their status in this branch can be found in
-`this issue`_, and further
-Please feel free to comment on that list as to missing items and priorities.
+.. _documentation: https://fastparquet.readthedocs.io
+
+The original plan listing expected features can be found in
+`this issue`_.
+Please feel free to comment on that list as to missing items and priorities,
+or raise new issues with bugs or requests.
 
 .. _this issue: https://github.com/dask/fastparquet/issues/1
 
-In the meantime, the more eyes on this code, the more example files and the
-more use cases the better.
+
 
 Requirements
 ------------
