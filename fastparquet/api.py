@@ -17,7 +17,7 @@ from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
-                   ensure_bytes, check_column_names)
+                   ensure_bytes, check_column_names, metadata_from_many)
 
 
 class ParquetFile(object):
@@ -28,9 +28,10 @@ class ParquetFile(object):
 
     Parameters
     ----------
-    fn: path/URL string
+    fn: path/URL string or list of paths
         Location of the data. If a directory, will attempt to read a file
-        "_metadata" within that directory.
+        "_metadata" within that directory. If a list of paths, will assume
+        that they make up a single parquet data set.
     verify: bool [False]
         test file start/end byte markers
     open_with: function
@@ -41,16 +42,23 @@ class ParquetFile(object):
     """
     def __init__(self, fn, verify=False, open_with=default_open,
                  sep=os.sep):
-        try:
-            fn2 = sep.join([fn, '_metadata'])
-            self.fn = fn2
-            with open_with(fn2, 'rb') as f:
-                self._parse_header(f, verify)
-            fn = fn2
-        except (IOError, OSError):
-            self.fn = fn
-            with open_with(fn, 'rb') as f:
-                self._parse_header(f, verify)
+        if isinstance(fn, (tuple, list)):
+            basepath, fmd = metadata_from_many(fn, verify_schema=verify,
+                                               open_with=open_with)
+            self.fn = sep.join([basepath, '_metadata'])  # effective file
+            self.fmd = fmd
+            self._set_attrs()
+        else:
+            try:
+                fn2 = sep.join([fn, '_metadata'])
+                self.fn = fn2
+                with open_with(fn2, 'rb') as f:
+                    self._parse_header(f, verify)
+                fn = fn2
+            except (IOError, OSError):
+                self.fn = fn
+                with open_with(fn, 'rb') as f:
+                    self._parse_header(f, verify)
         if all(rg.columns[0].file_path is None for rg in self.row_groups):
             self.file_scheme = 'simple'
         elif all(rg.columns[0].file_path is not None for rg in self.row_groups):
@@ -78,8 +86,12 @@ class ParquetFile(object):
         except thriftpy.transport.TTransportException:
             raise ParquetException('Metadata parse failed: %s' %
                                          self.fn)
-        self.fmd = fmd
         self.head_size = head_size
+        self.fmd = fmd
+        self._set_attrs()
+
+    def _set_attrs(self):
+        fmd = self.fmd
         self.version = fmd.version
         self.schema = fmd.schema
         self.row_groups = fmd.row_groups or []

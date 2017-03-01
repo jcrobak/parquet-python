@@ -23,7 +23,7 @@ from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
                    ParquetException, thrift_copy, index_like, PY2, STR_TYPE,
-                   check_column_names)
+                   check_column_names, metadata_from_many)
 from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
@@ -888,34 +888,7 @@ def merge(file_list, verify_schema=True, open_with=default_open):
     ParquetFile instance corresponding to the merged data.
     """
     sep = sep_from_open(open_with)
-    if all(isinstance(pf, api.ParquetFile) for pf in file_list):
-        pfs = file_list
-        file_list = [pf.fn for pf in pfs]
-        open_with = pfs[0].open
-    elif all(not isinstance(pf, api.ParquetFile) for pf in file_list):
-        pfs = [api.ParquetFile(fn, open_with=open_with) for fn in file_list]
-    else:
-        raise ValueError("Merge requires all PaquetFile instances or none")
-    basepath, file_list = analyse_paths(file_list, sep)
-
-    if verify_schema:
-        for pf in pfs[1:]:
-            if pf.schema != pfs[0].schema:
-                raise ValueError('Incompatible schemas')
-
-    fmd = thrift_copy(pfs[0].fmd)  # we inherit "created by" field
-    fmd.row_groups = []
-
-    for pf, fn in zip(pfs, file_list):
-        if pf.file_scheme != 'simple':
-            raise ValueError('Cannot merge multi-file input', fn)
-        for rg in pf.row_groups:
-            rg = thrift_copy(rg)
-            for chunk in rg.columns:
-                chunk.file_path = fn
-            fmd.row_groups.append(rg)
-
-    fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
+    basepath, fmd = metadata_from_many(file_list, verify_schema, open_with)
 
     out_file = sep.join([basepath, '_metadata'])
     write_common_metadata(out_file, fmd, open_with, no_row_groups=False)
@@ -924,31 +897,3 @@ def merge(file_list, verify_schema=True, open_with=default_open):
     out_file = sep.join([basepath, '_common_metadata'])
     write_common_metadata(out_file, fmd, open_with)
     return out
-
-
-def analyse_paths(file_list, sep):
-    """Consolidate list of file-paths into acceptable parquet relative paths"""
-    path_parts_list = [fn.split(sep) for fn in file_list]
-    if len({len(path_parts) for path_parts in path_parts_list}) > 1:
-        raise ValueError('Mixed nesting in merge files')
-    basepath = path_parts_list[0][:-1]
-    s = re.compile("([a-zA-Z_]+)=([^/]+)")
-    out_list = []
-    for i, path_parts in enumerate(path_parts_list):
-        j = len(path_parts) - 1
-        for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
-            if base_part != path_part:
-                j = k
-                break
-        basepath = basepath[:j]
-    l = len(basepath)
-    if len({tuple([p.split('=')[0] for p in parts[l:-1]])
-            for parts in path_parts_list}) > 1:
-        raise ValueError('Partitioning directories do not agree')
-    for path_parts in path_parts_list:
-        for path_part in path_parts[l:-1]:
-            if s.match(path_part) is None:
-                raise ValueError('Malformed paths set at', sep.join(path_parts))
-        out_list.append(sep.join(path_parts[l:]))
-
-    return sep.join(basepath), out_list
