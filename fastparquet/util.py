@@ -3,6 +3,7 @@ import os, os.path
 import shutil
 import pandas as pd
 import pytest
+import re
 import tempfile
 import thriftpy
 import sys
@@ -131,3 +132,80 @@ def check_column_names(columns, *args):
 
 def byte_buffer(raw_bytes):
     return buffer(raw_bytes) if PY2 else memoryview(raw_bytes)
+
+
+def metadata_from_many(file_list, verify_schema=False, open_with=default_open):
+    """
+    Given list of parquet files, make a FileMetaData that points to them
+
+    Parameters
+    ----------
+    file_list: list of paths of parquet files
+    verify_schema: bool (False)
+        Whether to assert that the schemas in each file are identical
+    open_with: function
+        Use this to open each path.
+
+    Returns
+    -------
+    basepath: the root path that other paths are relative to
+    fmd: metadata thrift structure
+    """
+    from fastparquet import api
+    sep = sep_from_open(open_with)
+    if all(isinstance(pf, api.ParquetFile) for pf in file_list):
+        pfs = file_list
+        file_list = [pf.fn for pf in pfs]
+    elif all(not isinstance(pf, api.ParquetFile) for pf in file_list):
+        pfs = [api.ParquetFile(fn, open_with=open_with) for fn in file_list]
+    else:
+        raise ValueError("Merge requires all PaquetFile instances or none")
+    basepath, file_list = analyse_paths(file_list, sep)
+
+    if verify_schema:
+        for pf in pfs[1:]:
+            if pf.schema != pfs[0].schema:
+                raise ValueError('Incompatible schemas')
+
+    fmd = thrift_copy(pfs[0].fmd)  # we inherit "created by" field
+    fmd.row_groups = []
+
+    for pf, fn in zip(pfs, file_list):
+        if pf.file_scheme != 'simple':
+            raise ValueError('Cannot merge multi-file input', fn)
+        for rg in pf.row_groups:
+            rg = thrift_copy(rg)
+            for chunk in rg.columns:
+                chunk.file_path = fn
+            fmd.row_groups.append(rg)
+
+    fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
+    return basepath, fmd
+
+
+def analyse_paths(file_list, sep):
+    """Consolidate list of file-paths into acceptable parquet relative paths"""
+    path_parts_list = [fn.split(sep) for fn in file_list]
+    if len({len(path_parts) for path_parts in path_parts_list}) > 1:
+        raise ValueError('Mixed nesting in merge files')
+    basepath = path_parts_list[0][:-1]
+    s = re.compile("([a-zA-Z_]+)=([^/]+)")
+    out_list = []
+    for i, path_parts in enumerate(path_parts_list):
+        j = len(path_parts) - 1
+        for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
+            if base_part != path_part:
+                j = k
+                break
+        basepath = basepath[:j]
+    l = len(basepath)
+    if len({tuple([p.split('=')[0] for p in parts[l:-1]])
+            for parts in path_parts_list}) > 1:
+        raise ValueError('Partitioning directories do not agree')
+    for path_parts in path_parts_list:
+        for path_part in path_parts[l:-1]:
+            if s.match(path_part) is None:
+                raise ValueError('Malformed paths set at', sep.join(path_parts))
+        out_list.append(sep.join(path_parts[l:]))
+
+    return sep.join(basepath), out_list

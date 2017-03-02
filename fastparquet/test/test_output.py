@@ -606,39 +606,6 @@ def test_merge_fail(tempdir):
     assert 'multi-file' in str(e)
 
 
-def test_analyse_paths():
-    file_list = ['a', 'b']
-    base, out = writer.analyse_paths(file_list, '/')
-    assert (base, out) == ('', ['a', 'b'])
-
-    file_list = ['c/a', 'c/b']
-    base, out = writer.analyse_paths(file_list, '/')
-    assert (base, out) == ('c', ['a', 'b'])
-
-    file_list = ['c/d/a', 'c/d/b']
-    base, out = writer.analyse_paths(file_list, '/')
-    assert (base, out) == ('c/d', ['a', 'b'])
-
-    file_list = ['c/cat=1/a', 'c/cat=2/b', 'c/cat=1/c']
-    base, out = writer.analyse_paths(file_list, '/')
-    assert (base, out) == ('c', ['cat=1/a', 'cat=2/b', 'cat=1/c'])
-
-    file_list = ['c/cat=2/b', 'c/cat/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        writer.analyse_paths(file_list, '/')
-    assert 'c/cat/a' in str(e)
-
-    file_list = ['c/cat=2/b', 'c/fred=2/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        writer.analyse_paths(file_list, '/')
-    assert 'directories' in str(e)
-
-    file_list = ['c/cat=2/b', 'c/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        writer.analyse_paths(file_list, '/')
-    assert 'nesting' in str(e)
-
-
 def test_append_simple(tempdir):
     fn = os.path.join(str(tempdir), 'test.parq')
     df = pd.DataFrame({'a': [1, 2, 3, 0],
