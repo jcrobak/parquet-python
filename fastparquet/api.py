@@ -465,9 +465,17 @@ def statistics(obj):
         if not s:
             return rv
         if s.max is not None:
-            rv['max'] = encoding.read_plain(ensure_bytes(s.max), md.type, 1)[0]
+            try:
+                rv['max'] = encoding.read_plain(ensure_bytes(s.max),
+                                                md.type, 1)[0]
+            except:
+                rv['max'] = None
         if s.min is not None:
-            rv['min'] = encoding.read_plain(ensure_bytes(s.min), md.type, 1)[0]
+            try:
+                rv['min'] = encoding.read_plain(ensure_bytes(s.min),
+                                                md.type, 1)[0]
+            except:
+                rv['min'] = None
         if s.null_count is not None:
             rv['null_count'] = s.null_count
         if s.distinct_count is not None:

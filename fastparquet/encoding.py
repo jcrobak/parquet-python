@@ -44,7 +44,14 @@ def read_plain(raw_bytes, type_, count, width=0):
     if type_ == parquet_thrift.Type.BOOLEAN:
         return read_plain_boolean(raw_bytes, count)
     # variable byte arrays (rare)
-    return np.array(unpack_byte_array(raw_bytes, count), dtype='O')
+    try:
+        return np.array(unpack_byte_array(raw_bytes, count), dtype='O')
+    except RuntimeError:
+        if count == 1:
+            # e.g., for statistics
+            return np.array([raw_bytes], dtype='O')
+        else:
+            raise
 
 
 @numba.jit(nogil=True)
