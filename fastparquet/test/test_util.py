@@ -21,6 +21,10 @@ def test_analyse_paths():
     base, out = analyse_paths(file_list, '/')
     assert (base, out) == ('c', ['cat=1/a', 'cat=2/b', 'cat=1/c'])
 
+    file_list = ['c\\cat=1\\a', 'c\\cat=2\\b', 'c\\cat=1\\c']
+    base, out = analyse_paths(file_list, '\\')
+    assert (base, out) == ('c', ['cat=1\\a', 'cat=2\\b', 'cat=1\\c'])
+
     file_list = ['c/cat=2/b', 'c/cat/a', 'c/cat=1/c']
     with pytest.raises(ValueError) as e:
         analyse_paths(file_list, '/')
