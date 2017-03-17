@@ -166,7 +166,7 @@ class ParquetFile(object):
         core.read_row_group(
                 infile, rg, columns, categories, self.helper, self.cats,
                 self.selfmade, index=index, assign=assign,
-                timestamp96=timestamp96)
+                timestamp96=timestamp96, sep=self.sep)
         if ret:
             return df
 

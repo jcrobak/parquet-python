@@ -13,7 +13,7 @@ from .converted_types import convert, typemap
 from .speedups import unpack_byte_array
 from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
-from .util import val_to_num, byte_buffer
+from .util import val_to_num, byte_buffer, ex_from_sep
 
 
 def read_thrift(file_obj, ttype):
@@ -261,11 +261,11 @@ def read_col(column, schema_helper, infile, use_cat=False,
 
 def read_row_group_file(fn, rg, columns, categories, schema_helper, cats,
                         open=open, selfmade=False, index=None, assign=None,
-                        timestamp96=[]):
+                        timestamp96=[], sep=os.sep):
     with open(fn, mode='rb') as f:
         return read_row_group(f, rg, columns, categories, schema_helper, cats,
                               selfmade=selfmade, index=index, assign=assign,
-                              timestamp96=timestamp96)
+                              timestamp96=timestamp96, sep=sep)
 
 
 def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
@@ -293,7 +293,8 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
-                   selfmade=False, index=None, assign=None, timestamp96=[]):
+                   selfmade=False, index=None, assign=None, timestamp96=[],
+                   sep=os.sep):
     """
     Access row-group in a file and read some columns into a data-frame.
     """
@@ -303,7 +304,7 @@ def read_row_group(file, rg, columns, categories, schema_helper, cats,
                           cats, selfmade, assign=assign, timestamp96=timestamp96)
 
     for cat in cats:
-        partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
-                                rg.columns[0].file_path)
+        s = ex_from_sep(sep)
+        partitions = s.findall(rg.columns[0].file_path)
         val = val_to_num([p[1] for p in partitions if p[0] == cat][0])
         assign[cat][:] = cats[cat].index(val)
