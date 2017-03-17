@@ -183,13 +183,20 @@ def metadata_from_many(file_list, verify_schema=False, open_with=default_open):
     return basepath, fmd
 
 
-def analyse_paths(file_list, sep):
+def ex_from_sep(sep):
+    """Generate regex for category folder matching"""
+    if sep in r'\^$.|?*+()[]':
+        return re.compile(r"([a-zA-Z_]+)=([^\{}]+)".format(sep))
+    return re.compile("([a-zA-Z_]+)=([^{}]+)".format(sep))
+
+
+def analyse_paths(file_list, sep=os.sep):
     """Consolidate list of file-paths into acceptable parquet relative paths"""
     path_parts_list = [fn.split(sep) for fn in file_list]
     if len({len(path_parts) for path_parts in path_parts_list}) > 1:
         raise ValueError('Mixed nesting in merge files')
     basepath = path_parts_list[0][:-1]
-    s = re.compile("([a-zA-Z_]+)=([^/]+)")
+    s = ex_from_sep(sep)
     out_list = []
     for i, path_parts in enumerate(path_parts_list):
         j = len(path_parts) - 1

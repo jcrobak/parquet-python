@@ -17,7 +17,8 @@ from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
-                   ensure_bytes, check_column_names, metadata_from_many)
+                   ensure_bytes, check_column_names, metadata_from_many,
+                   ex_from_sep)
 
 
 class ParquetFile(object):
@@ -42,6 +43,7 @@ class ParquetFile(object):
     """
     def __init__(self, fn, verify=False, open_with=default_open,
                  sep=os.sep):
+        self.sep = sep
         if isinstance(fn, (tuple, list)):
             basepath, fmd = metadata_from_many(fn, verify_schema=verify,
                                                open_with=open_with)
@@ -66,7 +68,6 @@ class ParquetFile(object):
         else:
             self.file_scheme = 'mixed'
         self.open = open_with
-        self.sep = sep
 
     def _parse_header(self, f, verify=True):
         try:
@@ -120,8 +121,8 @@ class ParquetFile(object):
         cats = {}
         for rg in self.row_groups:
             for col in rg.columns:
-                partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
-                                        col.file_path or "")
+                s = ex_from_sep(self.sep)
+                partitions = s.findall(col.file_path or "")
                 for key, val in partitions:
                     cats.setdefault(key, set()).add(val)
         self.cats = {key: list([val_to_num(x) for x in v])
@@ -539,8 +540,7 @@ def sorted_partitioned_columns(pf):
     return out
 
 
-
-def filter_out_cats(rg, filters):
+def filter_out_cats(rg, filters, sep='/'):
     """
     According to the filters, should this row-group be excluded
 
@@ -560,8 +560,8 @@ def filter_out_cats(rg, filters):
     """
     if len(filters) == 0:
         return False
-    partitions = re.findall("([a-zA-Z_]+)=([^/]+)/",
-                            rg.columns[0].file_path)
+    s = ex_from_sep(sep)
+    partitions = s.findall(rg.columns[0].file_path)
     pairs = [(p[0], val_to_num(p[1])) for p in partitions]
     for cat, v in pairs:
 
