@@ -88,12 +88,12 @@ def test_rle_bp():
 def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
     if comp == 'BROTLI':
         pytest.xfail("spark doesn't support BROTLI compression")
-    data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                         'i64': np.arange(1000, dtype=np.int64),
-                         'f': np.arange(1000, dtype=np.float64),
+    data = pd.DataFrame({'i32': np.arange(1001, dtype=np.int32),
+                         'i64': np.arange(1001, dtype=np.int64),
+                         'f': np.arange(1001, dtype=np.float64),
                          'bhello': np.random.choice([b'hello', b'you',
-                            b'people'], size=1000).astype("O"),
-                         't': [datetime.datetime.now()]*1000})
+                            b'people'], size=1001).astype("O"),
+                         't': [datetime.datetime.now()]*1001})
 
     data['t'] += pd.to_timedelta('1ns')
     data['hello'] = data.bhello.str.decode('utf8')

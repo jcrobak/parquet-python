@@ -162,6 +162,4 @@ def unpack_byte_array(bytes raw_bytes, Py_ssize_t n):
         out[i] = PyBytes_FromStringAndSize(<char *> data, itemlen)
         data += itemlen
 
-    if remaining != 0:
-        raise RuntimeError("invalid input size (corrupted?)")
     return out

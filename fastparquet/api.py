@@ -18,7 +18,7 @@ from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, sep_from_open, val_to_num,
                    ensure_bytes, check_column_names, metadata_from_many,
-                   ex_from_sep)
+                   ex_from_sep, created_by)
 
 
 class ParquetFile(object):
@@ -103,7 +103,7 @@ class ParquetFile(object):
             for chunk in rg.columns:
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
         self.helper = schema.SchemaHelper(self.schema)
-        self.selfmade = self.created_by == "fastparquet-python"
+        self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python"
         self._read_partitions()
         self._dtypes()
 

@@ -23,7 +23,7 @@ from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
                    ParquetException, thrift_copy, index_like, PY2, STR_TYPE,
-                   check_column_names, metadata_from_many)
+                   check_column_names, metadata_from_many, created_by)
 from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
@@ -402,8 +402,7 @@ def make_definitions(data, no_nulls):
     return block, out
 
 
-def write_column(f, data, selement, compression=None,
-                 object_encoding=None):
+def write_column(f, data, selement, compression=None):
     """
     Write a single column of data to an open Parquet file
 
@@ -415,7 +414,6 @@ def write_column(f, data, selement, compression=None,
         produced by ``find_type``
     compression: str or None
         if not None, must be one of the keys in ``compression.compress``
-    object_encoding: None|bytes|utf8|json|bson|infer
 
     Returns
     -------
@@ -451,6 +449,7 @@ def write_column(f, data, selement, compression=None,
                 num_values=len(data.cat.categories),
                 encoding=parquet_thrift.Encoding.PLAIN)
         bdata = encode['PLAIN'](pd.Series(data.cat.categories), selement)
+        bdata += (16 - (len(bdata) % 8)) * b'\x00'
         l0 = len(bdata)
         if compression:
             bdata = compress_data(bdata, compression)
@@ -482,6 +481,7 @@ def write_column(f, data, selement, compression=None,
     start = f.tell()
     bdata = definition_data + repetition_data + encode[encoding](
             data, selement)
+    bdata += (16 - (len(bdata) % 8)) * b'\x00'
     try:
         if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
             max, min = data.values.max(), data.values.min()
@@ -581,7 +581,7 @@ def make_part_file(f, data, schema, compression=None):
         fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                           schema=schema,
                                           version=1,
-                                          created_by='parquet-python',
+                                          created_by=created_by,
                                           row_groups=[rg])
         foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
@@ -597,7 +597,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                       schema=[root],
                                       version=1,
-                                      created_by='fastparquet-python',
+                                      created_by=created_by,
                                       row_groups=[])
 
     object_encoding = object_encoding or {}
