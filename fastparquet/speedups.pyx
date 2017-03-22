@@ -151,17 +151,15 @@ def unpack_byte_array(bytes raw_bytes, Py_ssize_t n):
         # It is required to check this inside the loop to avoid
         # out of bounds array accesses.
         if remaining < 0:
-            break
+            raise RuntimeError("Ran out of input")
         itemlen = (data[0] + (data[1] << 8) +
                    (data[2] << 16) + (data[3] << 24))
         data += 4
 
         remaining -= itemlen
         if remaining < 0:
-            break
+            raise RuntimeError("Ran out of input")
         out[i] = PyBytes_FromStringAndSize(<char *> data, itemlen)
         data += itemlen
 
-    if remaining != 0:
-        raise RuntimeError("invalid input size (corrupted?)")
     return out

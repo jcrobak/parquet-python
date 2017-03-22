@@ -107,6 +107,8 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
     else:
         definition_levels, num_nulls = read_def(io_obj, daph, helper, metadata)
 
+    nval = daph.num_values-num_nulls
+
     repetition_levels = read_rep(io_obj, daph, helper, metadata)
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
         width = helper.schema_element(metadata.path_in_schema[-1]).type_length
@@ -131,12 +133,12 @@ def read_data_page(f, helper, header, metadata, skip_nulls=False,
             # length is simply "all data left in this page"
             encoding.read_rle_bit_packed_hybrid(
                         io_obj, bit_width, io_obj.len-io_obj.loc, o=values)
-            values = values.data[:daph.num_values-num_nulls]
+            values = values.data[:nval]
         else:
-            values = np.zeros(daph.num_values-num_nulls, dtype=np.int8)
+            values = np.zeros(nval, dtype=np.int8)
     else:
         raise NotImplementedError('Encoding %s' % daph.encoding)
-    return definition_levels, repetition_levels, values
+    return definition_levels, repetition_levels, values[:nval]
 
 
 def skip_definition_bytes(io_obj, num):

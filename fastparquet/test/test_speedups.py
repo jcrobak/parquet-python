@@ -113,9 +113,14 @@ def test_unpack_byte_array():
         with pytest.raises(RuntimeError):
             unpack_byte_array(b, n)
 
-    check_invalid_length(packed, len(bytestrings) - 1)
     check_invalid_length(packed, len(bytestrings) + 1)
-    check_invalid_length(packed + b'\x00', len(bytestrings))
-    check_invalid_length(packed + b'\x01\x02\x03\x04', len(bytestrings))
     check_invalid_length(packed[:-1], len(bytestrings))
     check_invalid_length(packed[:-1], len(bytestrings))
+
+    # Extra bytes silently ignored
+    seq = unpack_byte_array(packed, len(bytestrings) - 1)
+    assert seq == bytestrings[:-1]
+    seq = unpack_byte_array(packed + b'\x00', len(bytestrings))
+    assert seq == bytestrings
+    seq = unpack_byte_array(packed + b'\x01\x02\x03\x04', len(bytestrings))
+    assert seq == bytestrings

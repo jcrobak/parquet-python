@@ -12,7 +12,9 @@ import six
 
 PY2 = six.PY2
 PY3 = six.PY3
-STR_TYPE = six.string_types[0] # 'str' for Python3, 'basestring' for Python2
+STR_TYPE = six.string_types[0]  # 'str' for Python3, 'basestring' for Python2
+created_by = "fastparquet-python version 1.0.0 (build 111)"
+
 
 class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
