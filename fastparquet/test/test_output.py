@@ -88,9 +88,11 @@ def test_rle_bp():
 def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
     if comp == 'BROTLI':
         pytest.xfail("spark doesn't support BROTLI compression")
-    data = pd.DataFrame({'i32': np.arange(1001, dtype=np.int32),
-                         'i64': np.arange(1001, dtype=np.int64),
-                         'f': np.arange(1001, dtype=np.float64),
+    data = pd.DataFrame({'i32': np.random.randint(-2**17, 2**17, size=1001,
+                                                  dtype=np.int32),
+                         'i64': np.random.randint(-2**33, 2**33, size=1001,
+                                                  dtype=np.int64),
+                         'f': np.random.randn(1001),
                          'bhello': np.random.choice([b'hello', b'you',
                             b'people'], size=1001).astype("O"),
                          't': [datetime.datetime.now()]*1001})
@@ -103,10 +105,10 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
 
     fname = os.path.join(tempdir, 'test.parquet')
     write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp, times='int96')
+          compression=comp, times='int96', write_index=True)
 
     df = sql.read.parquet(fname)
-    ddf = df.toPandas()
+    ddf = df.sort('index').toPandas()
     for col in data:
         if data[col].dtype.kind == "M":
             # pyspark auto-converts timezones

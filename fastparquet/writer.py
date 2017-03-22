@@ -449,7 +449,7 @@ def write_column(f, data, selement, compression=None):
                 num_values=len(data.cat.categories),
                 encoding=parquet_thrift.Encoding.PLAIN)
         bdata = encode['PLAIN'](pd.Series(data.cat.categories), selement)
-        bdata += (16 - (len(bdata) % 8)) * b'\x00'
+        bdata += 8 * b'\x00'
         l0 = len(bdata)
         if compression:
             bdata = compress_data(bdata, compression)
@@ -481,7 +481,7 @@ def write_column(f, data, selement, compression=None):
     start = f.tell()
     bdata = definition_data + repetition_data + encode[encoding](
             data, selement)
-    bdata += (16 - (len(bdata) % 8)) * b'\x00'
+    bdata += 8 * b'\x00'
     try:
         if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
             max, min = data.values.max(), data.values.min()
