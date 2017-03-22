@@ -594,11 +594,15 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
+    cats = parquet_thrift.KeyValue()
+    cats.key = 'fastparquet.cats'
+    catstruct = {}
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                       schema=[root],
                                       version=1,
                                       created_by=created_by,
-                                      row_groups=[])
+                                      row_groups=[],
+                                      key_value_metadata=[cats])
 
     object_encoding = object_encoding or {}
     for column in data.columns:
@@ -611,6 +615,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
             se, type = find_type(data[column].cat.categories,
                                  fixed_text=fixed, object_encoding=oencoding)
             se.name = column
+            catstruct[column] = len(data[column].cat.categories)
         else:
             se, type = find_type(data[column], fixed_text=fixed,
                                  object_encoding=oencoding, times=times)
@@ -624,6 +629,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
+    cats.value = json.dumps(catstruct)
     return fmd
 
 

@@ -22,9 +22,13 @@ category type:
 
     df[col] = df[col].astype('category')
 
-To efficiently load a column as a categorical type, include it in the optional
+Fastparquet will automatically use metadata information to load such columns
+as categorical *if* the data was written by fastparquet.
+
+To efficiently load a column as a categorical type for data from other
+parquet frameworks, include it in the optional
 keyword parameter ``categories``; however it must be encoded as dictionary
-throughout the dataset (as it will, if written by fastparquet).
+throughout the dataset.
 
 .. code-block:: python
 
@@ -39,7 +43,8 @@ be de-referenced on load which is potentially expensive.
 
 Note that before loading, it is not possible to know whether the above condition
 will be met, so the ``dtypes`` attribute of a ``ParquetFile`` will show the
-data type appropriate for the values of column and never ``Category``.
+data type appropriate for the values of column, unless the data originates with
+fastparquet.
 
 Byte Arrays
 -----------
