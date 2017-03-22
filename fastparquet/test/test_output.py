@@ -536,6 +536,26 @@ def test_many_categories(tempdir, n):
     assert (out.y == df.y).all()
 
 
+def test_autocat(tempdir):
+    tmp = str(tempdir)
+    fn = os.path.join(tmp, "test.parq")
+    data = pd.DataFrame({'o': pd.Categorical(
+        np.random.choice(['hello', 'world'], size=1000))})
+    write(fn, data)
+    pf = ParquetFile(fn)
+    assert 'o' in pf.categories
+    assert pf.categories['o'] == 2
+    assert pf.dtypes['o'] == 'category'
+    out = pf.to_pandas()
+    assert out.dtypes['o'] == 'category'
+    out = pf.to_pandas(categories={})
+    assert str(out.dtypes['o']) != 'category'
+    out = pf.to_pandas(categories=['o'])
+    assert out.dtypes['o'] == 'category'
+    out = pf.to_pandas(categories={'o': 2})
+    assert out.dtypes['o'] == 'category'
+
+
 @pytest.mark.parametrize('row_groups', ([0], [0, 2]))
 @pytest.mark.parametrize('dirs', (['', ''], ['cat=1', 'cat=2']))
 def test_merge(tempdir, dirs, row_groups):

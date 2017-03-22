@@ -4,6 +4,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import json
 import operator
 import os
 import re
@@ -138,6 +139,8 @@ class ParquetFile(object):
     def read_row_group_file(self, rg, columns, categories, index=None,
                             assign=None, timestamp96=[]):
         """ Open file for reading, and process it as a row-group """
+        if categories is None:
+            categories = self.categories
         fn = self.row_group_filename(rg)
         ret = False
         if assign is None:
@@ -157,6 +160,8 @@ class ParquetFile(object):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
+        if categories is None:
+            categories = self.categories
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(rg.num_rows, columns,
@@ -221,7 +226,7 @@ class ParquetFile(object):
                 not(filter_out_cats(rg, filters))]
 
     def iter_row_groups(self, columns=None, categories=None, filters=[],
-                        index=None, assign=None):
+                        index=None):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -235,7 +240,8 @@ class ParquetFile(object):
             and its name is also in this list, it will generate a Pandas
             Category-type column, potentially saving memory and time. If a
             dict {col: int}, the value indicates the number of categories,
-            so that the optimal data-dtype can be allocated.
+            so that the optimal data-dtype can be allocated. If ``None``,
+            will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
@@ -285,7 +291,8 @@ class ParquetFile(object):
             and its name is also in this list, it will generate a Pandas
             Category-type column, potentially saving memory and time. If a
             dict {col: int}, the value indicates the number of categories,
-            so that the optimal data-dtype can be allocated.
+            so that the optimal data-dtype can be allocated. If ``None``,
+            will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
@@ -325,8 +332,10 @@ class ParquetFile(object):
         return df
 
     def pre_allocate(self, size, columns, categories, index, timestamp96=[]):
+        if categories is None:
+            categories = self.categories
         return _pre_allocate(size, columns, categories, index, self.cats,
-                             self.dtypes, timestamp96=timestamp96)
+                             self._dtypes(categories), timestamp96=timestamp96)
 
     @property
     def count(self):
@@ -337,10 +346,23 @@ class ParquetFile(object):
     def info(self):
         """ Some metadata details """
         return {'name': self.fn, 'columns': self.columns,
-                'categories': list(self.cats), 'rows': self.count}
+                'partitions': list(self.cats), 'rows': self.count}
 
-    def _dtypes(self):
+    @property
+    def categories(self):
+        if self.fmd.key_value_metadata is None:
+            return {}
+        vals = [entry.value for entry in self.fmd.key_value_metadata
+                if entry.key == "fastparquet.cats"]
+        if vals:
+            return json.loads(vals[0])
+        else:
+            return {}
+
+    def _dtypes(self, categories=None):
         """ Implied types of the columns in the schema """
+        if categories is None:
+            categories = self.categories
         dtype = {f.name: converted_types.typemap(f)
                  for f in self.schema if f.num_children is None or
                  f.num_children == 0}
@@ -361,9 +383,12 @@ class ParquetFile(object):
                         num_nulls += chunk.meta_data.statistics.null_count
                 if num_nulls:
                     dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
+        for field in categories:
+            dtype[field] = 'category'
         for cat in self.cats:
             dtype[cat] = "category"
         self.dtypes = dtype
+        return dtype
 
     def __str__(self):
         return "<Parquet File: %s>" % self.info
