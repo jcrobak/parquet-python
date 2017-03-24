@@ -437,26 +437,26 @@ def test_text_convert(tempdir):
 
     write(fn, df, fixed_text={'a': 2, 'b': 1})
     pf = ParquetFile(fn)
-    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
-    assert pf.schema[1].type_length == 2
-    assert pf.schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
-    assert pf.schema[2].type_length == 1
+    assert pf._schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf._schema[1].type_length == 2
+    assert pf._schema[2].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf._schema[2].type_length == 1
     assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df)
     pf = ParquetFile(fn)
-    assert pf.schema[1].type == parquet_thrift.Type.BYTE_ARRAY
-    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf._schema[1].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf._schema[2].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df, fixed_text={'a': 2})
     pf = ParquetFile(fn)
-    assert pf.schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
-    assert pf.schema[2].type == parquet_thrift.Type.BYTE_ARRAY
+    assert pf._schema[1].type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
+    assert pf._schema[2].type == parquet_thrift.Type.BYTE_ARRAY
     assert pf.statistics['max']['a'] == [u'π']
     df2 = pf.to_pandas()
     tm.assert_frame_equal(df, df2, check_categorical=False)
@@ -498,17 +498,17 @@ def test_auto_null(tempdir):
 
     write(fn, df, has_nulls=True)
     pf = ParquetFile(fn)
-    for col in pf.schema[2:]:
+    for col in pf._schema[2:]:
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    assert pf.schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    assert pf._schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     df2 = pf.to_pandas(categories=['e'])
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
     write(fn, df, has_nulls=None)
     pf = ParquetFile(fn)
-    for col in pf.schema[1:3]:
+    for col in pf._schema[1:3]:
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
-    assert pf.schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    assert pf._schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     df2= pf.to_pandas(categories=['e'])
     tm.assert_frame_equal(df, df2, check_categorical=False)
 
@@ -714,9 +714,9 @@ def test_hasnulls_ordering(tempdir):
     writer.write(fname, data, has_nulls=['a', 'c'])
 
     r = ParquetFile(fname)
-    assert r.schema[1].name == 'a'
-    assert r.schema[1].repetition_type == 1
-    assert r.schema[2].name == 'b'
-    assert r.schema[2].repetition_type == 0
-    assert r.schema[3].name == 'c'
-    assert r.schema[3].repetition_type == 1
+    assert r._schema[1].name == 'a'
+    assert r._schema[1].repetition_type == 1
+    assert r._schema[2].name == 'b'
+    assert r._schema[2].repetition_type == 0
+    assert r._schema[3].name == 'c'
+    assert r._schema[3].repetition_type == 1

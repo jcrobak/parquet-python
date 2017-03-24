@@ -95,7 +95,7 @@ class ParquetFile(object):
     def _set_attrs(self):
         fmd = self.fmd
         self.version = fmd.version
-        self.schema = fmd.schema
+        self._schema = fmd.schema
         self.row_groups = fmd.row_groups or []
         self.key_value_metadata = fmd.key_value_metadata
         self.created_by = fmd.created_by
@@ -103,7 +103,7 @@ class ParquetFile(object):
         for i, rg in enumerate(self.row_groups):
             for chunk in rg.columns:
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
-        self.helper = schema.SchemaHelper(self.schema)
+        self.schema = schema.SchemaHelper(self._schema)
         self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python"
         self._read_partitions()
         self._dtypes()
@@ -111,8 +111,7 @@ class ParquetFile(object):
     @property
     def columns(self):
         """ Column names """
-        return [f.name for f in self.schema if f.num_children is None or
-                f.num_children == 0]
+        return list(self._schema[0].children)
 
     @property
     def statistics(self):
@@ -149,7 +148,7 @@ class ParquetFile(object):
                     timestamp96=timestamp96)
             ret = True
         core.read_row_group_file(
-                fn, rg, columns, categories, self.helper, self.cats,
+                fn, rg, columns, categories, self.schema, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
                 assign=assign, timestamp96=timestamp96)
         if ret:
@@ -169,7 +168,7 @@ class ParquetFile(object):
                                            timestamp96=timestamp96)
             ret = True
         core.read_row_group(
-                infile, rg, columns, categories, self.helper, self.cats,
+                infile, rg, columns, categories, self.schema, self.cats,
                 self.selfmade, index=index, assign=assign,
                 timestamp96=timestamp96, sep=self.sep)
         if ret:
@@ -204,7 +203,7 @@ class ParquetFile(object):
                 name = ".".join(column.meta_data.path_in_schema)
                 if name not in columns:
                     continue
-                out[name] = core.read_col(column, self.helper, f,
+                out[name] = core.read_col(column, self.schema, f,
                                           grab_dict=True)
         return out
 
@@ -222,7 +221,7 @@ class ParquetFile(object):
         Filtered list of row groups
         """
         return [rg for rg in self.row_groups if
-                not(filter_out_stats(rg, filters, self.helper)) and
+                not(filter_out_stats(rg, filters, self.schema)) and
                 not(filter_out_cats(rg, filters))]
 
     def iter_row_groups(self, columns=None, categories=None, filters=[],
@@ -363,9 +362,9 @@ class ParquetFile(object):
         """ Implied types of the columns in the schema """
         if categories is None:
             categories = self.categories
-        dtype = {f.name: converted_types.typemap(f)
-                 for f in self.schema if f.num_children is None or
-                 f.num_children == 0}
+        dtype = {f.name: (converted_types.typemap(f)
+                          if f.num_children in [None, 0] else np.dtype("O"))
+                 for f in self.schema.root.children.values()}
         for col, dt in dtype.copy().items():
             if dt.kind == 'i':
                 # int columns that may have nulls become float columns
@@ -419,7 +418,7 @@ def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
     return df, views
 
 
-def filter_out_stats(rg, filters, helper):
+def filter_out_stats(rg, filters, schema):
     """
     According to the filters, should this row-group be excluded
 
@@ -444,7 +443,7 @@ def filter_out_stats(rg, filters, helper):
         name = ".".join(column.meta_data.path_in_schema)
         app_filters = [f[1:] for f in filters if f[0] == name]
         for op, val in app_filters:
-            se = helper.schema_element(name)
+            se = schema.schema_element(name)
             if column.meta_data.statistics is not None:
                 s = column.meta_data.statistics
                 if s.max is not None:
@@ -514,14 +513,13 @@ def statistics(obj):
 
     if isinstance(obj, ParquetFile):
         L = list(map(statistics, obj.row_groups))
-        names = obj.columns
         d = {n: {col: [item[col].get(n, None) for item in L]
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
-        helper = schema.SchemaHelper(obj.schema)
+        schema = obj.schema
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
-            se = helper.schema_element(column)
+            se = schema.schema_element(column)
             if se.converted_type is not None:
                 for name in ['min', 'max']:
                     d[name][column] = (

@@ -46,7 +46,7 @@ def test_read_footer():
     """Test reading the footer."""
     p = fastparquet.ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
     snames = {"schema", "n_regionkey", "n_name", "n_nationkey", "n_comment"}
-    assert {s.name for s in p.schema} == snames
+    assert {s.name for s in p._schema} == snames
     assert set(p.columns) == snames - {"schema"}
 
 files = [os.path.join(TEST_DATA, p) for p in

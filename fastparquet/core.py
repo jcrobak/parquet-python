@@ -231,6 +231,8 @@ def read_col(column, schema_helper, infile, use_cat=False,
             skip_nulls = False
         defi, rep, val = read_data_page(infile, schema_helper, ph, cmd,
                                         skip_nulls, selfmade=selfmade)
+        import pdb
+        #pdb.set_trace()
         d = ph.data_page_header.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY
         if use_cat and not d:
             raise ValueError('Returning category type requires all chunks to'
