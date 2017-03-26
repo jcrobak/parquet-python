@@ -6,12 +6,13 @@ from __future__ import unicode_literals
 
 from collections import OrderedDict
 import os
+from six import text_type
 
 import thriftpy
 
 
 THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
-parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=str("parquet_thrift"))
+parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=text_type("parquet_thrift"))
 
 
 def schema_tree(schema, i=0):
@@ -64,7 +65,7 @@ class SchemaHelper(object):
             [(se.name, se) for se in schema_elements])
         schema_tree(schema_elements)
 
-    def __str__(self):
+    def __text_type__(self):
         return schema_to_text(self.schema_elements[0])
 
     def __repr__(self):
@@ -74,7 +75,7 @@ class SchemaHelper(object):
     def schema_element(self, name):
         """Get the schema element with the given name or path"""
         root = self.root
-        if isinstance(name, str):
+        if isinstance(name, text_type):
             name = name.split('.')
         for part in name:
             root = root.children[part]
@@ -83,7 +84,7 @@ class SchemaHelper(object):
     def is_required(self, name):
         """Return true if the schema element with the given name is required."""
         required = True
-        if isinstance(name, str):
+        if isinstance(name, text_type):
             name = name.split('.')
         parts = []
         for part in name:
@@ -97,7 +98,7 @@ class SchemaHelper(object):
     def max_repetition_level(self, parts):
         """Get the max repetition level for the given schema path."""
         max_level = 0
-        if isinstance(parts, str):
+        if isinstance(parts, text_type):
             parts = parts.split('.')
         for i in range(len(parts)):
             element = self.schema_element(parts[:i+1])
@@ -108,7 +109,7 @@ class SchemaHelper(object):
     def max_definition_level(self, parts):
         """Get the max definition level for the given schema path."""
         max_level = 0
-        if isinstance(parts, str):
+        if isinstance(parts, text_type):
             parts = parts.split('.')
         for i in range(len(parts)):
             element = self.schema_element(parts[:i+1])
