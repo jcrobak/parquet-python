@@ -29,8 +29,9 @@ def schema_tree(schema, i=0):
         return i + 1
 
 
-def schema_to_text(root, indent=''):
-    text = indent + root.name + ": "
+def schema_to_text(root, indent=[]):
+    l = len(indent)
+    text = "".join(indent) + '- ' + root.name + ": "
     parts = []
     if root.type is not None:
         parts.append(parquet_thrift.Type._VALUES_TO_NAMES[root.type])
@@ -41,13 +42,14 @@ def schema_to_text(root, indent=''):
         parts.append(parquet_thrift.FieldRepetitionType._VALUES_TO_NAMES[
                          root.repetition_type])
     text += ', '.join(parts)
-    if indent:
-        indent = indent[:-1] + ' |-'
-    else:
-        indent = '|-'
+    indent.append('|')
     if hasattr(root, 'children'):
-        for child in root.children.values():
+        indent[-1] = '| '
+        for i, child in enumerate(root.children.values()):
+            if i == len(root.children) - 1:
+                indent[-1] = '  '
             text += '\n' + schema_to_text(child, indent)
+    indent.pop()
     return text
 
 
@@ -110,6 +112,49 @@ class SchemaHelper(object):
             parts = parts.split('.')
         for i in range(len(parts)):
             element = self.schema_element(parts[:i+1])
-            if element.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL:
+            if element.repetition_type != parquet_thrift.FieldRepetitionType.REQUIRED:
                 max_level += 1
         return max_level
+
+
+def _is_list_like(helper, column):
+    se = helper.schema_element(
+        column.meta_data.path_in_schema[0])
+    ct = se.converted_type
+    if ct != parquet_thrift.ConvertedType.LIST:
+        return False
+    if len(se.children) > 1:
+        return False
+    se2 = list(se.children.values())[0]
+    if len(se2.children) > 1:
+        return False
+    if se2.repetition_type != parquet_thrift.FieldRepetitionType.REPEATED:
+        return False
+    se3 = list(se2.children.values())[0]
+    if se3.repetition_type == parquet_thrift.FieldRepetitionType.REPEATED:
+        return False
+    return True
+
+
+def _is_map_like(helper, column):
+    se = helper.schema_element(
+        column.meta_data.path_in_schema[0])
+    ct = se.converted_type
+    if ct != parquet_thrift.ConvertedType.MAP:
+        return False
+    if len(se.children) > 1:
+        return False
+    se2 = list(se.children.values())[0]
+    if len(se2.children) != 2:
+        return False
+    if se2.repetition_type != parquet_thrift.FieldRepetitionType.REPEATED:
+        return False
+    if set(se2.children) != {'key', 'value'}:
+        return False
+    se3 = se2.children['key']
+    if se3.repetition_type != parquet_thrift.FieldRepetitionType.REQUIRED:
+        return False
+    se3 = se2.children['value']
+    if se3.repetition_type == parquet_thrift.FieldRepetitionType.REPEATED:
+        return False
+    return True

@@ -1,4 +1,4 @@
-"""test_read_support.py - unit and integration tests for reading parquet data."""
+"""test_read.py - unit and integration tests for reading parquet data."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -22,7 +22,7 @@ import pytest
 import fastparquet
 from fastparquet import writer, core
 
-TEST_DATA = "test-data"
+from fastparquet.test.util import sql, s3, TEST_DATA
 
 
 @pytest.yield_fixture()
@@ -56,37 +56,6 @@ files = [os.path.join(TEST_DATA, p) for p in
 csvfile = os.path.join(TEST_DATA, "nation.csv")
 cols = ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 expected = pd.read_csv(csvfile, delimiter="|", index_col=0, names=cols)
-
-
-@pytest.yield_fixture()
-def s3():
-    s3fs = pytest.importorskip('s3fs')
-    moto = pytest.importorskip('moto')
-    m = moto.mock_s3()
-    m.start()
-    s3 = s3fs.S3FileSystem()
-    s3.mkdir(TEST_DATA)
-    paths = []
-    for cat, catnum in product(('fred', 'freda'), ('1', '2', '3')):
-        path = os.sep.join([TEST_DATA, 'split', 'cat=' + cat,
-                            'catnum=' + catnum])
-        files = os.listdir(path)
-        for fn in files:
-            full_path = os.path.join(path, fn)
-            s3.put(full_path, full_path)
-            paths.append(full_path)
-    path = os.path.join(TEST_DATA, 'split')
-    files = os.listdir(path)
-    for fn in files:
-        full_path = os.path.join(path, fn)
-        if os.path.isdir(full_path):
-            continue
-        s3.put(full_path, full_path)
-        paths.append(full_path)
-    yield s3
-    for path in paths:
-        s3.rm(path)
-
 
 
 def test_read_s3(s3):

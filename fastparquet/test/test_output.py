@@ -13,18 +13,10 @@ import shutil
 import tempfile
 
 from fastparquet.util import tempdir, default_mkdirs
-from fastparquet.test.test_read import s3
+from fastparquet.test.util import s3, sql
 from fastparquet.compression import compressions
 
 TEST_DATA = "test-data"
-
-
-@pytest.fixture()
-def sql():
-    pyspark = pytest.importorskip("pyspark")
-    sc = pyspark.SparkContext.getOrCreate()
-    sql = pyspark.SQLContext(sc)
-    return sql
 
 
 def test_uvarint():
@@ -80,43 +72,6 @@ def test_rle_bp():
 
         encoding.read_rle_bit_packed_hybrid(o, width, length=l, o=out)
         assert (out.so_far()[:len(values)] == values).all()
-
-
-@pytest.mark.parametrize('scheme', ['simple', 'hive'])
-@pytest.mark.parametrize('row_groups', [[0], [0, 500]])
-@pytest.mark.parametrize('comp', [None] + list(compressions))
-def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
-    if comp == 'BROTLI':
-        pytest.xfail("spark doesn't support BROTLI compression")
-    data = pd.DataFrame({'i32': np.random.randint(-2**17, 2**17, size=1001,
-                                                  dtype=np.int32),
-                         'i64': np.random.randint(-2**33, 2**33, size=1001,
-                                                  dtype=np.int64),
-                         'f': np.random.randn(1001),
-                         'bhello': np.random.choice([b'hello', b'you',
-                            b'people'], size=1001).astype("O"),
-                         't': [datetime.datetime.now()]*1001})
-
-    data['t'] += pd.to_timedelta('1ns')
-    data['hello'] = data.bhello.str.decode('utf8')
-    data.loc[100, 'f'] = np.nan
-    data['bcat'] = data.bhello.astype('category')
-    data['cat'] = data.hello.astype('category')
-
-    fname = os.path.join(tempdir, 'test.parquet')
-    write(fname, data, file_scheme=scheme, row_group_offsets=row_groups,
-          compression=comp, times='int96', write_index=True)
-
-    df = sql.read.parquet(fname)
-    ddf = df.sort('index').toPandas()
-    for col in data:
-        if data[col].dtype.kind == "M":
-            # pyspark auto-converts timezones
-            offset = round((datetime.datetime.utcnow() -
-                            datetime.datetime.now()).seconds / 3600)
-            ddf[col] + datetime.timedelta(hours=offset) == data[col]
-        else:
-            assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
 
 
 def test_roundtrip_s3(s3):
