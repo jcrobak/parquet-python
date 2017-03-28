@@ -166,7 +166,7 @@ def metadata_from_many(file_list, verify_schema=False, open_with=default_open):
 
     if verify_schema:
         for pf in pfs[1:]:
-            if pf.schema != pfs[0].schema:
+            if pf._schema != pfs[0]._schema:
                 raise ValueError('Incompatible schemas')
 
     fmd = thrift_copy(pfs[0].fmd)  # we inherit "created by" field

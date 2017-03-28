@@ -214,3 +214,55 @@ spec8 = [('data', numba.uint8[:]), ('loc', numba.int64), ('len', numba.int64)]
 Numpy8 = numba.jitclass(spec8)(NumpyIO)
 spec32 = [('data', numba.uint32[:]), ('loc', numba.int64), ('len', numba.int64)]
 Numpy32 = numba.jitclass(spec32)(NumpyIO)
+
+
+def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
+    """Dremel-assembly of arrays of values into lists
+
+    Parameters
+    ----------
+    assign: array dtype O
+        To insert lists into
+    defi: int array
+        Definition levels, max 3
+    rep: int array
+        Repetition levels, max 1
+    dic: array of labels or None
+        Applied if d is True
+    d: bool
+        Whether to dereference dict values
+    null: bool
+        Can an entry be None?
+    null_val: bool
+        can list elements be None
+    """
+    if d:
+        # dereference dict values
+        val = dic[val]
+    i = 0
+    vali = 0
+    part = []
+    started = False
+    append_value = 1 + null + null_val
+    have_null = False
+    for de, re in zip(defi, rep):
+        if not re:
+            # new row - save what we have
+            if started:
+                assign[i] = None if have_null else part
+                part = []
+                i += 1
+            else:
+                # first time: no row to save yet
+                started = True
+        if de == append_value:
+            # append real value to current item
+            part.append(val[vali])
+            vali += 1
+        elif de > null:
+            # append null to current item
+            part.append(None)
+        # next object is None as opposed to an object
+        have_null = de == 0 and null
+    assign[i] = None if have_null else part
+    return i

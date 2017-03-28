@@ -129,7 +129,7 @@ def test_zero_child_leaf(tempdir):
     pf = ParquetFile(fn)
     assert pf.columns == ['x']
 
-    pf.schema[1].num_children = 0
+    pf._schema[1].num_children = 0
     assert pf.columns == ['x']
 
 
