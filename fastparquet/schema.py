@@ -65,7 +65,7 @@ class SchemaHelper(object):
             [(se.name, se) for se in schema_elements])
         schema_tree(schema_elements)
 
-    def __text_type__(self):
+    def __str__(self):
         return schema_to_text(self.schema_elements[0])
 
     def __repr__(self):

@@ -13,6 +13,7 @@ import struct
 import numpy as np
 import pandas as pd
 import thriftpy
+import warnings
 
 from .core import read_thrift
 from .thrift_structures import parquet_thrift
@@ -107,6 +108,12 @@ class ParquetFile(object):
         self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python"
         self._read_partitions()
         self._dtypes()
+
+    @ property
+    def helper(self):
+        warnings.warn('The "helper" attribute of ParquetFile has been'
+                      'renamed to "schema".')
+        return self.schema
 
     @property
     def columns(self):
