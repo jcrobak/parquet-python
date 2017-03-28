@@ -43,7 +43,7 @@ def read_data(fobj, coding, count, bit_width):
 
     Reads with RLE/bitpacked hybrid, where length is given by first byte.
     """
-    out = np.zeros(count, dtype=np.int32)
+    out = np.empty(count, dtype=np.int32)
     o = encoding.Numpy32(out)
     if coding == parquet_thrift.Encoding.RLE:
         while o.loc < count:
