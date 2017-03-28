@@ -120,7 +120,7 @@ class SchemaHelper(object):
 
 def _is_list_like(helper, column):
     se = helper.schema_element(
-        column.meta_data.path_in_schema[0])
+        column.meta_data.path_in_schema[0:1])
     ct = se.converted_type
     if ct != parquet_thrift.ConvertedType.LIST:
         return False
@@ -139,7 +139,7 @@ def _is_list_like(helper, column):
 
 def _is_map_like(helper, column):
     se = helper.schema_element(
-        column.meta_data.path_in_schema[0])
+        column.meta_data.path_in_schema[0:1])
     ct = se.converted_type
     if ct != parquet_thrift.ConvertedType.MAP:
         return False

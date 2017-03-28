@@ -519,7 +519,7 @@ def statistics(obj):
         schema = obj.schema
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
-            se = schema.schema_element(column)
+            se = schema.schema_element(col.meta_data.path_in_schema)
             if se.converted_type is not None:
                 for name in ['min', 'max']:
                     d[name][column] = (
