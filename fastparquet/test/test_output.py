@@ -369,6 +369,17 @@ def test_index(tempdir):
     assert set(r.columns) == {'x', 'y', 'z'}
 
 
+def test_dotted_column(tempdir):
+    fn = os.path.join(tempdir, 'tmp.parq')
+    df = pd.DataFrame({'x.y': [1, 2, 3],
+                       'y': [1., 2., 3.]})
+
+    writer.write(fn, df)
+
+    out = ParquetFile(fn).to_pandas()
+    assert list(out.columns) == ['x.y', 'y']
+
+
 def test_naive_index(tempdir):
     fn = os.path.join(tempdir, 'tmp.parq')
     df = pd.DataFrame({'x': [1, 2, 3],
