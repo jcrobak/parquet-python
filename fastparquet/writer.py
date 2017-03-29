@@ -591,6 +591,9 @@ def make_part_file(f, data, schema, compression=None):
 
 def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
                   object_encoding=None, times='int64'):
+    if not data.columns.is_unique:
+        raise ValueError('Cannot create parquet dataset with duplicate'
+                         ' column names (%s)' % data.columns)
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
