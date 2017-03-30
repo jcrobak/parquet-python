@@ -369,6 +369,14 @@ def test_index(tempdir):
     assert set(r.columns) == {'x', 'y', 'z'}
 
 
+def test_duplicate_columns(tempdir):
+    fn = os.path.join(tempdir, 'tmp.parq')
+    df = pd.DataFrame(np.arange(12).reshape(4, 3), columns=list('aaa'))
+    with pytest.raises(ValueError) as e:
+        write(fn, df)
+    assert 'duplicate' in str(e)
+
+
 def test_dotted_column(tempdir):
     fn = os.path.join(tempdir, 'tmp.parq')
     df = pd.DataFrame({'x.y': [1, 2, 3],
