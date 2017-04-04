@@ -285,27 +285,35 @@ def test_int_rowgroups(tempdir):
     assert [rg.num_rows for rg in r.row_groups] == [34, 34, 32]
 
 
-def test_groups_roundtrip(tempdir):
+@pytest.mark.parametrize('scheme', ['hive', 'drill'])
+def test_groups_roundtrip(tempdir, scheme):
     df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
                        'b': np.random.randint(0, 64000, size=1000),
                        'c': np.random.choice([True, False], size=1000)})
-    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive')
+    writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme=scheme)
 
     r = ParquetFile(tempdir)
     assert r.columns == ['b']
     out = r.to_pandas()
+    if scheme == 'drill':
+        assert set(r.cats) == {'dir0', 'dir1'}
+        assert set(out.columns) == {'b', 'dir0', 'dir1'}
+        out.rename(columns={'dir0': 'a', 'dir1': 'c'}, inplace=True)
 
     for i, row in out.iterrows():
-        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+        assert row.b in list(df[(df.a == row.a) & (df.c == row.c)].b)
 
     writer.write(tempdir, df, row_group_offsets=[0, 50], partition_on=['a', 'c'],
-                 file_scheme='hive')
+                 file_scheme=scheme)
 
     r = ParquetFile(tempdir)
     assert r.count == sum(~df.a.isnull())
     assert len(r.row_groups) == 8
     out = r.to_pandas()
 
+    if scheme == 'drill':
+        assert set(out.columns) == {'b', 'dir0', 'dir1'}
+        out.rename(columns={'dir0': 'a', 'dir1': 'c'}, inplace=True)
     for i, row in out.iterrows():
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
