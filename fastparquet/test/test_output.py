@@ -310,6 +310,21 @@ def test_groups_roundtrip(tempdir):
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
 
+def test_groups_iterable(tempdir):
+    df = pd.DataFrame({'a': np.random.choice(['aaa', 'bbb', None], size=1000),
+                       'b': np.random.randint(0, 64000, size=1000),
+                       'c': np.random.choice([True, False], size=1000)})
+    writer.write(tempdir, df, partition_on=['a'], file_scheme='hive')
+
+    r = ParquetFile(tempdir)
+    assert r.columns == ['b', 'c']
+    out = r.to_pandas()
+
+    for i, row in out.iterrows():
+        assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
+
+
+
 def test_empty_groupby(tempdir):
     df = pd.DataFrame({'a': np.random.choice(['a', 'b', None], size=1000),
                        'b': np.random.randint(0, 64000, size=1000),
