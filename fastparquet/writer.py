@@ -830,6 +830,8 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         remaining.remove(column)
     for key in gb.indices:
         df = gb.get_group(key)[remaining]
+        if not isinstance(key, tuple):
+            key = (key,)
         if with_field:
             path = sep.join(["%s=%s" % (name, val)
                              for name, val in zip(columns, key)])
