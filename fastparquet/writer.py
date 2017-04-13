@@ -760,7 +760,7 @@ def write(filename, data, row_group_offsets=50000000,
     if file_scheme == 'simple':
         write_simple(filename, data, fmd, row_group_offsets,
                      compression, open_with, has_nulls, append)
-    elif file_scheme == 'hive':
+    elif file_scheme in ['hive', 'drill']:
         if append:
             pf = api.ParquetFile(filename, open_with=open_with)
             if pf.file_scheme != 'hive':
@@ -780,7 +780,8 @@ def write(filename, data, row_group_offsets=50000000,
             if partition_on:
                 partition_on_columns(
                     data[start:end], partition_on, filename, part, fmd,
-                    sep, compression, open_with, mkdirs
+                    sep, compression, open_with, mkdirs,
+                    with_field=file_scheme == 'hive'
                 )
                 rg = None
             else:
@@ -816,7 +817,7 @@ def find_max_part(row_groups):
 
 
 def partition_on_columns(data, columns, root_path, partname, fmd, sep,
-                         compression, open_with, mkdirs):
+                         compression, open_with, mkdirs, with_field=True):
     """
     Split each row-group by the given columns
 
@@ -831,8 +832,11 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         df = gb.get_group(key)[remaining]
         if not isinstance(key, tuple):
             key = (key,)
-        path = sep.join(["%s=%s" % (name, val)
-                         for name, val in zip(columns, key)])
+        if with_field:
+            path = sep.join(["%s=%s" % (name, val)
+                             for name, val in zip(columns, key)])
+        else:
+            path = sep.join(["%s" % val for val in key])
         relname = sep.join([path, partname])
         mkdirs(root_path + sep + path)
         fullname = sep.join([root_path, path, partname])

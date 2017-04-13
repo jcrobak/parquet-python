@@ -4,6 +4,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from collections import OrderedDict
 import json
 import operator
 import os
@@ -130,10 +131,15 @@ class ParquetFile(object):
             for col in rg.columns:
                 s = ex_from_sep(self.sep)
                 partitions = s.findall(col.file_path or "")
-                for key, val in partitions:
-                    cats.setdefault(key, set()).add(val)
-        self.cats = {key: list([val_to_num(x) for x in v])
-                     for key, v in cats.items()}
+                if partitions:
+                    for key, val in partitions:
+                        cats.setdefault(key, set()).add(val)
+                elif self.sep in (col.file_path or ""):
+                    for i, val in enumerate(col.file_path.split(self.sep)[:-1]):
+                        key = 'dir%i' % i
+                        cats.setdefault(key, set()).add(val)
+        self.cats = OrderedDict([(key, list([val_to_num(x) for x in v]))
+                     for key, v in cats.items()])
 
     def row_group_filename(self, rg):
         if rg.columns[0].file_path:

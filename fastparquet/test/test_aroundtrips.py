@@ -57,7 +57,7 @@ df = sql.createDataFrame(out, df_schema)
     pd.util.testing.assert_frame_equal(data, expected)
 
 
-@pytest.mark.parametrize('scheme', ['simple', 'hive'])
+@pytest.mark.parametrize('scheme', ['simple', 'hive', 'drill'])
 @pytest.mark.parametrize('row_groups', [[0], [0, 500]])
 @pytest.mark.parametrize('comp', [None] + list(compressions))
 def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
