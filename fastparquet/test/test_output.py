@@ -483,9 +483,12 @@ def test_null_time(tempdir):
 def test_auto_null(tempdir):
     tmp = str(tempdir)
     df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'aa': [1, 2, 3, None],
                        'b': [1., 2., 3., np.nan],
                        'c': pd.to_timedelta([1, 2, 3, np.nan], unit='ms'),
-                       'd': ['a', 'b', 'c', None]})
+                       'd': ['a', 'b', 'c', None],
+                       'f': [True, False, True, True],
+                       'ff': [True, False, None, True]})
     df['e'] = df['d'].astype('category')
     fn = os.path.join(tmp, "test.parq")
 
@@ -495,19 +498,24 @@ def test_auto_null(tempdir):
 
     write(fn, df, has_nulls=True)
     pf = ParquetFile(fn)
-    for col in pf._schema[2:]:
+    for col in pf._schema[1:]:
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    assert pf._schema[1].repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     df2 = pf.to_pandas(categories=['e'])
-    tm.assert_frame_equal(df, df2, check_categorical=False)
+
+    cols = list(set(df) - {'ff'})
+    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
 
     write(fn, df, has_nulls=None)
     pf = ParquetFile(fn)
-    for col in pf._schema[1:3]:
-        assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
-    assert pf._schema[4].repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
-    df2= pf.to_pandas(categories=['e'])
-    tm.assert_frame_equal(df, df2, check_categorical=False)
+    for col in pf._schema[1:]:
+        if col.name in ['d', 'ff']:
+            assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+        else:
+            assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
 
 
 @pytest.mark.parametrize('n', (10, 127, 2**8 + 1, 2**16 + 1))

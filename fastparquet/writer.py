@@ -80,7 +80,6 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
     - converted data (None if convert is False)
 
     """
-    out = None
     dtype = data.dtype
     if dtype.name in typemap:
         type, converted_type, width = typemap[dtype.name]
@@ -93,15 +92,25 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
 
         if object_encoding == 'utf8':
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
-                                           parquet_thrift.ConvertedType.UTF8, None)
+                                           parquet_thrift.ConvertedType.UTF8,
+                                           None)
         elif object_encoding in ['bytes', None]:
-            type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None, None
+            type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None,\
+                                          None
         elif object_encoding == 'json':
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
-                                           parquet_thrift.ConvertedType.JSON, None)
+                                           parquet_thrift.ConvertedType.JSON,
+                                           None)
         elif object_encoding == 'bson':
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
-                                           parquet_thrift.ConvertedType.BSON, None)
+                                           parquet_thrift.ConvertedType.BSON,
+                                           None)
+        elif object_encoding == 'bool':
+            type, converted_type, width = (parquet_thrift.Type.BOOLEAN, None,
+                                           None)
+        elif object_encoding == 'int':
+            type, converted_type, width = (parquet_thrift.Type.INT64, None,
+                                           None)
         else:
             raise ValueError('Object encoding (%s) not one of '
                              'infer|utf8|bytes|json|bson' % object_encoding)
@@ -191,6 +200,10 @@ def infer_object_encoding(data):
         return 'bytes'
     if all(isinstance(i, (list, dict)) for i in head):
         return 'json'
+    if all(isinstance(i, bool) for i in head):
+        return 'bool'
+    if all(isinstance(i, int) for i in head):
+        return 'int'
     else:
         raise ValueError("Can't infer object conversion type: %s" % head)
 
@@ -427,11 +440,16 @@ def write_column(f, data, selement, compression=None):
     if has_nulls:
         if str(data.dtype) == 'category':
             num_nulls = (data.cat.codes == -1).sum()
-        elif data.dtype.kind == 'i':
+        elif data.dtype.kind in ['i', 'b']:
             num_nulls = 0
         else:
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
+        if data.dtype.kind == "O":
+            if selement.type == parquet_thrift.Type.INT64:
+                data = data.astype(int)
+            elif selement.type == parquet_thrift.Type.BOOLEAN:
+                data = data.astype(bool)
     else:
         definition_data = b""
         num_nulls = 0
@@ -611,8 +629,8 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
     for column in data.columns:
         if column in ignore_columns:
             continue
-        oencoding = (object_encoding if isinstance(object_encoding, STR_TYPE) else
-                     object_encoding.get(column, None))
+        oencoding = (object_encoding if isinstance(object_encoding, STR_TYPE)
+                     else object_encoding.get(column, None))
         fixed = None if fixed_text is None else fixed_text.get(column, None)
         if str(data[column].dtype) == 'category':
             se, type = find_type(data[column].cat.categories,
@@ -624,11 +642,10 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
                                  object_encoding=oencoding, times=times)
         col_has_nulls = has_nulls
         if has_nulls is None:
-            se.repetition_type = type in [parquet_thrift.Type.BYTE_ARRAY,
-                                          parquet_thrift.Type.INT96]
+            se.repetition_type = data[column].dtype == "O"
         elif has_nulls is not True and has_nulls is not False:
             col_has_nulls = column in has_nulls
-        if col_has_nulls and data[column].dtype.kind != 'i':
+        if col_has_nulls:
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1

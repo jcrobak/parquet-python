@@ -379,8 +379,8 @@ class ParquetFile(object):
                           if f.num_children in [None, 0] else np.dtype("O"))
                  for f in self.schema.root.children.values()}
         for col, dt in dtype.copy().items():
-            if dt.kind == 'i':
-                # int columns that may have nulls become float columns
+            if dt.kind in ['i', 'b']:
+                # int/bool columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
                     chunks = [c for c in rg.columns
