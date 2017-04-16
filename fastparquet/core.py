@@ -210,6 +210,10 @@ def read_col(column, schema_helper, infile, use_cat=False,
         return dic
     if use_cat:
         catdef._categories = pd.Index(dic)
+        if np.iinfo(assign.dtype).max < len(dic):
+            raise RuntimeError('Assigned array dtype (%s) cannot accommodate '
+                               'number of category labels (%i)' %
+                               (assign.dtype, len(dic)))
 
     rows = cmd.num_values
 

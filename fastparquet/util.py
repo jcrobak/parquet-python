@@ -184,12 +184,19 @@ def metadata_from_many(file_list, verify_schema=False, open_with=default_open):
     fmd.num_rows = sum(rg.num_rows for rg in fmd.row_groups)
     return basepath, fmd
 
+# simple cache to avoid re compile every time
+seps = {}
+
 
 def ex_from_sep(sep):
     """Generate regex for category folder matching"""
-    if sep in r'\^$.|?*+()[]':
-        return re.compile(r"([a-zA-Z_]+)=([^\{}]+)".format(sep))
-    return re.compile("([a-zA-Z_]+)=([^{}]+)".format(sep))
+    if sep not in seps:
+        if sep in r'\^$.|?*+()[]':
+            s = re.compile(r"([a-zA-Z_]+)=([^\{}]+)".format(sep))
+        else:
+            s = re.compile("([a-zA-Z_]+)=([^{}]+)".format(sep))
+        seps[sep] = s
+    return seps[sep]
 
 
 def analyse_paths(file_list, sep=os.sep):
