@@ -452,6 +452,9 @@ def filter_out_stats(rg, filters, schema):
     -------
     True or False
     """
+    if rg.num_rows == 0:
+        # always ignore empty row-groups, don't bother loading
+        return True
     if len(filters) == 0:
         return False
     for column in rg.columns:
