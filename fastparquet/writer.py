@@ -591,19 +591,26 @@ def make_row_group(f, data, schema, compression=None):
     return rg
 
 
-def make_part_file(f, data, schema, compression=None):
+def make_part_file(f, data, schema, compression=None, fmd=None):
     if len(data) == 0:
         return
     with f as f:
         f.write(MARKER)
         rg = make_row_group(f, data, schema, compression=compression)
-        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                          schema=schema,
-                                          version=1,
-                                          created_by=created_by,
-                                          row_groups=[rg])
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
+        if fmd is None:
+            fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                              schema=schema,
+                                              version=1,
+                                              created_by=created_by,
+                                              row_groups=[rg])
+            foot_size = write_thrift(f, fmd)
+            f.write(struct.pack(b"<i", foot_size))
+        else:
+            prev = fmd.row_groups
+            fmd.row_groups = [rg]
+            foot_size = write_thrift(f, fmd)
+            f.write(struct.pack(b"<i", foot_size))
+            fmd.row_groups = prev
         f.write(MARKER)
     return rg
 
@@ -806,7 +813,7 @@ def write(filename, data, row_group_offsets=50000000,
                 partname = sep.join([filename, part])
                 with open_with(partname, 'wb') as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
-                                        compression=compression)
+                                        compression=compression, fmd=fmd)
                 for chunk in rg.columns:
                     chunk.file_path = part
 
@@ -860,7 +867,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         fullname = sep.join([root_path, path, partname])
         with open_with(fullname, 'wb') as f2:
             rg = make_part_file(f2, df, fmd.schema,
-                                compression=compression)
+                                compression=compression, fmd=fmd)
         if rg is not None:
             for chunk in rg.columns:
                 chunk.file_path = relname
