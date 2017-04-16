@@ -95,4 +95,4 @@ def test_to_pandas():
     assert len(out.columns) == 29
     # test for bad integer conversion
     assert (out.dep_time < 0).sum() == 0
-    assert out.dep_time.dtype == 'float32'
+    assert out.dep_time.dtype == 'float64'
