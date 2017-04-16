@@ -285,3 +285,20 @@ def test_timestamp96():
              "2016-08-07 23:08:06", "2016-08-08 23:08:07",
              "2016-08-09 23:08:08", "2016-08-10 23:08:09"])
     assert (out['date_added'] == expected).all()
+
+
+def test_bad_catsize(tempdir):
+    df = pd.DataFrame({'a': pd.Categorical([str(i) for i in range(1024)])})
+    fastparquet.write(tempdir, df, file_scheme='hive')
+    pf = fastparquet.ParquetFile(tempdir)
+    assert pf.categories == {'a': 1024}
+    with pytest.raises(RuntimeError):
+        pf.to_pandas(categories={'a': 2})
+
+
+def test_null_sizes(tempdir):
+    df = pd.DataFrame({'a': [True, None], 'b': [3000, np.nan]}, dtype="O")
+    fastparquet.write(tempdir, df, has_nulls=True, file_scheme='hive')
+    pf = fastparquet.ParquetFile(tempdir)
+    assert pf.dtypes['a'] == 'float32'
+    assert pf.dtypes['b'] == 'float64'
