@@ -67,9 +67,9 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
     fixed_text: int or None
         For str and bytes, the fixed-string length to use. If None, object
         column will remain variable length.
-    object_encoding: None or bytes|utf8\json|bson
+    object_encoding: None or bytes|utf8\json|bson|bool|int
         How to encode object type into bytes. If None, bytes is assumed;
-        if 'infer'
+        if 'infer', type is guessed from 10 first non-null values.
     times: 'int64'|'int96'
         Normal integers or 12-byte encoding for timestamps.
 
@@ -113,7 +113,8 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
                                            None)
         else:
             raise ValueError('Object encoding (%s) not one of '
-                             'infer|utf8|bytes|json|bson' % object_encoding)
+                             'infer|utf8|bytes|json|bson|bool|int' %
+                             object_encoding)
         if fixed_text:
             width = fixed_text
             type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
@@ -745,10 +746,10 @@ def write(filename, data, row_group_offsets=50000000,
         and the schema must match the input data.
     object_encoding: str or {col: type}
         For object columns, this gives the data type, so that the values can
-        be encoded to bytes. Possible values are bytes|utf8|json|bson, where
-        bytes is assumed if not specified (i.e., no conversion). The special
-        value 'infer' will cause the type to be guessed from the first ten
-        values.
+        be encoded to bytes. Possible values are bytes|utf8|json|bson|bool|int,
+        where bytes is assumed if not specified (i.e., no conversion). The 
+        special value 'infer' will cause the type to be guessed from the first 
+        ten non-null values.
     times: 'int64' (default), or 'int96':
         In "int64" mode, datetimes are written as 8-byte integers, us
         resolution; in "int96" mode, they are written as 12-byte blocks, with

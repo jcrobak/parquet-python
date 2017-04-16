@@ -2,7 +2,9 @@ Usage Notes
 ===========
 
 Some additional information to bear in mind when using fastparquet,
-in no particular order.
+in no particular order. Much of what follows has implications for writing
+parquet files that are compatible with other parquet implementations, versus
+performance when writing data for reading back with fastparquet.
 
 Whilst we aim to make the package simple to use, some choices on the part
 of the user may effect performance and data consistency.
@@ -87,19 +89,21 @@ This value can be stored in float and time fields, and will be read back such
 that the original data is recovered. They are not, however, the same thing
 as missing values, and if querying the resultant files using other frameworks,
 this should be born in mind. With ``has_nulls=None`` (the default) on writing,
-float and time fields will not write separate NULLs information, and
+float, time and category fields will not write separate NULLs information, and
 the metadata will give num_nulls=0.
 
 Using ``has_nulls=True`` (which can
 also be specified for some specific subset of columns using a list) will force
 the writing of NULLs information, making the output more transferable, but
-comes with a performance penalty.
+comes with a performance penalty on writing. If there are, in fact, no nulls,
+then performance will be essentially unaffected on reading.
 
 Because of the ``NaN`` encoding for NULLs, pandas is unable to represent missing
 data in an integer field. In practice, this means that fastparquet will never
 write any NULLs in an integer field, and if reading an integer field with NULLs,
 the resultant column will become a float type. This is in line with what
-pandas does when reading integers.
+pandas does when reading integers. The only way to write NULLs in a bool or int
+field is to use an object type column.
 
 For object and category columns, NULLs (``None``) do exist, and fastparquet can
 read and write them. Including this data does come at a cost, however.
@@ -109,6 +113,13 @@ their decoding will be pretty efficient. In general, it is best to provide
 ``has_nulls`` with a list of columns known to contain NULLs - however if None
 is encountered in a column not in the list, this will raise an exception.
 
+
+``has_nulls=True`` should be considered the default option for output
+designed to be read by other parquet readers, since NaN and NULL are generally
+not considered to be equivalent in Spark and Impala as they are in pandas.
+It is typical for those systems to write all fields in a schema as optional
+(allowing NULLs), even when the schema design suggests that they are in fact
+required.
 
 Data Types
 ----------
