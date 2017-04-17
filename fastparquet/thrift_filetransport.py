@@ -4,7 +4,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from thriftpy.transport import TTransportBase
+from thriftpy.transport import TTransportBase, TTransportException
 
 
 class TFileTransport(TTransportBase):  # pylint: disable=too-few-public-methods
@@ -14,12 +14,7 @@ class TFileTransport(TTransportBase):  # pylint: disable=too-few-public-methods
         """Initialize with `fo`, the file object to read from."""
         self._fo = fo
         self._pos = fo.tell()
-
-    def _read(self, sz):
-        """Read data `sz` bytes."""
-        return self._fo.read(sz)
-
-    def _write(self, sz):
-        return self._fo.write(sz)
-
-    write = _write
+        self._read = fo.read
+        self.read = fo.read
+        self._write = fo.write
+        self.write = fo.write
