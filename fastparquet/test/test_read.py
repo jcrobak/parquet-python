@@ -42,6 +42,25 @@ def test_header_magic_bytes(tempdir):
         p = fastparquet.ParquetFile(fn, verify=True)
 
 
+@pytest.mark.parametrize("size", [1, 4, 12, 20])
+def test_read_footer_fail(tempdir, size):
+    """Test reading the footer."""
+    import struct
+    fn = os.path.join(TEST_DATA, "nation.impala.parquet")
+    fout = os.path.join(tempdir, "temp.parquet")
+    with open(fn, 'rb') as f1:
+        with open(fout, 'wb') as f2:
+            f1.seek(-8, 2)
+            head_size = struct.unpack('<i', f1.read(4))[0]
+            f1.seek(-(head_size + 8), 2)
+            block = f1.read(head_size)
+            f2.write(b'0' * 25)  # padding
+            f2.write(block[:-size])
+            f2.write(f1.read())
+    with pytest.raises(TypeError):
+        p = fastparquet.ParquetFile(fout)
+
+
 def test_read_footer():
     """Test reading the footer."""
     p = fastparquet.ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
