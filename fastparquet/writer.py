@@ -14,9 +14,8 @@ import warnings
 
 import numba
 
-from thriftpy.protocol.compact import TCompactProtocolFactory
+from thriftpy.protocol.compact import TCompactProtocol
 from thriftpy.protocol.exc import TProtocolException
-from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from .converted_types import tobson
@@ -231,8 +230,7 @@ def write_thrift(fobj, thrift):
     Number of bytes written
     """
     t0 = fobj.tell()
-    tout = TFileTransport(fobj)
-    pout = TCompactProtocolFactory().get_protocol(tout)
+    pout = TCompactProtocol(fobj)
     try:
         thrift.write(pout)
         fail = False
