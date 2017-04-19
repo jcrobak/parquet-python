@@ -14,9 +14,8 @@ import warnings
 
 import numba
 
-from thriftpy.protocol.compact import TCompactProtocolFactory
+from thriftpy.protocol.compact import TCompactProtocol
 from thriftpy.protocol.exc import TProtocolException
-from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from .converted_types import tobson
@@ -67,9 +66,9 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
     fixed_text: int or None
         For str and bytes, the fixed-string length to use. If None, object
         column will remain variable length.
-    object_encoding: None or bytes|utf8\json|bson
+    object_encoding: None or bytes|utf8\json|bson|bool|int
         How to encode object type into bytes. If None, bytes is assumed;
-        if 'infer'
+        if 'infer', type is guessed from 10 first non-null values.
     times: 'int64'|'int96'
         Normal integers or 12-byte encoding for timestamps.
 
@@ -113,7 +112,8 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
                                            None)
         else:
             raise ValueError('Object encoding (%s) not one of '
-                             'infer|utf8|bytes|json|bson' % object_encoding)
+                             'infer|utf8|bytes|json|bson|bool|int' %
+                             object_encoding)
         if fixed_text:
             width = fixed_text
             type = parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY
@@ -230,8 +230,7 @@ def write_thrift(fobj, thrift):
     Number of bytes written
     """
     t0 = fobj.tell()
-    tout = TFileTransport(fobj)
-    pout = TCompactProtocolFactory().get_protocol(tout)
+    pout = TCompactProtocol(fobj)
     try:
         thrift.write(pout)
         fail = False
@@ -590,19 +589,26 @@ def make_row_group(f, data, schema, compression=None):
     return rg
 
 
-def make_part_file(f, data, schema, compression=None):
+def make_part_file(f, data, schema, compression=None, fmd=None):
     if len(data) == 0:
         return
     with f as f:
         f.write(MARKER)
         rg = make_row_group(f, data, schema, compression=compression)
-        fmd = parquet_thrift.FileMetaData(num_rows=len(data),
-                                          schema=schema,
-                                          version=1,
-                                          created_by=created_by,
-                                          row_groups=[rg])
-        foot_size = write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
+        if fmd is None:
+            fmd = parquet_thrift.FileMetaData(num_rows=len(data),
+                                              schema=schema,
+                                              version=1,
+                                              created_by=created_by,
+                                              row_groups=[rg])
+            foot_size = write_thrift(f, fmd)
+            f.write(struct.pack(b"<i", foot_size))
+        else:
+            prev = fmd.row_groups
+            fmd.row_groups = [rg]
+            foot_size = write_thrift(f, fmd)
+            f.write(struct.pack(b"<i", foot_size))
+            fmd.row_groups = prev
         f.write(MARKER)
     return rg
 
@@ -745,10 +751,10 @@ def write(filename, data, row_group_offsets=50000000,
         and the schema must match the input data.
     object_encoding: str or {col: type}
         For object columns, this gives the data type, so that the values can
-        be encoded to bytes. Possible values are bytes|utf8|json|bson, where
-        bytes is assumed if not specified (i.e., no conversion). The special
-        value 'infer' will cause the type to be guessed from the first ten
-        values.
+        be encoded to bytes. Possible values are bytes|utf8|json|bson|bool|int,
+        where bytes is assumed if not specified (i.e., no conversion). The 
+        special value 'infer' will cause the type to be guessed from the first 
+        ten non-null values.
     times: 'int64' (default), or 'int96':
         In "int64" mode, datetimes are written as 8-byte integers, us
         resolution; in "int96" mode, they are written as 12-byte blocks, with
@@ -805,7 +811,7 @@ def write(filename, data, row_group_offsets=50000000,
                 partname = sep.join([filename, part])
                 with open_with(partname, 'wb') as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
-                                        compression=compression)
+                                        compression=compression, fmd=fmd)
                 for chunk in rg.columns:
                     chunk.file_path = part
 
@@ -859,7 +865,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         fullname = sep.join([root_path, path, partname])
         with open_with(fullname, 'wb') as f2:
             rg = make_part_file(f2, df, fmd.schema,
-                                compression=compression)
+                                compression=compression, fmd=fmd)
         if rg is not None:
             for chunk in rg.columns:
                 chunk.file_path = relname

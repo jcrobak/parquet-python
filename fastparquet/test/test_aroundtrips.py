@@ -92,3 +92,25 @@ def test_pyspark_roundtrip(tempdir, scheme, row_groups, comp, sql):
             ddf[col] + datetime.timedelta(hours=offset) == data[col]
         else:
             assert (ddf[col] == data[col])[~ddf[col].isnull()].all()
+
+
+def test_empty_row_groups(tempdir, sql):
+    fn = os.path.join(tempdir, 'output.parquet')
+    d0 = pd.DataFrame({'name': ['alice'], 'age': [20]})
+    df = sql.createDataFrame(d0)
+    df.write.parquet(fn)
+    import glob
+    files = glob.glob(os.path.join(fn, '*.parquet'))
+    sizes = [os.stat(p).st_size for p in files]
+    msize = max(sizes)
+    pf = fastparquet.ParquetFile(files)  # don't necessarily have metadata
+    assert len(files) > 1  # more than one worker was writing
+    d = pf.to_pandas(index=False)
+    pd.util.testing.assert_frame_equal(d, d0)
+
+    # destroy empty files
+    [os.unlink(f) for (f, s) in zip(files, sizes) if s < msize]
+
+    # loads anyway, since empty row-groups are not touched
+    d = pf.to_pandas()
+    pd.util.testing.assert_frame_equal(d, d0)

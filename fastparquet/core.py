@@ -5,29 +5,28 @@ import struct
 
 import numpy as np
 import pandas as pd
-from thriftpy.protocol.compact import TCompactProtocolFactory
+from thriftpy.protocol.compact import TCompactProtocol
 
 from . import encoding
 from .compression import decompress_data
 from .converted_types import convert, typemap
 from .schema import _is_list_like, _is_map_like
 from .speedups import unpack_byte_array
-from .thrift_filetransport import TFileTransport
 from .thrift_structures import parquet_thrift
 from .util import val_to_num, byte_buffer, ex_from_sep
 
 
 def read_thrift(file_obj, ttype):
     """Read a thrift structure from the given fo."""
-    tin = TFileTransport(file_obj)
-    pin = TCompactProtocolFactory().get_protocol(tin)
+    pin = TCompactProtocol(file_obj, True)
     page_header = ttype()
     page_header.read(pin)
     return page_header
 
 
 def _read_page(file_obj, page_header, column_metadata):
-    """Read the data page from the given file-object and convert it to raw, uncompressed bytes (if necessary)."""
+    """Read the data page from the given file-object and convert it to raw, 
+    uncompressed bytes (if necessary)."""
     raw_bytes = file_obj.read(page_header.compressed_page_size)
     raw_bytes = decompress_data(raw_bytes, column_metadata.codec)
 
@@ -210,6 +209,10 @@ def read_col(column, schema_helper, infile, use_cat=False,
         return dic
     if use_cat:
         catdef._categories = pd.Index(dic)
+        if np.iinfo(assign.dtype).max < len(dic):
+            raise RuntimeError('Assigned array dtype (%s) cannot accommodate '
+                               'number of category labels (%i)' %
+                               (assign.dtype, len(dic)))
 
     rows = cmd.num_values
 

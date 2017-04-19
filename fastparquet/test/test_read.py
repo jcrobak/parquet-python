@@ -42,6 +42,25 @@ def test_header_magic_bytes(tempdir):
         p = fastparquet.ParquetFile(fn, verify=True)
 
 
+@pytest.mark.parametrize("size", [1, 4, 12, 20])
+def test_read_footer_fail(tempdir, size):
+    """Test reading the footer."""
+    import struct
+    fn = os.path.join(TEST_DATA, "nation.impala.parquet")
+    fout = os.path.join(tempdir, "temp.parquet")
+    with open(fn, 'rb') as f1:
+        with open(fout, 'wb') as f2:
+            f1.seek(-8, 2)
+            head_size = struct.unpack('<i', f1.read(4))[0]
+            f1.seek(-(head_size + 8), 2)
+            block = f1.read(head_size)
+            f2.write(b'0' * 25)  # padding
+            f2.write(block[:-size])
+            f2.write(f1.read())
+    with pytest.raises(TypeError):
+        p = fastparquet.ParquetFile(fout)
+
+
 def test_read_footer():
     """Test reading the footer."""
     p = fastparquet.ParquetFile(os.path.join(TEST_DATA, "nation.impala.parquet"))
@@ -285,3 +304,20 @@ def test_timestamp96():
              "2016-08-07 23:08:06", "2016-08-08 23:08:07",
              "2016-08-09 23:08:08", "2016-08-10 23:08:09"])
     assert (out['date_added'] == expected).all()
+
+
+def test_bad_catsize(tempdir):
+    df = pd.DataFrame({'a': pd.Categorical([str(i) for i in range(1024)])})
+    fastparquet.write(tempdir, df, file_scheme='hive')
+    pf = fastparquet.ParquetFile(tempdir)
+    assert pf.categories == {'a': 1024}
+    with pytest.raises(RuntimeError):
+        pf.to_pandas(categories={'a': 2})
+
+
+def test_null_sizes(tempdir):
+    df = pd.DataFrame({'a': [True, None], 'b': [3000, np.nan]}, dtype="O")
+    fastparquet.write(tempdir, df, has_nulls=True, file_scheme='hive')
+    pf = fastparquet.ParquetFile(tempdir)
+    assert pf.dtypes['a'] == 'float16'
+    assert pf.dtypes['b'] == 'float64'

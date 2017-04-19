@@ -725,3 +725,21 @@ def test_hasnulls_ordering(tempdir):
     assert r._schema[2].repetition_type == 0
     assert r._schema[3].name == 'c'
     assert r._schema[3].repetition_type == 1
+
+
+def test_cats_in_part_files(tempdir):
+    df = pd.DataFrame({'a': pd.Categorical(['a', 'b'] * 100)})
+    writer.write(tempdir, df, file_scheme='hive', row_group_offsets=50)
+    import glob
+    files = glob.glob(os.path.join(tempdir, 'part*'))
+    pf = ParquetFile(tempdir)
+    assert len(pf.row_groups) == 4
+    kv = pf.fmd.key_value_metadata
+    assert kv
+    for f in files:
+        pf = ParquetFile(f)
+        assert pf.fmd.key_value_metadata == kv
+        assert len(pf.row_groups) == 1
+    out = pd.concat([ParquetFile(f).to_pandas() for f in files],
+                    ignore_index=True)
+    pd.util.testing.assert_frame_equal(df, out)

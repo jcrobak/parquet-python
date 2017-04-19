@@ -394,7 +394,12 @@ class ParquetFile(object):
                             break
                         num_nulls += chunk.meta_data.statistics.null_count
                 if num_nulls:
-                    dtype[col] = np.dtype('f%i' % max(dt.itemsize, 2))
+                    if dtype[col].itemsize == 1:
+                        dtype[col] = np.dtype('f2')
+                    elif dtype[col].itemsize == 2:
+                        dtype[col] = np.dtype('f4')
+                    else:
+                        dtype[col] = np.dtype('f8')
         for field in categories:
             dtype[field] = 'category'
         for cat in self.cats:
@@ -449,6 +454,9 @@ def filter_out_stats(rg, filters, schema):
     -------
     True or False
     """
+    if rg.num_rows == 0:
+        # always ignore empty row-groups, don't bother loading
+        return True
     if len(filters) == 0:
         return False
     for column in rg.columns:
