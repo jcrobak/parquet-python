@@ -87,9 +87,9 @@ class ParquetFile(object):
         f.seek(-(head_size+8), 2)
         try:
             fmd = read_thrift(f, parquet_thrift.FileMetaData)
-        except thriftpy.transport.TTransportException:
+        except Exception:
             raise ParquetException('Metadata parse failed: %s' %
-                                         self.fn)
+                                   self.fn)
         self.head_size = head_size
         self.fmd = fmd
         self._set_attrs()

@@ -1,5 +1,5 @@
 import numpy as np
-from pandas.core.index import _ensure_index, CategoricalIndex
+from pandas.core.index import _ensure_index, CategoricalIndex, Index
 from pandas.core.internals import BlockManager, _block_shape
 from pandas.core.generic import NDFrame
 from pandas.core.frame import DataFrame
@@ -77,8 +77,8 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
             index._data._codes = vals
             views[index_name] = vals
         else:
-            index = np.empty(size, dtype=index_type)
-            views[index_name] = index
+            index = Index(np.empty(size, dtype=index_type))
+            views[index_name] = index.values
 
         axes = [df._data.axes[0], index]
     else:
