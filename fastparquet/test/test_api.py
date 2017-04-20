@@ -120,6 +120,27 @@ def test_attributes(tempdir):
         assert pf.dtypes[col] == df.dtypes[col]
 
 
+def test_cast_index(tempdir):
+    df = pd.DataFrame({'i8': np.array([1, 2, 3, 4], dtype='uint8'),
+                       'i16': np.array([1, 2, 3, 4], dtype='int16'),
+                       'i32': np.array([1, 2, 3, 4], dtype='int32'),
+                       'i62': np.array([1, 2, 3, 4], dtype='int64'),
+                       'f16': np.array([1, 2, 3, 4], dtype='float16'),
+                       'f32': np.array([1, 2, 3, 4], dtype='float32'),
+                       'f64': np.array([1, 2, 3, 4], dtype='float64'),
+                       })
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df)
+    pf = ParquetFile(fn)
+    for col in list(df):
+        d = pf.to_pandas(index=col)
+        if d.index.dtype.kind == 'i':
+            assert d.index.dtype == 'int64'
+        else:
+            assert d.index.dtype == 'float64'
+        assert (d.index == df[col]).all()
+
+
 def test_zero_child_leaf(tempdir):
     df = pd.DataFrame({'x': [1, 2, 3]})
 
