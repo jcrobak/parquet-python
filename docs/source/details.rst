@@ -84,7 +84,41 @@ Spark, be sure to transform integer columns to a minimum of 4 bytes (numpy
 Nulls
 -----
 
-In pandas, NULL values are typically represented by the floating point ``NaN``.
+In pandas, there is no internal representation difference between NULL (no value)
+and NaN (not a valid number) for float, time and category columns. Whether to
+enocde these values using parquet NULL or the "sentinel" values is a choice for
+the user. The parquet framework that will read the data will likely treat
+NULL and NaN differently (e.g., in `in Spark`_). In the typical case of tabular
+data (as opposed to strict numerics), users often mean the NULL semantics, and
+so should write NULLs information. Furthermore, it is typical for some parquet
+frameworks to define all columns as optional, whether or not they are intended to
+hold any missing data, to allow for possible mutation of the schema when appending
+partitions later.
+
+.. _in Spark: https://spark.apache.org/docs/2.1.0/sql-programming-guide.html#nan-semantics
+
+Since there is some cost associated with reading and writing NULLs information,
+fastparquet provides the ``has_nulls`` keyword when writing to specify how to
+handle NULLs. In the case that a column has no NULLs, including NULLs information
+will not produce a great performance hit on reading, and only a slight extra time
+upon writing, while determining that there are zero NULL values.
+
+The following cases are allowed for ``has_nulls``:
+
+    - True: all columns become optional, and NaNs are always stored as NULL. This is
+      the best option for compatibility. This is the default.
+
+    - False: all columns become required, and any NaNs are stored as NaN; if there
+      are any fields which cannot store such sentinel values (e.g,. string),
+      but do contain None, there will be an error.
+
+    - 'infer': only object columns will become optional, since float, time, and
+      category columns can store sentinel values, and pandas int columns cannot
+      contain any NaNs. This is the best-performing
+      option if the data will only be read by fastparquet.
+
+    - list of strings: the named columns will be optional, others required (no NULLs)
+
 This value can be stored in float and time fields, and will be read back such
 that the original data is recovered. They are not, however, the same thing
 as missing values, and if querying the resultant files using other frameworks,
@@ -92,34 +126,6 @@ this should be born in mind. With ``has_nulls=None`` (the default) on writing,
 float, time and category fields will not write separate NULLs information, and
 the metadata will give num_nulls=0.
 
-Using ``has_nulls=True`` (which can
-also be specified for some specific subset of columns using a list) will force
-the writing of NULLs information, making the output more transferable, but
-comes with a performance penalty on writing. If there are, in fact, no nulls,
-then performance will be essentially unaffected on reading.
-
-Because of the ``NaN`` encoding for NULLs, pandas is unable to represent missing
-data in an integer field. In practice, this means that fastparquet will never
-write any NULLs in an integer field, and if reading an integer field with NULLs,
-the resultant column will become a float type. This is in line with what
-pandas does when reading integers. The only way to write NULLs in a bool or int
-field is to use an object type column.
-
-For object and category columns, NULLs (``None``) do exist, and fastparquet can
-read and write them. Including this data does come at a cost, however.
-Currently, with ``has_nulls=None`` (the default), object fields will assume
-the existence of NULLs; if a chunk does not in fact have any, then skipping
-their decoding will be pretty efficient. In general, it is best to provide
-``has_nulls`` with a list of columns known to contain NULLs - however if None
-is encountered in a column not in the list, this will raise an exception.
-
-
-``has_nulls=True`` should be considered the default option for output
-designed to be read by other parquet readers, since NaN and NULL are generally
-not considered to be equivalent in Spark and Impala as they are in pandas.
-It is typical for those systems to write all fields in a schema as optional
-(allowing NULLs), even when the schema design suggests that they are in fact
-required.
 
 Data Types
 ----------

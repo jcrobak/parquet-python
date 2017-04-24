@@ -695,7 +695,7 @@ def write_simple(fn, data, fmd, row_group_offsets, compression,
 
 def write(filename, data, row_group_offsets=50000000,
           compression=None, file_scheme='simple', open_with=default_open,
-          mkdirs=default_mkdirs, has_nulls=None, write_index=None,
+          mkdirs=default_mkdirs, has_nulls=True, write_index=None,
           partition_on=[], fixed_text=None, append=False,
           object_encoding='infer', times='int64'):
     """ Write Pandas DataFrame to filename as Parquet Format
@@ -724,13 +724,13 @@ def write(filename, data, row_group_offsets=50000000,
         When called with a path/URL, creates any necessary dictionaries to
         make that location writable, e.g., ``os.makedirs``. This is not
         necessary if using the simple file scheme
-    has_nulls: None, bool or list of strings
+    has_nulls: bool, 'infer' or list of strings
         Whether columns can have nulls. If a list of strings, those given
         columns will be marked as "optional" in the metadata, and include
         null definition blocks on disk. Some data types (floats and times)
         can instead use the sentinel values NaN and NaT, which are not the same
         as NULL in parquet, but functionally act the same in many cases,
-        particularly if converting back to pandas later. A value of None
+        particularly if converting back to pandas later. A value of 'infer'
         will assume nulls for object columns and not otherwise.
     write_index: boolean
         Whether or not to write the index to a separate column.  By default we
@@ -765,6 +765,8 @@ def write(filename, data, row_group_offsets=50000000,
     --------
     >>> fastparquet.write('myfile.parquet', df)  # doctest: +SKIP
     """
+    if str(has_nulls) == 'infer':
+        has_nulls = None
     sep = sep_from_open(open_with)
     if isinstance(row_group_offsets, int):
         l = len(data)

@@ -506,6 +506,30 @@ def test_auto_null(tempdir):
     tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
     tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
 
+    # not giving any value same as has_nulls=True
+    write(fn, df)
+    pf = ParquetFile(fn)
+    for col in pf._schema[1:]:
+        assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+    df2 = pf.to_pandas(categories=['e'])
+
+    cols = list(set(df) - {'ff'})
+    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+
+    # 'infer' is new recommended auto-null
+    write(fn, df, has_nulls='infer')
+    pf = ParquetFile(fn)
+    for col in pf._schema[1:]:
+        if col.name in ['d', 'ff']:
+            assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
+        else:
+            assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
+    df2 = pf.to_pandas()
+    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+
+    # nut legacy None still works
     write(fn, df, has_nulls=None)
     pf = ParquetFile(fn)
     for col in pf._schema[1:]:
