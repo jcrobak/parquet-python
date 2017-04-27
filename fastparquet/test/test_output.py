@@ -490,6 +490,7 @@ def test_auto_null(tempdir):
                        'f': [True, False, True, True],
                        'ff': [True, False, None, True]})
     df['e'] = df['d'].astype('category')
+    df['bb'] = df['b'].astype('object')
     fn = os.path.join(tmp, "test.parq")
 
     with pytest.raises((TypeError, AttributeError)):
