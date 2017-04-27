@@ -490,6 +490,10 @@ def test_auto_null(tempdir):
                        'f': [True, False, True, True],
                        'ff': [True, False, None, True]})
     df['e'] = df['d'].astype('category')
+    df['bb'] = df['b'].astype('object')
+    df['aaa'] = df['a'].astype('object')
+    object_cols = ['d', 'ff', 'bb', 'aaa']
+    test_cols = list(set(df) - set(object_cols)) + ['d']
     fn = os.path.join(tmp, "test.parq")
 
     with pytest.raises((TypeError, AttributeError)):
@@ -502,9 +506,10 @@ def test_auto_null(tempdir):
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     df2 = pf.to_pandas(categories=['e'])
 
-    cols = list(set(df) - {'ff'})
-    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[test_cols], df2[test_cols], check_categorical=False)
     tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+    tm.assert_frame_equal(df[['bb']].astype('float64'), df2[['bb']])
+    tm.assert_frame_equal(df[['aaa']].astype('int64'), df2[['aaa']])
 
     # not giving any value same as has_nulls=True
     write(fn, df)
@@ -513,33 +518,38 @@ def test_auto_null(tempdir):
         assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
     df2 = pf.to_pandas(categories=['e'])
 
-    cols = list(set(df) - {'ff'})
-    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[test_cols], df2[test_cols], check_categorical=False)
     tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+    tm.assert_frame_equal(df[['bb']].astype('float64'), df2[['bb']])
+    tm.assert_frame_equal(df[['aaa']].astype('int64'), df2[['aaa']])
 
     # 'infer' is new recommended auto-null
     write(fn, df, has_nulls='infer')
     pf = ParquetFile(fn)
     for col in pf._schema[1:]:
-        if col.name in ['d', 'ff']:
+        if col.name in object_cols:
             assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
         else:
             assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     df2 = pf.to_pandas()
-    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[test_cols], df2[test_cols], check_categorical=False)
     tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+    tm.assert_frame_equal(df[['bb']].astype('float64'), df2[['bb']])
+    tm.assert_frame_equal(df[['aaa']].astype('int64'), df2[['aaa']])
 
     # nut legacy None still works
     write(fn, df, has_nulls=None)
     pf = ParquetFile(fn)
     for col in pf._schema[1:]:
-        if col.name in ['d', 'ff']:
+        if col.name in object_cols:
             assert col.repetition_type == parquet_thrift.FieldRepetitionType.OPTIONAL
         else:
             assert col.repetition_type == parquet_thrift.FieldRepetitionType.REQUIRED
     df2 = pf.to_pandas()
-    tm.assert_frame_equal(df[cols], df2[cols], check_categorical=False)
+    tm.assert_frame_equal(df[test_cols], df2[test_cols], check_categorical=False)
     tm.assert_frame_equal(df[['ff']].astype('float16'), df2[['ff']])
+    tm.assert_frame_equal(df[['bb']].astype('float64'), df2[['bb']])
+    tm.assert_frame_equal(df[['aaa']].astype('int64'), df2[['aaa']])
 
 
 @pytest.mark.parametrize('n', (10, 127, 2**8 + 1, 2**16 + 1))
