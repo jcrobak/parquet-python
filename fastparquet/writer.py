@@ -46,7 +46,8 @@ typemap = {  # primitive type, converted type, bit width
 
 revmap = {parquet_thrift.Type.INT32: np.int32,
           parquet_thrift.Type.INT64: np.int64,
-          parquet_thrift.Type.FLOAT: np.float32}
+          parquet_thrift.Type.FLOAT: np.float32,
+          parquet_thrift.Type.DOUBLE: np.float64}
 
 
 def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
@@ -94,8 +95,8 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
                                            parquet_thrift.ConvertedType.UTF8,
                                            None)
         elif object_encoding in ['bytes', None]:
-            type, converted_type, width = parquet_thrift.Type.BYTE_ARRAY, None,\
-                                          None
+            type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY, None,
+                                           None)
         elif object_encoding == 'json':
             type, converted_type, width = (parquet_thrift.Type.BYTE_ARRAY,
                                            parquet_thrift.ConvertedType.JSON,
@@ -106,13 +107,13 @@ def find_type(data, fixed_text=None, object_encoding=None, times='int64'):
                                            None)
         elif object_encoding == 'bool':
             type, converted_type, width = (parquet_thrift.Type.BOOLEAN, None,
-                                           None)
+                                           1)
         elif object_encoding == 'int':
             type, converted_type, width = (parquet_thrift.Type.INT64, None,
-                                           None)
+                                           64)
         elif object_encoding == 'float':
             type, converted_type, width = (parquet_thrift.Type.DOUBLE, None,
-                                           None)
+                                           64)
         else:
             raise ValueError('Object encoding (%s) not one of '
                              'infer|utf8|bytes|json|bson|bool|int|float' %
@@ -165,7 +166,14 @@ def convert(data, se):
         if converted_type == parquet_thrift.ConvertedType.UTF8:
             out = array_encode_utf8(data)
         elif converted_type is None:
-            out = data.values
+            if type in revmap:
+                out = data.values.astype(revmap[type], copy=False)
+            elif type == parquet_thrift.Type.BOOLEAN:
+                padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
+                                    'constant', constant_values=(0, 0))
+                out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
+            else:
+                out = data.values
         elif converted_type == parquet_thrift.ConvertedType.JSON:
             out = np.array([json.dumps(x).encode('utf8') for x in data],
                            dtype="O")
@@ -195,19 +203,22 @@ def infer_object_encoding(data):
     head = data[:10] if isinstance(data, pd.Index) else data.valid()[:10]
     if all(isinstance(i, STR_TYPE) for i in head) and not PY2:
         return "utf8"
-    if PY2 and all(isinstance(i, unicode) for i in head):
+    elif PY2 and all(isinstance(i, unicode) for i in head):
         return "utf8"
-    if all(isinstance(i, STR_TYPE) for i in head) and PY2:
+    elif all(isinstance(i, STR_TYPE) for i in head) and PY2:
         return "bytes"
-    if all(isinstance(i, bytes) for i in head):
+    elif all(isinstance(i, bytes) for i in head):
         return 'bytes'
-    if all(isinstance(i, (list, dict)) for i in head):
+    elif all(isinstance(i, (list, dict)) for i in head):
         return 'json'
-    if all(isinstance(i, bool) for i in head):
+    elif all(isinstance(i, bool) for i in head):
         return 'bool'
-    if all(isinstance(i, int) for i in head):
+    elif all(isinstance(i, int) for i in head):
         return 'int'
-    if all(isinstance(i, float) for i in head):
+    elif all(isinstance(i, float) or isinstance(i, np.floating)
+             for i in head):
+        # You need np.floating here for pandas NaNs in object
+        # columns with python floats.
         return 'float'
     else:
         raise ValueError("Can't infer object conversion type: %s" % head)
