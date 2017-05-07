@@ -22,7 +22,7 @@ def schema_tree(schema, i=0):
         i += 1
         s = schema[i]
         root.children[s.name] = s
-        if s.num_children is not None:
+        if s.num_children not in [None, 0]:
             i = schema_tree(schema, i)
     if root.num_children:
         return i
