@@ -136,6 +136,10 @@ def test_cast_index(tempdir):
         d = pf.to_pandas(index=col)
         if d.index.dtype.kind == 'i':
             assert d.index.dtype == 'int64'
+        elif d.index.dtype.kind == 'u':
+            # new UInt64Index
+            assert pd.__version__ >= '0.20'
+            assert d.index.dtype == 'uint64'
         else:
             assert d.index.dtype == 'float64'
         assert (d.index == df[col]).all()
