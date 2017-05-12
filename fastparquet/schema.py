@@ -8,11 +8,7 @@ from collections import OrderedDict
 import os
 from six import text_type
 
-import thriftpy
-
-
-THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")
-parquet_thrift = thriftpy.load(THRIFT_FILE, module_name=text_type("parquet_thrift"))
+from .thrift_structures import parquet_thrift
 
 
 def schema_tree(schema, i=0):

@@ -175,3 +175,18 @@ def test_read_multiple_no_metadata(tempdir):
     assert len(pf.row_groups) == 2
     out = pf.to_pandas()
     pd.util.testing.assert_frame_equal(out, df)
+
+
+def test_filter_without_paths(tempdir):
+    fn = os.path.join(tempdir, 'test.parq')
+    df = pd.DataFrame({
+        'x': [1, 2, 3, 4, 5, 6, 7],
+        'letter': ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    })
+    write(fn, df)
+
+    pf = ParquetFile(fn)
+    out = pf.to_pandas(filters=[['x', '>', 3]])
+    pd.util.testing.assert_frame_equal(out, df)
+    out = pf.to_pandas(filters=[['x', '>', 30]])
+    assert len(out) == 0
