@@ -136,6 +136,10 @@ def test_cast_index(tempdir):
         d = pf.to_pandas(index=col)
         if d.index.dtype.kind == 'i':
             assert d.index.dtype == 'int64'
+        elif d.index.dtype.kind == 'u':
+            # new UInt64Index
+            assert pd.__version__ >= '0.20'
+            assert d.index.dtype == 'uint64'
         else:
             assert d.index.dtype == 'float64'
         assert (d.index == df[col]).all()
@@ -175,3 +179,18 @@ def test_read_multiple_no_metadata(tempdir):
     assert len(pf.row_groups) == 2
     out = pf.to_pandas()
     pd.util.testing.assert_frame_equal(out, df)
+
+
+def test_filter_without_paths(tempdir):
+    fn = os.path.join(tempdir, 'test.parq')
+    df = pd.DataFrame({
+        'x': [1, 2, 3, 4, 5, 6, 7],
+        'letter': ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    })
+    write(fn, df)
+
+    pf = ParquetFile(fn)
+    out = pf.to_pandas(filters=[['x', '>', 3]])
+    pd.util.testing.assert_frame_equal(out, df)
+    out = pf.to_pandas(filters=[['x', '>', 30]])
+    assert len(out) == 0

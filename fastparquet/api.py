@@ -602,7 +602,7 @@ def filter_out_cats(rg, filters, sep='/'):
     -------
     True or False
     """
-    if len(filters) == 0:
+    if len(filters) == 0 or rg.columns[0].file_path is None:
         return False
     s = ex_from_sep(sep)
     partitions = s.findall(rg.columns[0].file_path)
