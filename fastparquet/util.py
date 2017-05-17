@@ -225,3 +225,50 @@ def analyse_paths(file_list, sep=os.sep):
         out_list.append(sep.join(path_parts[l:]))
 
     return sep.join(basepath), out_list
+
+
+def infer_dtype(column):
+    try:
+        return pd.api.types.infer_dtype(column)
+    except AttributeError:
+        return pd.lib.infer_dtype(column)
+
+
+def get_column_metadata(column, name):
+    """Produce pandas column metadata block"""
+    # from pyarrow.pandas_compat
+    # https://github.com/apache/arrow/blob/master/python/pyarrow/pandas_compat.py
+    inferred_dtype = infer_dtype(column)
+    dtype = column.dtype
+
+    if str(dtype) == 'category':
+        extra_metadata = {
+            'num_categories': len(column.cat.categories),
+            'ordered': column.cat.ordered,
+        }
+    elif hasattr(dtype, 'tz'):
+        extra_metadata = {'timezone': str(dtype.tz)}
+    else:
+        extra_metadata = None
+
+    if not isinstance(name, six.string_types):
+        raise TypeError(
+            'Column name must be a string. Got column {} of type {}'.format(
+                name, type(name).__name__
+            )
+        )
+
+    return {
+        'name': name,
+        'pandas_type': {
+            'string': 'bytes' if PY2 else 'unicode',
+            'datetime64': (
+                'datetimetz' if hasattr(dtype, 'tz')
+                else 'datetime'
+            ),
+            'integer': str(dtype),
+            'floating': str(dtype),
+        }.get(inferred_dtype, inferred_dtype),
+        'numpy_dtype': str(dtype),
+        'metadata': extra_metadata,
+    }

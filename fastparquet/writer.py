@@ -22,7 +22,8 @@ from .converted_types import tobson
 from . import encoding, api
 from .util import (default_open, default_mkdirs, sep_from_open,
                    ParquetException, thrift_copy, index_like, PY2, STR_TYPE,
-                   check_column_names, metadata_from_many, created_by)
+                   check_column_names, metadata_from_many, created_by,
+                   get_column_metadata)
 from .speedups import array_encode_utf8, pack_byte_array
 
 MARKER = b'PAR1'
@@ -630,27 +631,33 @@ def make_part_file(f, data, schema, compression=None, fmd=None):
 
 
 def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
-                  object_encoding=None, times='int64'):
+                  object_encoding=None, times='int64', index_cols=[]):
     if not data.columns.is_unique:
         raise ValueError('Cannot create parquet dataset with duplicate'
                          ' column names (%s)' % data.columns)
+    pandas_metadata = {'index_columns': index_cols,
+                       'columns': [], 'pandas_version': pd.__version__}
     root = parquet_thrift.SchemaElement(name='schema',
                                         num_children=0)
 
     cats = parquet_thrift.KeyValue()
     cats.key = 'fastparquet.cats'
+    meta = parquet_thrift.KeyValue()
+    meta.key = 'pandas'
     catstruct = {}
     fmd = parquet_thrift.FileMetaData(num_rows=len(data),
                                       schema=[root],
                                       version=1,
                                       created_by=created_by,
                                       row_groups=[],
-                                      key_value_metadata=[cats])
+                                      key_value_metadata=[cats, meta])
 
     object_encoding = object_encoding or {}
     for column in data.columns:
         if column in ignore_columns:
             continue
+        pandas_metadata['columns'].append(
+            get_column_metadata(data[column], column))
         oencoding = (object_encoding if isinstance(object_encoding, STR_TYPE)
                      else object_encoding.get(column, None))
         fixed = None if fixed_text is None else fixed_text.get(column, None)
@@ -671,6 +678,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
+    meta.value = json.dumps(pandas_metadata)
     cats.value = json.dumps(catstruct)
     return fmd
 
@@ -790,13 +798,17 @@ def write(filename, data, row_group_offsets=50000000,
         chunksize = max(min((l - 1) // nparts + 1, l), 1)
         row_group_offsets = list(range(0, l, chunksize))
     if write_index or write_index is None and index_like(data.index):
+        cols = set(data)
         data = data.reset_index()
+        index_cols = [c for c in data if c not in cols]
+    else:
+        index_cols = []
     check_column_names(data.columns, partition_on, fixed_text, object_encoding,
                        has_nulls)
     ignore = partition_on if file_scheme != 'simple' else []
     fmd = make_metadata(data, has_nulls=has_nulls, ignore_columns=ignore,
                         fixed_text=fixed_text, object_encoding=object_encoding,
-                        times=times)
+                        times=times, index_cols=index_cols)
 
     if file_scheme == 'simple':
         write_simple(filename, data, fmd, row_group_offsets,
