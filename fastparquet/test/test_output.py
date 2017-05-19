@@ -127,7 +127,7 @@ def test_roundtrip(tempdir, scheme, row_groups, comp):
 def test_bad_coltype(tempdir):
     df = pd.DataFrame({'0': [1, 2], (0, 1): [3, 4]})
     fn = os.path.join(tempdir, 'temp.parq')
-    with pytest.raises(ValueError) as e:
+    with pytest.raises((ValueError, TypeError)) as e:
         write(fn, df)
         assert "tuple" in str(e)
 
@@ -381,6 +381,7 @@ def test_write_compression_schema(tempdir):
 
 
 def test_index(tempdir):
+    import json
     fn = os.path.join(tempdir, 'tmp.parq')
     df = pd.DataFrame({'x': [1, 2, 3],
                        'y': [1., 2., 3.]},
@@ -388,8 +389,17 @@ def test_index(tempdir):
 
     writer.write(fn, df)
 
-    r = ParquetFile(fn)
-    assert set(r.columns) == {'x', 'y', 'z'}
+    pf = ParquetFile(fn)
+    assert set(pf.columns) == {'x', 'y', 'z'}
+    meta = json.loads(pf.key_value_metadata['pandas'])
+    assert meta['index_columns'] == ['z']
+    out = pf.to_pandas()
+    assert out.index.name == 'z'
+    pd.util.testing.assert_frame_equal(df, out)
+    out = pf.to_pandas(index=False)
+    assert out.index.name is None
+    assert (out.index == range(3)).all()
+    assert (out.z == df.index).all()
 
 
 def test_duplicate_columns(tempdir):
@@ -582,6 +592,22 @@ def test_autocat(tempdir):
         np.random.choice(['hello', 'world'], size=1000))})
     write(fn, data)
     pf = ParquetFile(fn)
+    assert 'o' in pf.categories
+    assert pf.categories['o'] == 2
+    assert pf.dtypes['o'] == 'category'
+    out = pf.to_pandas()
+    assert out.dtypes['o'] == 'category'
+    out = pf.to_pandas(categories={})
+    assert str(out.dtypes['o']) != 'category'
+    out = pf.to_pandas(categories=['o'])
+    assert out.dtypes['o'] == 'category'
+    out = pf.to_pandas(categories={'o': 2})
+    assert out.dtypes['o'] == 'category'
+
+    # regression test
+    pf.fmd.key_value_metadata = [parquet_thrift.KeyValue(
+        key='fastparquet.cats', value='{"o": 2}')]
+    pf._set_attrs()
     assert 'o' in pf.categories
     assert pf.categories['o'] == 2
     assert pf.dtypes['o'] == 'category'

@@ -99,7 +99,8 @@ class ParquetFile(object):
         self.version = fmd.version
         self._schema = fmd.schema
         self.row_groups = fmd.row_groups or []
-        self.key_value_metadata = fmd.key_value_metadata
+        self.key_value_metadata = {k.key: k.value
+                                   for k in fmd.key_value_metadata or []}
         self.created_by = fmd.created_by
         self.group_files = {}
         for i, rg in enumerate(self.row_groups):
@@ -258,8 +259,9 @@ class ParquetFile(object):
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
-            Column to assign to the index. If None, index is simple sequential
-            integers.
+            Column to assign to the index. If None, index is inferred from the
+            metadata (if this was originally pandas data); if the metadata does
+            not exist or index is False, index is simple sequential integers.
         assign: dict {cols: array}
             Pre-allocated memory to write to. If None, will allocate memory
             here.
@@ -269,6 +271,7 @@ class ParquetFile(object):
         Generator yielding one Pandas data-frame per row-group
         """
         check_column_names(self.columns, columns, categories)
+        index = self._get_index(index)
         columns = columns or self.columns
         rgs = self.filter_row_groups(filters)
         if all(column.file_path is None for rg in self.row_groups
@@ -287,6 +290,19 @@ class ParquetFile(object):
                 self.read_row_group_file(rg, columns, categories, index,
                                          assign=views)
                 yield df
+
+    def _get_index(self, index=None):
+        if index is None:
+            index = json.loads(self.key_value_metadata.get('pandas', '{}')).get(
+                'index_columns', [])
+            if len(index) > 1:
+                raise NotImplementedError('multi-index not yet supported, '
+                                          'use index=False')
+            if index:
+                return index[0]
+            else:
+                return None
+        return index
 
     def to_pandas(self, columns=None, categories=None, filters=[],
                   index=None, timestamp96=[]):
@@ -309,8 +325,9 @@ class ParquetFile(object):
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
-            Column to assign to the index. If None, index is simple sequential
-            integers.
+            Column to assign to the index. If None, index is inferred from the
+            metadata (if this was originally pandas data); if the metadata does
+            not exist or index is False, index is simple sequential integers.
 
         Returns
         -------
@@ -320,6 +337,7 @@ class ParquetFile(object):
         rgs = self.filter_row_groups(filters)
         size = sum(rg.num_rows for rg in rgs)
         columns = columns or self.columns
+        index = self._get_index(index)
         df, views = self.pre_allocate(size, columns, categories, index,
                                       timestamp96=timestamp96)
         start = 0
@@ -364,10 +382,18 @@ class ParquetFile(object):
     def categories(self):
         if self.fmd.key_value_metadata is None:
             return {}
-        vals = [entry.value for entry in self.fmd.key_value_metadata
-                if entry.key == "fastparquet.cats"]
+        vals = self.key_value_metadata.get('pandas', None)
         if vals:
-            return json.loads(vals[0])
+            metadata = json.loads(vals)
+            cats = {m['name']: m['metadata']['num_categories'] for m in
+                    metadata['columns'] if m['pandas_type'] == 'categorical'}
+            return cats
+        # old track
+        vals = self.key_value_metadata.get("fastparquet.cats", None)
+        if vals:
+            warnings.warn('Regression warning: found category spec from '
+                          'fastparquet <= 0.0.6')
+            return json.loads(vals)
         else:
             return {}
 
