@@ -803,3 +803,14 @@ def test_cats_in_part_files(tempdir):
     out = pd.concat([ParquetFile(f).to_pandas() for f in files],
                     ignore_index=True)
     pd.util.testing.assert_frame_equal(df, out)
+
+
+def test_cats_and_nulls(tempdir):
+    df = pd.DataFrame({'x': pd.Categorical([1, 2, 1])})
+    fn = os.path.join(tempdir, 'temp.parq')
+    write(fn, df)
+    pf = ParquetFile(fn)
+    assert not pf.schema.is_required('x')
+    out = pf.to_pandas()
+    assert out.dtypes['x'] == 'category'
+    assert out.x.tolist() == [1, 2, 1]

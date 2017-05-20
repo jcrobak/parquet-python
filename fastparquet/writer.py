@@ -461,7 +461,7 @@ def write_column(f, data, selement, compression=None):
         else:
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
-        if data.dtype.kind == "O":
+        if data.dtype.kind == "O" and str(data.dtype) != 'category':
             if selement.type == parquet_thrift.Type.INT64:
                 data = data.astype(int)
             elif selement.type == parquet_thrift.Type.BOOLEAN:
@@ -826,12 +826,12 @@ def write(filename, data, row_group_offsets=50000000,
                    else None)
             part = 'part.%i.parquet' % (i + i_offset)
             if partition_on:
-                partition_on_columns(
+                rgs = partition_on_columns(
                     data[start:end], partition_on, filename, part, fmd,
                     sep, compression, open_with, mkdirs,
                     with_field=file_scheme == 'hive'
                 )
-                rg = None
+                fmd.row_groups.extend(rgs)
             else:
                 partname = sep.join([filename, part])
                 with open_with(partname, 'wb') as f2:
@@ -840,7 +840,6 @@ def write(filename, data, row_group_offsets=50000000,
                 for chunk in rg.columns:
                     chunk.file_path = part
 
-            if rg is not None:
                 fmd.row_groups.append(rg)
 
         write_common_metadata(fn, fmd, open_with, no_row_groups=False)
@@ -876,6 +875,7 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
     remaining = list(data)
     for column in columns:
         remaining.remove(column)
+    rgs = []
     for key in gb.indices:
         df = gb.get_group(key)[remaining]
         if not isinstance(key, tuple):
@@ -894,7 +894,8 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         if rg is not None:
             for chunk in rg.columns:
                 chunk.file_path = relname
-            fmd.row_groups.append(rg)
+            rgs.append(rg)
+    return rgs
 
 
 def write_common_metadata(fn, fmd, open_with=default_open,
