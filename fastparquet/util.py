@@ -246,6 +246,7 @@ def get_column_metadata(column, name):
             'num_categories': len(column.cat.categories),
             'ordered': column.cat.ordered,
         }
+        dtype = column.cat.codes.dtype
     elif hasattr(dtype, 'tz'):
         extra_metadata = {'timezone': str(dtype.tz)}
     else:
