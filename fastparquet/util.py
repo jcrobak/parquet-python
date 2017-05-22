@@ -43,7 +43,8 @@ def default_open(f, mode='rb'):
 
 
 def val_to_num(x):
-    # What about ast.literal_eval?
+    if x == 'NOW':
+        return x
     try:
         return ast.literal_eval(x)
     except ValueError:
