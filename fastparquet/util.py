@@ -43,7 +43,7 @@ def default_open(f, mode='rb'):
 
 
 def val_to_num(x):
-    if x == 'NOW':
+    if x in ['NOW', 'TODAY']:
         return x
     try:
         return ast.literal_eval(x)
