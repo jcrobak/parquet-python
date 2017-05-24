@@ -47,11 +47,11 @@ def val_to_num(x):
         return x
     try:
         return ast.literal_eval(x)
-    except ValueError:
+    except:
         pass
     try:
         return pd.to_datetime(x)
-    except ValueError:
+    except:
         pass
     try:
         return pd.to_timedelta(x)
