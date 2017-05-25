@@ -37,11 +37,13 @@ Requirements
 
 Required:
 
-- numba (requires .. _LLVM 4.0.x:https://github.com/llvm-mirror/llvm)
+- numba (requires `LLVM 4.0.x`)
 - numpy
 - pandas
 - cython
 - six
+
+.. _LLVM 4.0.x: https://github.com/llvm-mirror/llvm 
 
 Optional (compression algorithms; gzip is always available):
 
