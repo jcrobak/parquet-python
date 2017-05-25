@@ -37,7 +37,7 @@ Requirements
 
 Required:
 
-- numba
+- numba (requires [LLVM 4.0.x](https://github.com/llvm-mirror/llvm))
 - numpy
 - pandas
 - cython
