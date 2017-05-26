@@ -270,7 +270,9 @@ def _read_data(file_obj, fo_encoding, value_count, bit_width):
             vals += values
             seen += len(values)
     elif fo_encoding == parquet_thrift.Encoding.BIT_PACKED:
-        raise NotImplementedError("Bit packing not yet supported")
+        byte_count = 0 if bit_width == 0 else (value_count * bit_width - 1) // 8 + 1
+        vals = encoding.read_bitpacked_deprecated(
+            file_obj, byte_count, value_count, bit_width, logger.isEnabledFor(logging.DEBUG))
 
     return vals
 
@@ -297,11 +299,24 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
                      _get_name(parquet_thrift.Encoding, daph.repetition_level_encoding))
         logger.debug("  encoding: %s", _get_name(parquet_thrift.Encoding, daph.encoding))
 
+    # repetition levels are skipped if data is at the first level.
+    repetition_levels = None  # pylint: disable=unused-variable
+    if len(column_metadata.path_in_schema) > 1:
+        max_repetition_level = schema_helper.max_repetition_level(
+            column_metadata.path_in_schema)
+        bit_width = encoding.width_from_max_int(max_repetition_level)
+        repetition_levels = _read_data(io_obj,
+                                       daph.repetition_level_encoding,
+                                       daph.num_values,
+                                       bit_width)
+        if debug_logging:
+            logger.debug("  Repetition levels: %s", len(repetition_levels))
+
     # definition levels are skipped if data is required.
     definition_levels = None
     num_nulls = 0
     max_definition_level = -1
-    if not schema_helper.is_required(column_metadata.path_in_schema[-1]):
+    if not schema_helper.is_required(column_metadata.path_in_schema):
         max_definition_level = schema_helper.max_definition_level(
             column_metadata.path_in_schema)
         bit_width = encoding.width_from_max_int(max_definition_level)
@@ -319,23 +334,12 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
         # any thing that isn't at max definition level is a null.
         num_nulls = len(definition_levels) - definition_levels.count(max_definition_level)
         if debug_logging:
-            logger.debug("  Definition levels: %s", len(definition_levels))
-
-    # repetition levels are skipped if data is at the first level.
-    repetition_levels = None  # pylint: disable=unused-variable
-    if len(column_metadata.path_in_schema) > 1:
-        max_repetition_level = schema_helper.max_repetition_level(
-            column_metadata.path_in_schema)
-        bit_width = encoding.width_from_max_int(max_repetition_level)
-        repetition_levels = _read_data(io_obj,
-                                       daph.repetition_level_encoding,
-                                       daph.num_values,
-                                       bit_width)
+            logger.debug("  Definition levels: %d, nulls: %d", len(definition_levels), num_nulls)
 
     # NOTE: The repetition levels aren't yet used.
     if daph.encoding == parquet_thrift.Encoding.PLAIN:
         read_values = encoding.read_plain(io_obj, column_metadata.type, daph.num_values - num_nulls)
-        schema_element = schema_helper.schema_element(column_metadata.path_in_schema[-1])
+        schema_element = schema_helper.schema_element(column_metadata.path_in_schema)
         read_values = convert_column(read_values, schema_element) \
             if schema_element.converted_type is not None else read_values
         if definition_levels:
@@ -344,7 +348,8 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
         else:
             vals.extend(read_values)
         if debug_logging:
-            logger.debug("  Values: %s, nulls: %s", len(vals), num_nulls)
+            logger.debug("  Read %s values using PLAIN encoding and definition levels show %s nulls",
+                         len(vals), num_nulls)
 
     elif daph.encoding == parquet_thrift.Encoding.PLAIN_DICTIONARY:
         # bit_width is stored as single byte.
@@ -396,32 +401,11 @@ def _read_dictionary_page(file_obj, schema_helper, page_header, column_metadata)
         page_header.dictionary_page_header.num_values
     )
     # convert the values once, if the dictionary is associated with a converted_type.
-    schema_element = schema_helper.schema_element(column_metadata.path_in_schema[-1])
+    schema_element = schema_helper.schema_element(column_metadata.path_in_schema)
     return convert_column(values, schema_element) if schema_element.converted_type is not None else values
 
 
-def DictReader(file_obj, columns=None):  # pylint: disable=invalid-name
-    """
-    Reader for a parquet file object.
-
-    This function is a generator returning an OrderedDict for each row
-    of data in the parquet file. Nested values will be flattend into the
-    top-level dict and can be referenced with '.' notation (e.g. 'foo' -> 'bar'
-    is referenced as 'foo.bar')
-
-    :param file_obj: the file containing parquet data
-    :param columns: the columns to include. If None (default), all columns
-                    are included. Nested values are referenced with "." notation
-    """
-    footer = _read_footer(file_obj)
-    keys = columns if columns else [s.name for s in
-                                    footer.schema if s.type]
-
-    for row in reader(file_obj, columns):
-        yield OrderedDict(zip(keys, row))
-
-
-def reader(file_obj, columns=None):
+def _row_group_reader(file_obj, columns=None):
     """
     Reader for a parquet file object.
 
@@ -436,8 +420,6 @@ def reader(file_obj, columns=None):
         logger.error("parquet.reader requires the fileobj to be opened in binary mode!")
     footer = _read_footer(file_obj)
     schema_helper = schema.SchemaHelper(footer.schema)
-    keys = columns if columns else [s.name for s in
-                                    footer.schema if s.type]
     debug_logging = logger.isEnabledFor(logging.DEBUG)
     for row_group in footer.row_groups:
         res = defaultdict(list)
@@ -481,8 +463,65 @@ def reader(file_obj, columns=None):
                     logger.info("Skipping unknown page type=%s",
                                 _get_name(parquet_thrift.PageType, page_header.type))
 
-        for i in range(row_group.num_rows):
-            yield [res[k][i] for k in keys if res[k]]
+        yield row_group.num_rows, res
+
+
+def reader(file_obj, columns=None):
+    """
+    Reader for a parquet file object.
+
+    This function is a generator returning a list of values for each row
+    of data in the parquet file.
+
+    :param file_obj: the file containing parquet data
+    :param columns: the columns to include. If None (default), all columns
+                    are included. Nested values are referenced with "." notation
+    """
+    footer = _read_footer(file_obj)
+    schema_helper = schema.SchemaHelper(footer.schema)
+    keys = columns if columns else [".".join(path) for path in schema_helper.leaf_node_dict().keys()]
+
+    for num_rows, data in _row_group_reader(file_obj, columns):
+        for i in range(num_rows):
+            yield [data[k][i] for k in keys if data[k]]
+
+
+def DictReader(file_obj, columns=None, flatten=False):  # pylint: disable=invalid-name
+    """
+    Reader for a parquet file object.
+
+    This function is a generator returning an OrderedDict for each row of data in the parquet file. If `flatten` is
+    True, nested values will be flattened into the top-level dict and can be referenced with '.' notation (e.g.
+    'foo' -> 'bar' is referenced as 'foo.bar')
+
+    :param file_obj: the file containing parquet data
+    :param columns: the columns to include. If None (default), all columns
+                    are included. Nested values are referenced with "." notation
+    """
+    footer = _read_footer(file_obj)
+    schema_helper = schema.SchemaHelper(footer.schema)
+    keys = columns if columns else [".".join(path) for path in schema_helper.leaf_node_dict().keys()]
+
+    for num_rows, data in _row_group_reader(file_obj, columns):  # pylint: disable=too-many-nested-blocks
+        for i in range(num_rows):
+            if flatten:
+                yield OrderedDict(zip(keys, [data[k][i] for k in keys if data[k]]))
+            else:
+                res = OrderedDict()
+                for key in keys:
+                    parts = key.split(".")
+                    num_keys = len(parts)
+                    curr = res
+                    for idx, part in enumerate(parts):
+                        if part not in curr and idx + 1 < num_keys:
+                            curr[part] = OrderedDict()
+                            curr = curr[part]
+                            continue
+                        if idx + 1 == num_keys:
+                            curr[part] = data[key][i]
+                        else:
+                            curr = curr[part]
+                yield res
 
 
 class JsonWriter(object):  # pylint: disable=too-few-public-methods
@@ -508,7 +547,7 @@ def _dump(file_obj, options, out=sys.stdout):
     total_count = 0
     writer = None
     keys = None
-    for row in DictReader(file_obj, options.col):
+    for row in DictReader(file_obj, options.col, flatten=True if options.format == 'csv' else options.flatten):
         if not keys:
             keys = row.keys()
         if not writer:

@@ -44,6 +44,8 @@ def main(argv=None):
                              'format=csv)')
     parser.add_argument('--format', action='store', type=str, default='csv',
                         help='format for the output data. can be csv or json.')
+    parser.add_argument('--flatten', action='store_true',
+                        help='for json format, flatten all data into a single top-level object')
     parser.add_argument('--debug', action='store_true',
                         help='log debug info to stderr')
     parser.add_argument('file',
