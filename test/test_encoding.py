@@ -117,6 +117,13 @@ class TestBitPacked(unittest.TestCase):
         res = parquet.encoding.read_bitpacked(fo, count, 3, True)
         self.assertEqual(list(range(8)), res)
 
+    def test_width_zero(self):
+        """Test a zero-width item."""
+        fo = io.BytesIO()
+        count = 1 << 1
+        res = parquet.encoding.read_bitpacked(fo, count, 0, True)
+        self.assertEqual([0] * 8, res)
+
 
 class TestBitPackedDeprecated(unittest.TestCase):
     """Test reading the deprecated bit-packed encoded data."""
