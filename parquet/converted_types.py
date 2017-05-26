@@ -73,7 +73,7 @@ def convert_column(data, schemae):
     elif ctype == parquet_thrift.ConvertedType.TIMESTAMP_MILLIS:
         return [datetime.datetime.utcfromtimestamp(d / 1000.0) for d in data]
     elif ctype == parquet_thrift.ConvertedType.UTF8:
-        return list(codecs.iterdecode(data, "utf-8"))
+        return [codecs.decode(item, "utf-8") for item in data]
     elif ctype == parquet_thrift.ConvertedType.UINT_8:
         return _convert_unsigned(data, 'b')
     elif ctype == parquet_thrift.ConvertedType.UINT_16:
