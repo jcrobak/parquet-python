@@ -147,6 +147,8 @@ def read_bitpacked(file_obj, header, width, debug_logging):
     if debug_logging:
         logger.debug("Reading a bit-packed run with: %s groups, count %s, bytes %s",
                      num_groups, count, byte_count)
+    if width == 0:
+        return [0 for _ in range(count)]
     raw_bytes = array.array(ARRAY_BYTE_STR, file_obj.read(byte_count)).tolist()
     current_byte = 0
     data = raw_bytes[current_byte]
