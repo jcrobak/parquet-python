@@ -134,7 +134,7 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
     println("  Version: {0}".format(footer.version))
     println("  Num Rows: {0}".format(footer.num_rows))
     println("  k/v metadata: ")
-    if footer.key_value_metadata and len(footer.key_value_metadata) > 0:
+    if footer.key_value_metadata:
         for item in footer.key_value_metadata:
             println("    {0}={1}".format(item.key, item.value))
     else:
