@@ -2,6 +2,8 @@
 Native accelerators for Parquet encoding and decoding.
 """
 
+from __future__ import absolute_import
+
 cdef extern from "string.h":
     void *memcpy(void *dest, const void *src, size_t n)
 
