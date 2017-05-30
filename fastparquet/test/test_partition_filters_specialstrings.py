@@ -45,7 +45,7 @@ def frame_symbol_dtTrade_type_strike(days=1 * 252,
 def test_frame_write_read_verify(tempdir, input_symbols, input_days, file_scheme, 
 						    input_columns, partitions, filters):
     #Generate Temp Director for parquet Files
-    fdir = tempdir().next()
+    fdir = str(tempdir)
     fname = os.path.join(fdir, 'test')
 
     #Generate Test Input Frame
