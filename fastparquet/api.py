@@ -659,14 +659,18 @@ def filter_val(op, val, vmin=None, vmax=None):
     -------
     True or False
     """
-    if vmin is not None:
+    if vmax is not None:
+        if isinstance(vmax, np.ndarray):
+            vmax = vmax[0]
         if op in ['==', '>='] and val > vmax:
             return True
         if op == '>' and val >= vmax:
             return True
         if op == 'in' and min(val) > vmax:
             return True
-    if vmax is not None:
+    if vmin is not None:
+        if isinstance(vmin, np.ndarray):
+            vmin = vmin[0]
         if op in ['==', '<='] and val < vmin:
             return True
         if op == '<' and val <= vmin:

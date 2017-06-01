@@ -206,3 +206,13 @@ def test_filter_special(tempdir):
     out = pf.to_pandas(filters=[('symbol', '==', 'NOW')])
     assert out.x.tolist() == [1, 5, 6]
     assert out.symbol.tolist() == ['NOW', 'NOW', 'NOW']
+
+
+def test_filter_stats(tempdir):
+    df = pd.DataFrame({
+        'x': [1, 2, 3, 4, 5, 6, 7],
+    })
+    write(tempdir, df, file_scheme='hive', row_group_offsets=[0, 4])
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(filters=[('x', '>=', 5)])
+    assert out.x.tolist() == [5, 6, 7]
