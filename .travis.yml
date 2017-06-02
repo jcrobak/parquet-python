@@ -1,4 +1,9 @@
 language: python
+matrix:
+  include:
+  - python: "2.7.5"   # python versino from centos 7
+    env: TOXENV=py27  # only run the python 2.7 test.
+  - python: "2.7"     # test with latest python 2.7 version, and all envs from tox.ini
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y libsnappy-dev
