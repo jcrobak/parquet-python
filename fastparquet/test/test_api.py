@@ -70,11 +70,13 @@ def test_empty_statistics(tempdir):
 
 def test_sorted_row_group_columns(tempdir):
     df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'v': [{'a': 0}, {'b': -1}, {'c': 5}, {'a': 0}],
                        'y': [1.0, 2.0, 1.0, 2.0],
                        'z': ['a', 'b', 'c', 'd']})
 
     fn = os.path.join(tempdir, 'foo.parquet')
-    write(fn, df, row_group_offsets=[0, 2])
+    write(fn, df, row_group_offsets=[0, 2], object_encoding={'v': 'json',
+                                                             'z': 'utf8'})
 
     pf = ParquetFile(fn)
 
@@ -82,6 +84,7 @@ def test_sorted_row_group_columns(tempdir):
     expected = {'x': {'min': [1, 3], 'max': [2, 4]},
                 'z': {'min': ['a', 'c'], 'max': ['b', 'd']}}
 
+    # NB column v should not feature, as dict are unorderable
     assert result == expected
 
 
