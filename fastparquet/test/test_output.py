@@ -174,13 +174,16 @@ def test_roundtrip_complex(tempdir, scheme,):
     ])
 def test_datetime_roundtrip(tempdir, df, capsys):
     fname = os.path.join(tempdir, 'test.parquet')
-    write(fname, df)
-
-    r = ParquetFile(fname)
-    out, err = capsys.readouterr()
+    w = False
     if 'x' in df and str(df.x.dtype.tz) == 'Europe/London':
-        # warning happens first time only
-        assert "UTC" in err
+        with pytest.warns(UserWarning) as w:
+            write(fname, df)
+    else:
+        write(fname, df)
+    r = ParquetFile(fname)
+
+    if w:
+        assert "UTC" in str(w.list[0].message)
 
     df2 = r.to_pandas()
     if 'x' in df:

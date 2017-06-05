@@ -603,10 +603,14 @@ def sorted_partitioned_columns(pf):
         min, max = s['min'][c], s['max'][c]
         if any(x is None for x in min + max):
             continue
-        if (sorted(min) == min and
-            sorted(max) == max and
-            all(mx < mn for mx, mn in zip(max[:-1], min[1:]))):
-            out[c] = {'min': min, 'max': max}
+        try:
+            if (sorted(min) == min and
+                sorted(max) == max and
+                all(mx < mn for mx, mn in zip(max[:-1], min[1:]))):
+                out[c] = {'min': min, 'max': max}
+        except TypeError:
+            # because some types, e.g., dicts cannot be sorted/compared
+            continue
     return out
 
 
