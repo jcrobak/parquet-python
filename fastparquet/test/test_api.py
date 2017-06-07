@@ -212,6 +212,16 @@ def test_filter_special(tempdir):
     assert out.symbol.tolist() == ['NOW', 'NOW', 'NOW']
 
 
+def test_in_filter(tempdir):
+    symbols = ['a', 'a', 'b', 'c', 'c', 'd']
+    values = [1, 2, 3, 4, 5, 6]
+    df = pd.DataFrame(data={'symbols': symbols, 'values': values})
+    write(tempdir, df, file_scheme='hive', partition_on=['symbols'])
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(filters=[('symbols', 'in', ['a', 'c'])])
+    assert set(out.symbols) == {'a', 'c'}
+
+
 def test_filter_stats(tempdir):
     df = pd.DataFrame({
         'x': [1, 2, 3, 4, 5, 6, 7],

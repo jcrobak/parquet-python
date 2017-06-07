@@ -663,6 +663,9 @@ def filter_val(op, val, vmin=None, vmax=None):
     -------
     True or False
     """
+    if (op == 'in' and vmax is not None and vmin is not None and
+            vmax == vmin and vmax not in val):
+        return True
     if vmax is not None:
         if isinstance(vmax, np.ndarray):
             vmax = vmax[0]
