@@ -270,9 +270,12 @@ class ParquetFile(object):
         -------
         Generator yielding one Pandas data-frame per row-group
         """
-        check_column_names(self.columns, columns, categories)
-        index = self._get_index(index)
+        if index is None:
+            index = self._get_index(index)
         columns = columns or self.columns
+        if index and index not in columns:
+            columns.append(index)
+        check_column_names(self.columns, columns, categories)
         rgs = self.filter_row_groups(filters)
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
@@ -333,11 +336,14 @@ class ParquetFile(object):
         -------
         Pandas data-frame
         """
-        check_column_names(self.columns, columns, categories, timestamp96)
         rgs = self.filter_row_groups(filters)
         size = sum(rg.num_rows for rg in rgs)
+        if index is None:
+            index = self._get_index(index)
         columns = columns or self.columns
-        index = self._get_index(index)
+        if index and index not in columns:
+            columns.append(index)
+        check_column_names(self.columns, columns, categories)
         df, views = self.pre_allocate(size, columns, categories, index,
                                       timestamp96=timestamp96)
         start = 0
