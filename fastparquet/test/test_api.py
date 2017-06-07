@@ -230,3 +230,13 @@ def test_filter_stats(tempdir):
     pf = ParquetFile(tempdir)
     out = pf.to_pandas(filters=[('x', '>=', 5)])
     assert out.x.tolist() == [5, 6, 7]
+
+
+def test_index_not_in_columns(tempdir):
+    df = pd.DataFrame({'a': ['x', 'y', 'z'], 'b': [4, 5, 6]}).set_index('a')
+    write(tempdir, df, file_scheme='hive')
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(columns=['b'])
+    assert out.index.tolist() == ['x', 'y', 'z']
+    out = pf.to_pandas(columns=['b'], index=False)
+    assert out.index.tolist() == [0, 1, 2]
