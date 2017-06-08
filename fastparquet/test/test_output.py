@@ -772,6 +772,7 @@ def test_empty_dataframe(tempdir):
     assert pf.count == 0
     assert len(out) == 0
     assert (out.columns == df.columns).all()
+    assert pf.statistics
 
 
 def test_hasnulls_ordering(tempdir):

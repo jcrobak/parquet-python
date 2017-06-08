@@ -256,6 +256,7 @@ class ParquetFile(object):
             so that the optimal data-dtype can be allocated. If ``None``,
             will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
+            To filter out (i.e., not read) some of the row-groups.
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
@@ -325,6 +326,7 @@ class ParquetFile(object):
             so that the optimal data-dtype can be allocated. If ``None``,
             will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
+            To filter out (i.e., not read) some of the row-groups.
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
@@ -569,6 +571,8 @@ def statistics(obj):
         d = {n: {col: [item[col].get(n, None) for item in L]
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
+        if not L:
+             return d
         schema = obj.schema
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
