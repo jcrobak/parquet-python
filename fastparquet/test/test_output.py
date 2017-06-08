@@ -352,6 +352,14 @@ def test_empty_groupby(tempdir):
         assert row.b in list(df[(df.a==row.a)&(df.c==row.c)].b)
 
 
+def test_too_many_partition_columns(tempdir):
+    df = pd.DataFrame({'a': np.random.choice(['a', 'b', 'c'], size=1000),
+                       'c': np.random.choice([True, False], size=1000)})
+    with pytest.raises(ValueError) as ve:
+        writer.write(tempdir, df, partition_on=['a', 'c'], file_scheme='hive')
+    assert "Cannot include all columns" in str(ve)
+
+
 @pytest.mark.parametrize('compression', ['GZIP',
                                          'gzip',
                                          None,

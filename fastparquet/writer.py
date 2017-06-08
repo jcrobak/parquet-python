@@ -875,6 +875,8 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
     remaining = list(data)
     for column in columns:
         remaining.remove(column)
+    if not remaining:
+        raise ValueError("Cannot include all columns in partition_on")
     rgs = []
     for key in gb.indices:
         df = gb.get_group(key)[remaining]

@@ -257,6 +257,7 @@ class ParquetFile(object):
             will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
             To filter out (i.e., not read) some of the row-groups.
+            (This is not row-level filtering)
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
@@ -327,6 +328,7 @@ class ParquetFile(object):
             will automatically set *if* the data was written by fastparquet.
         filters: list of tuples
             To filter out (i.e., not read) some of the row-groups.
+            (This is not row-level filtering)
             Filter syntax: [(column, op, val), ...],
             where op is [==, >, >=, <, <=, !=, in, not in]
         index: string or None
