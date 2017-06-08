@@ -174,7 +174,9 @@ def metadata_from_many(file_list, verify_schema=False, open_with=default_open):
     fmd.row_groups = []
 
     for pf, fn in zip(pfs, file_list):
-        if pf.file_scheme != 'simple':
+        if pf.file_scheme not in ['simple', 'empty']:
+            # should remove 'empty' datasets up front? Get ignored on load
+            # anyway.
             raise ValueError('Cannot merge multi-file input', fn)
         for rg in pf.row_groups:
             rg = thrift_copy(rg)
