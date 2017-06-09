@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 import datetime
 import numpy as np
@@ -715,6 +716,23 @@ def test_append_simple(tempdir):
     expected = pd.concat([df, df], ignore_index=True)
     pd.util.testing.assert_frame_equal(pf.to_pandas(), expected,
                                        check_categorical=False)
+
+
+@pytest.mark.parametrize('scheme', ('hive', 'simple'))
+def test_append_empty(tempdir, scheme):
+    fn = os.path.join(str(tempdir), 'test.parq')
+    df = pd.DataFrame({'a': [1, 2, 3, 0],
+                       'b': ['a', 'a', 'b', 'b']})
+    write(fn, df.head(0), write_index=False, file_scheme=scheme)
+    pf = ParquetFile(fn)
+    assert pf.count == 0
+    assert pf.file_scheme == 'empty'
+    write(fn, df, append=True, write_index=False, file_scheme=scheme)
+
+    pf = ParquetFile(fn)
+    pd.util.testing.assert_frame_equal(pf.to_pandas(), df,
+                                       check_categorical=False)
+
 
 
 @pytest.mark.parametrize('row_groups', ([0], [0, 2]))

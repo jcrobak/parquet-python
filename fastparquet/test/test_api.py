@@ -177,6 +177,7 @@ def test_read_multiple_no_metadata(tempdir):
     df = pd.DataFrame({'x': [1, 5, 2, 5]})
     write(tempdir, df, file_scheme='hive', row_group_offsets=[0, 2])
     os.unlink(os.path.join(tempdir, '_metadata'))
+    os.unlink(os.path.join(tempdir, '_common_metadata'))
     import glob
     flist = list(sorted(glob.glob(os.path.join(tempdir, '*'))))
     pf = ParquetFile(flist)

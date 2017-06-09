@@ -685,7 +685,7 @@ def write_simple(fn, data, fmd, row_group_offsets, compression,
     """
     if append:
         pf = api.ParquetFile(fn, open_with=open_with)
-        if pf.file_scheme != 'simple':
+        if pf.file_scheme not in ['simple', 'empty']:
             raise ValueError('File scheme requested is simple, but '
                              'existing file scheme is not')
         fmd = pf.fmd
@@ -811,9 +811,9 @@ def write(filename, data, row_group_offsets=50000000,
     elif file_scheme in ['hive', 'drill']:
         if append:
             pf = api.ParquetFile(filename, open_with=open_with)
-            if pf.file_scheme != 'hive':
-                raise ValueError('Requested file scheme is hive, '
-                                 'but existing file scheme is not.')
+            if pf.file_scheme not in ['hive', 'empty']:
+                raise ValueError('Requested file scheme is %s, but '
+                                 'existing file scheme is not.' % file_scheme)
             fmd = pf.fmd
             i_offset = find_max_part(fmd.row_groups)
             partition_on = list(pf.cats)
