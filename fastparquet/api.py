@@ -43,6 +43,38 @@ class ParquetFile(object):
         evaluated to a file open for reading. Defaults to the built-in `open`.
     sep: string [`os.sep`]
         Path separator to use, if data is in multiple files.
+        
+    Attributes
+    ----------
+    cats: dict
+        Columns derived from hive/drill directory information, with known
+        values for each column.
+    categories: list
+        Columns marked as categorical in the extra metadata (meaning the 
+        data must have come from pandas).
+    columns: list of str
+        The data columns available
+    count: int
+        Total number of rows
+    dtypes: dict
+        Expected output types for each column
+    file_scheme: str
+        'simple': all row groups are within the same file; 'hive': all row
+        groups are in other files; 'mixed': row groups in this file and others
+        too; 'empty': no row grops at all.
+    info: dict
+        Combination of some of the other attributes
+    key_value_metadata: list
+        Additional information about this data's origin, e.g., pandas
+        description.
+    row_groups: list
+        Thrift objects for each row group
+    schema: schema.SchemaHelper
+        print this for a representation of the column structure
+    self_made: bool
+        If this file was created by fastparquet
+    statistics: dict
+        Max/min/count of each column chunk
     """
     def __init__(self, fn, verify=False, open_with=default_open,
                  sep=os.sep):
@@ -115,8 +147,6 @@ class ParquetFile(object):
 
     @ property
     def helper(self):
-        warnings.warn('The "helper" attribute of ParquetFile has been'
-                      'renamed to "schema".')
         return self.schema
 
     @property
