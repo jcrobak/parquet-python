@@ -685,7 +685,8 @@ def filter_out_cats(rg, filters, sep='/'):
 
         app_filters = [f[1:] for f in filters if f[0] == cat]
         for op, val in app_filters:
-            if isinstance(val, str):
+            if isinstance(val, str) or (isinstance(val, (tuple, list)) and
+                                        all(isinstance(x, str) for x in val)):
                 v0 = v
             else:
                 v0 = val_to_num(v)
