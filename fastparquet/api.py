@@ -6,22 +6,19 @@ from __future__ import unicode_literals
 
 from collections import OrderedDict
 import json
-import operator
 import os
-import re
+import six
 import struct
 
 import numpy as np
-import pandas as pd
-import thriftpy
 import warnings
 
 from .core import read_thrift
 from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
-from .util import (default_open, ParquetException, sep_from_open, val_to_num,
+from .util import (default_open, ParquetException, val_to_num,
                    ensure_bytes, check_column_names, metadata_from_many,
-                   ex_from_sep, created_by)
+                   ex_from_sep)
 
 
 class ParquetFile(object):
@@ -685,7 +682,9 @@ def filter_out_cats(rg, filters, sep='/'):
 
         app_filters = [f[1:] for f in filters if f[0] == cat]
         for op, val in app_filters:
-            if isinstance(val, str):
+            tstr = six.string_types + (six.text_type, )
+            if isinstance(val, tstr) or (isinstance(val, (tuple, list)) and
+                                         all(isinstance(x, tstr) for x in val)):
                 v0 = v
             else:
                 v0 = val_to_num(v)

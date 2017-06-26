@@ -7,4 +7,5 @@ cover
 build
 dist
 parquet.egg-info
-.tox
+.idea
+.cached

@@ -223,6 +223,18 @@ def test_in_filter(tempdir):
     assert set(out.symbols) == {'a', 'c'}
 
 
+def test_in_filter_numbers(tempdir):
+    symbols = ['a', 'a', 'b', 'c', 'c', 'd']
+    values = [1, 2, 3, 4, 5, 6]
+    df = pd.DataFrame(data={'symbols': symbols, 'values': values})
+    write(tempdir, df, file_scheme='hive', partition_on=['values'])
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(filters=[('values', 'in', ['1', '4'])])
+    assert set(out.symbols) == {'a', 'c'}
+    out = pf.to_pandas(filters=[('values', 'in', [1, 4])])
+    assert set(out.symbols) == {'a', 'c'}
+
+
 def test_filter_stats(tempdir):
     df = pd.DataFrame({
         'x': [1, 2, 3, 4, 5, 6, 7],
