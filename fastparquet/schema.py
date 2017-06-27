@@ -50,6 +50,22 @@ def schema_to_text(root, indent=[]):
     return text
 
 
+def flatten(schema, root, name_parts=[]):
+    if not hasattr(schema, 'children'):
+        return
+    if schema is not root:
+        name_parts = name_parts + [schema.name]
+    # root.children.pop('.'.join(name_parts), None)
+    for name, item in schema.children.copy().items():
+        if schema.repetition_type == parquet_thrift.FieldRepetitionType.REPEATED:
+            continue
+        if len(getattr(item, 'children', [])) == 0:
+
+            root.children['.'.join(name_parts + [name])] = item
+            continue
+        flatten(item, root, name_parts)
+
+
 class SchemaHelper(object):
     """Utility providing convenience methods for schema_elements."""
 
@@ -60,6 +76,7 @@ class SchemaHelper(object):
         self.schema_elements_by_name = dict(
             [(se.name, se) for se in schema_elements])
         schema_tree(schema_elements)
+        flatten(self.root, self.root)
 
     def __str__(self):
         return schema_to_text(self.schema_elements[0])

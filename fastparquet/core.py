@@ -81,12 +81,15 @@ def read_rep(io_obj, daph, helper, metadata):
     if len(metadata.path_in_schema) > 1:
         max_repetition_level = helper.max_repetition_level(
             metadata.path_in_schema)
-        bit_width = encoding.width_from_max_int(max_repetition_level)
-        repetition_levels = read_data(io_obj, daph.repetition_level_encoding,
-                                      daph.num_values,
-                                      bit_width)[:daph.num_values]
-        if repetition_levels.max() == 0:
+        if max_repetition_level == 0:
             repetition_levels = None
+        else:
+            bit_width = encoding.width_from_max_int(max_repetition_level)
+            repetition_levels = read_data(io_obj, daph.repetition_level_encoding,
+                                          daph.num_values,
+                                          bit_width)[:daph.num_values]
+            if repetition_levels.max() == 0:
+                repetition_levels = None
     return repetition_levels
 
 

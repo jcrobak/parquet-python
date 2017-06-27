@@ -440,16 +440,16 @@ class ParquetFile(object):
         """ Implied types of the columns in the schema """
         if categories is None:
             categories = self.categories
-        dtype = {f.name: (converted_types.typemap(f)
+        dtype = {name: (converted_types.typemap(f)
                           if f.num_children in [None, 0] else np.dtype("O"))
-                 for f in self.schema.root.children.values()}
+                 for name, f in self.schema.root.children.items()}
         for col, dt in dtype.copy().items():
             if dt.kind in ['i', 'b']:
                 # int/bool columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
                     chunks = [c for c in rg.columns
-                              if c.meta_data.path_in_schema[-1] == col]
+                              if '.'.join(c.meta_data.path_in_schema) == col]
                     for chunk in chunks:
                         if chunk.meta_data.statistics is None:
                             num_nulls = True
