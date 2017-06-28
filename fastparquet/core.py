@@ -302,12 +302,12 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
     maps = {}
 
     for column in rg.columns:
-        name = ".".join(column.meta_data.path_in_schema)
-        if (column.meta_data.path_in_schema[0] in columns and
-                (_is_list_like(schema_helper, column) or
-                 _is_map_like(schema_helper, column))):
-            name = column.meta_data.path_in_schema[0]
-        elif name not in columns:
+        if (_is_list_like(schema_helper, column) or
+                _is_map_like(schema_helper, column)):
+            name = ".".join(column.meta_data.path_in_schema[:-2])
+        else:
+            name = ".".join(column.meta_data.path_in_schema)
+        if name not in columns:
             continue
 
         use = name in categories if categories is not None else False

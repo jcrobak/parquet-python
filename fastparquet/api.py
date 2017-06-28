@@ -149,7 +149,10 @@ class ParquetFile(object):
     @property
     def columns(self):
         """ Column names """
-        return list(self._schema[0].children)
+        return [c for c, i in self._schema[0].children.items()
+                if len(getattr(i, 'children', [])) == 0
+                or i.converted_type in [parquet_thrift.ConvertedType.LIST,
+                                        parquet_thrift.ConvertedType.MAP]]
 
     @property
     def statistics(self):

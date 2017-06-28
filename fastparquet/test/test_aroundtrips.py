@@ -57,6 +57,19 @@ df = sql.createDataFrame(out, df_schema)
     pd.util.testing.assert_frame_equal(data, expected)
 
 
+def test_nested_list(sql):
+    """
+j = {'nest': {'thing': ['hi', 'world']}}
+open('temp.json', 'w').write('\n'.join([json.dumps(j)] * 10))
+df = sql.read.json('temp.json')
+    """
+    fn = os.path.join(TEST_DATA, 'nested.parq')
+    pf = fastparquet.ParquetFile(fn)
+    assert pf.columns == ['nest.thing']  # NOT contain 'nest'
+    out = pf.to_pandas(columns=['nest.thing'])
+    assert all([o == ['hi', 'world'] for o in out['nest.thing']])
+
+
 @pytest.mark.parametrize('scheme', ['simple', 'hive', 'drill'])
 @pytest.mark.parametrize('row_groups', [[0], [0, 500]])
 @pytest.mark.parametrize('comp', [None] + list(compressions))

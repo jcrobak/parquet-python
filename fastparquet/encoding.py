@@ -245,6 +245,8 @@ def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
     started = False
     append_value = 1 + null + null_val
     have_null = False
+    if defi is None:
+        defi = value_maker(append_value)
     for de, re in zip(defi, rep):
         if not re:
             # new row - save what we have
@@ -266,3 +268,8 @@ def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
         have_null = de == 0 and null
     assign[i] = None if have_null else part
     return i
+
+
+def value_maker(val):
+    while True:
+        yield val

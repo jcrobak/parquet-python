@@ -138,7 +138,7 @@ def _is_list_like(helper, column):
     if len(column.meta_data.path_in_schema) < 3:
         return False
     se = helper.schema_element(
-        column.meta_data.path_in_schema[-3])
+        column.meta_data.path_in_schema[:-2])
     ct = se.converted_type
     if ct != parquet_thrift.ConvertedType.LIST:
         return False
@@ -159,7 +159,7 @@ def _is_map_like(helper, column):
     if len(column.meta_data.path_in_schema) < 3:
         return False
     se = helper.schema_element(
-        column.meta_data.path_in_schema[-3])
+        column.meta_data.path_in_schema[:-2])
     ct = se.converted_type
     if ct != parquet_thrift.ConvertedType.MAP:
         return False
