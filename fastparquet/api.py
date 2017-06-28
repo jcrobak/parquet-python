@@ -439,6 +439,11 @@ class ParquetFile(object):
         else:
             return {}
 
+    @property
+    def in96cols(self):
+        """List of columns that might be non-standard timestamps"""
+        return [n for n, d in self.dtypes.items() if d == 'S12']
+
     def _dtypes(self, categories=None):
         """ Implied types of the columns in the schema """
         if categories is None:

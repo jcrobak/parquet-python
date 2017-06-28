@@ -257,14 +257,15 @@ def read_col(column, schema_helper, infile, use_cat=False,
             num = encoding._assemble_objects(assign, defi, rep, val, dic, d,
                                              null, null_val)
         elif defi is not None:
+            max_defi = schema_helper.max_definition_level(cmd.path_in_schema)
             part = assign[num:num+len(defi)]
-            part[defi != 1] = my_nan
+            part[defi != max_defi] = my_nan
             if d and not use_cat:
-                part[defi == 1] = dic[val]
+                part[defi == max_defi] = dic[val]
             elif do_convert:
-                part[defi == 1] = convert(val, se, timestamp96=timestamp96)
+                part[defi == max_defi] = convert(val, se, timestamp96=timestamp96)
             else:
-                part[defi == 1] = val
+                part[defi == max_defi] = val
         else:
             piece = assign[num:num+len(val)]
             if d and not use_cat:
