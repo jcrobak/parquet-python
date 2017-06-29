@@ -148,6 +148,51 @@ A couple of caveats should be noted:
 - complex numbers must have their real and imaginary parts stored as two
   separate float columns.
 
+Spark Timestamps
+----------------
+
+Fastparquet can read and write int96-style timestamps, as typically found in Apache
+Spark and Map-Reduce output.
+
+Currently, int96-style timestamps are the only known use of the int96 type without
+an explicit schema-level converted type assignment. They will be automatically converted to
+times upon loading.
+
+Similarly on writing, the ``times`` keyword controls the encoding of timestamp columns:
+"int64" is the default and faster option, producing parquet standard compliant data, but
+"int96" is required to write data which is compatible with Spark.
+
+Reading Nested Schema
+---------------------
+
+Fastparquet can read nested schemas. The principal mechamism is *flattening*, whereby
+parquet schema struct columns become top-level columns. For instance, if a schema looks
+like
+
+.. code-block::
+
+    root
+    | - visitor: OPTIONAL
+      | - ip: BYTE_ARRAY, UTF8, OPTIONAL
+        - network_id: BYTE_ARRAY, UTF8, OPTIONAL
+
+then the ``ParquetFile`` will include entries "visitor.ip" and "visitor.network_id" in its
+``columns``, and these will become ordinary Pandas columns.
+
+Fastparquet also handles some parquet LIST and MAP types. For instance, the schema may include
+
+.. code-block::
+
+    | - tags: LIST, OPTIONAL
+        - list: REPEATED
+           - element: BYTE_ARRAY, UTF8, OPTIONAL
+
+In this case, ``columns`` would include an entry "tags", which evaluates to an object column
+containing lists of strings. Reading such columns will be relatively slow.
+If the 'element' type is anything other than a primitive type,
+i.e., a struct, map or list, than fastparquet will not be able to read it, and the resulting
+column will either not be contained in the output, or contain only ``None`` values.
+
 Partitions and row-groups
 -------------------------
 

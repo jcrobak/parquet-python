@@ -86,7 +86,7 @@ def typemap(se):
     return np.dtype("O")
 
 
-def convert(data, se, timestamp96=False):
+def convert(data, se, timestamp96=True):
     """Convert known types from primitive to rich.
 
     Parameters

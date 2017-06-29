@@ -149,7 +149,10 @@ class ParquetFile(object):
     @property
     def columns(self):
         """ Column names """
-        return list(self._schema[0].children)
+        return [c for c, i in self._schema[0].children.items()
+                if len(getattr(i, 'children', [])) == 0
+                or i.converted_type in [parquet_thrift.ConvertedType.LIST,
+                                        parquet_thrift.ConvertedType.MAP]]
 
     @property
     def statistics(self):
@@ -179,7 +182,7 @@ class ParquetFile(object):
             return self.fn
 
     def read_row_group_file(self, rg, columns, categories, index=None,
-                            assign=None, timestamp96=[]):
+                            assign=None):
         """ Open file for reading, and process it as a row-group """
         if categories is None:
             categories = self.categories
@@ -187,18 +190,17 @@ class ParquetFile(object):
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(
-                    rg.num_rows, columns, categories, index,
-                    timestamp96=timestamp96)
+                    rg.num_rows, columns, categories, index)
             ret = True
         core.read_row_group_file(
                 fn, rg, columns, categories, self.schema, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
-                assign=assign, timestamp96=timestamp96)
+                assign=assign)
         if ret:
             return df
 
     def read_row_group(self, rg, columns, categories, infile=None,
-                       index=None, assign=None, timestamp96=[]):
+                       index=None, assign=None):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
@@ -207,13 +209,11 @@ class ParquetFile(object):
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(rg.num_rows, columns,
-                                           categories, index,
-                                           timestamp96=timestamp96)
+                                           categories, index)
             ret = True
         core.read_row_group(
                 infile, rg, columns, categories, self.schema, self.cats,
-                self.selfmade, index=index, assign=assign,
-                timestamp96=timestamp96, sep=self.sep)
+                self.selfmade, index=index, assign=assign, sep=self.sep)
         if ret:
             return df
 
@@ -339,7 +339,7 @@ class ParquetFile(object):
         return index
 
     def to_pandas(self, columns=None, categories=None, filters=[],
-                  index=None, timestamp96=[]):
+                  index=None):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -377,8 +377,7 @@ class ParquetFile(object):
         if index and index not in columns:
             columns.append(index)
         check_column_names(self.columns, columns, categories)
-        df, views = self.pre_allocate(size, columns, categories, index,
-                                      timestamp96=timestamp96)
+        df, views = self.pre_allocate(size, columns, categories, index)
         start = 0
         if self.file_scheme == 'simple':
             with self.open(self.fn) as f:
@@ -387,8 +386,7 @@ class ParquetFile(object):
                                     else v[start:start + rg.num_rows])
                              for (name, v) in views.items()}
                     self.read_row_group(rg, columns, categories, infile=f,
-                                        index=index, assign=parts,
-                                        timestamp96=timestamp96)
+                                        index=index, assign=parts)
                     start += rg.num_rows
         else:
             for rg in rgs:
@@ -396,15 +394,15 @@ class ParquetFile(object):
                                 else v[start:start + rg.num_rows])
                          for (name, v) in views.items()}
                 self.read_row_group_file(rg, columns, categories, index,
-                                         assign=parts, timestamp96=timestamp96)
+                                         assign=parts)
                 start += rg.num_rows
         return df
 
-    def pre_allocate(self, size, columns, categories, index, timestamp96=[]):
+    def pre_allocate(self, size, columns, categories, index):
         if categories is None:
             categories = self.categories
         return _pre_allocate(size, columns, categories, index, self.cats,
-                             self._dtypes(categories), timestamp96=timestamp96)
+                             self._dtypes(categories))
 
     @property
     def count(self):
@@ -440,16 +438,16 @@ class ParquetFile(object):
         """ Implied types of the columns in the schema """
         if categories is None:
             categories = self.categories
-        dtype = {f.name: (converted_types.typemap(f)
+        dtype = {name: (converted_types.typemap(f)
                           if f.num_children in [None, 0] else np.dtype("O"))
-                 for f in self.schema.root.children.values()}
+                 for name, f in self.schema.root.children.items()}
         for col, dt in dtype.copy().items():
             if dt.kind in ['i', 'b']:
                 # int/bool columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
                     chunks = [c for c in rg.columns
-                              if c.meta_data.path_in_schema[-1] == col]
+                              if '.'.join(c.meta_data.path_in_schema) == col]
                     for chunk in chunks:
                         if chunk.meta_data.statistics is None:
                             num_nulls = True
@@ -465,6 +463,8 @@ class ParquetFile(object):
                         dtype[col] = np.dtype('f4')
                     else:
                         dtype[col] = np.dtype('f8')
+            elif dt == 'S12':
+                dtype[col] = 'M8[ns]'
         for field in categories:
             dtype[field] = 'category'
         for cat in self.cats:
@@ -478,7 +478,7 @@ class ParquetFile(object):
     __repr__ = __str__
 
 
-def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
+def _pre_allocate(size, columns, categories, index, cs, dt):
     cols = [c for c in columns if index != c]
     categories = categories or {}
     cats = cs.copy()
@@ -488,8 +488,6 @@ def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
     def get_type(name):
         if name in categories:
             return 'category'
-        if name in timestamp96:
-            return 'M8[ns]'
         return dt.get(name, None)
 
     dtypes = [get_type(c) for c in cols]
@@ -599,7 +597,7 @@ def statistics(obj):
 
     if isinstance(obj, ParquetFile):
         L = list(map(statistics, obj.row_groups))
-        d = {n: {col: [item[col].get(n, None) for item in L]
+        d = {n: {col: [item.get(col, {}).get(n, None) for item in L]
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
         if not L:
@@ -610,10 +608,15 @@ def statistics(obj):
             se = schema.schema_element(col.meta_data.path_in_schema)
             if se.converted_type is not None:
                 for name in ['min', 'max']:
-                    d[name][column] = (
-                        [None] if d[name][column] is None or None in d[name][column]
-                        else list(converted_types.convert(np.array(d[name][column]), se))
+                    try:
+                        d[name][column] = (
+                            [None] if d[name][column] is None
+                                      or None in d[name][column]
+                            else list(converted_types.convert(
+                                np.array(d[name][column]), se))
                         )
+                    except KeyError:
+                        d[name][column] = None
         return d
 
 
