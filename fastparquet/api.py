@@ -182,7 +182,7 @@ class ParquetFile(object):
             return self.fn
 
     def read_row_group_file(self, rg, columns, categories, index=None,
-                            assign=None, timestamp96=[]):
+                            assign=None):
         """ Open file for reading, and process it as a row-group """
         if categories is None:
             categories = self.categories
@@ -190,18 +190,17 @@ class ParquetFile(object):
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(
-                    rg.num_rows, columns, categories, index,
-                    timestamp96=timestamp96)
+                    rg.num_rows, columns, categories, index)
             ret = True
         core.read_row_group_file(
                 fn, rg, columns, categories, self.schema, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
-                assign=assign, timestamp96=timestamp96)
+                assign=assign)
         if ret:
             return df
 
     def read_row_group(self, rg, columns, categories, infile=None,
-                       index=None, assign=None, timestamp96=[]):
+                       index=None, assign=None):
         """
         Access row-group in a file and read some columns into a data-frame.
         """
@@ -210,13 +209,11 @@ class ParquetFile(object):
         ret = False
         if assign is None:
             df, assign = self.pre_allocate(rg.num_rows, columns,
-                                           categories, index,
-                                           timestamp96=timestamp96)
+                                           categories, index)
             ret = True
         core.read_row_group(
                 infile, rg, columns, categories, self.schema, self.cats,
-                self.selfmade, index=index, assign=assign,
-                timestamp96=timestamp96, sep=self.sep)
+                self.selfmade, index=index, assign=assign, sep=self.sep)
         if ret:
             return df
 
@@ -342,7 +339,7 @@ class ParquetFile(object):
         return index
 
     def to_pandas(self, columns=None, categories=None, filters=[],
-                  index=None, timestamp96=[]):
+                  index=None):
         """
         Read data from parquet into a Pandas dataframe.
 
@@ -380,8 +377,7 @@ class ParquetFile(object):
         if index and index not in columns:
             columns.append(index)
         check_column_names(self.columns, columns, categories)
-        df, views = self.pre_allocate(size, columns, categories, index,
-                                      timestamp96=timestamp96)
+        df, views = self.pre_allocate(size, columns, categories, index)
         start = 0
         if self.file_scheme == 'simple':
             with self.open(self.fn) as f:
@@ -390,8 +386,7 @@ class ParquetFile(object):
                                     else v[start:start + rg.num_rows])
                              for (name, v) in views.items()}
                     self.read_row_group(rg, columns, categories, infile=f,
-                                        index=index, assign=parts,
-                                        timestamp96=timestamp96)
+                                        index=index, assign=parts)
                     start += rg.num_rows
         else:
             for rg in rgs:
@@ -399,15 +394,15 @@ class ParquetFile(object):
                                 else v[start:start + rg.num_rows])
                          for (name, v) in views.items()}
                 self.read_row_group_file(rg, columns, categories, index,
-                                         assign=parts, timestamp96=timestamp96)
+                                         assign=parts)
                 start += rg.num_rows
         return df
 
-    def pre_allocate(self, size, columns, categories, index, timestamp96=[]):
+    def pre_allocate(self, size, columns, categories, index):
         if categories is None:
             categories = self.categories
         return _pre_allocate(size, columns, categories, index, self.cats,
-                             self._dtypes(categories), timestamp96=timestamp96)
+                             self._dtypes(categories))
 
     @property
     def count(self):
@@ -439,11 +434,6 @@ class ParquetFile(object):
         else:
             return {}
 
-    @property
-    def int96cols(self):
-        """List of columns that might be non-standard timestamps"""
-        return [n for n, d in self.dtypes.items() if d == 'S12']
-
     def _dtypes(self, categories=None):
         """ Implied types of the columns in the schema """
         if categories is None:
@@ -473,6 +463,8 @@ class ParquetFile(object):
                         dtype[col] = np.dtype('f4')
                     else:
                         dtype[col] = np.dtype('f8')
+            elif dt == 'S12':
+                dtype[col] = 'M8[ns]'
         for field in categories:
             dtype[field] = 'category'
         for cat in self.cats:
@@ -486,7 +478,7 @@ class ParquetFile(object):
     __repr__ = __str__
 
 
-def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
+def _pre_allocate(size, columns, categories, index, cs, dt):
     cols = [c for c in columns if index != c]
     categories = categories or {}
     cats = cs.copy()
@@ -496,8 +488,6 @@ def _pre_allocate(size, columns, categories, index, cs, dt, timestamp96=[]):
     def get_type(name):
         if name in categories:
             return 'category'
-        if name in timestamp96:
-            return 'M8[ns]'
         return dt.get(name, None)
 
     dtypes = [get_type(c) for c in cols]

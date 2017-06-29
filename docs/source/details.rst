@@ -154,14 +154,9 @@ Spark Timestamps
 Fastparquet can read and write int96-style timestamps, as typically found in Apache
 Spark and Map-Reduce output.
 
-To read int96 columns as timestamps, include the columns' names in the ``timestamp96``
-keyword parameter. A convenient attribute of ParquetFiles, ``int96cols`` lists all
-columns that might be eligible, so if they are certain to all be times (quite likely),
-the the data could be read as
-
-.. code-block::
-
-    pf.to_pandas(timestamp96=pf.int96cols)
+Currently, int96-style timestamps are the only known use of the int96 type without
+an explicit schema-level converted type assignment. They will be automatically converted to
+times upon loading.
 
 Similarly on writing, the ``times`` keyword controls the encoding of timestamp columns:
 "int64" is the default and faster option, producing parquet standard compliant data, but
