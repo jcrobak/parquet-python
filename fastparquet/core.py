@@ -88,8 +88,8 @@ def read_rep(io_obj, daph, helper, metadata):
             repetition_levels = read_data(io_obj, daph.repetition_level_encoding,
                                           daph.num_values,
                                           bit_width)[:daph.num_values]
-            if repetition_levels.max() == 0:
-                repetition_levels = None
+            # if repetition_levels.max() == 0:
+            #     repetition_levels = None
     return repetition_levels
 
 
@@ -246,12 +246,13 @@ def read_col(column, schema_helper, infile, use_cat=False,
                              'use dictionary encoding; column: %s',
                              cmd.path_in_schema)
 
+        max_defi = schema_helper.max_definition_level(cmd.path_in_schema)
         if rep is not None:
             null = not schema_helper.is_required(cmd.path_in_schema[0])
             null_val = (se.repetition_type !=
-                                 parquet_thrift.FieldRepetitionType.REQUIRED)
+                        parquet_thrift.FieldRepetitionType.REQUIRED)
             num = encoding._assemble_objects(assign, defi, rep, val, dic, d,
-                                             null, null_val)
+                                             null, null_val, max_defi)
         elif defi is not None:
             max_defi = schema_helper.max_definition_level(cmd.path_in_schema)
             part = assign[num:num+len(defi)]

@@ -216,7 +216,7 @@ spec32 = [('data', numba.uint32[:]), ('loc', numba.int64), ('len', numba.int64)]
 Numpy32 = numba.jitclass(spec32)(NumpyIO)
 
 
-def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
+def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val, max_defi):
     """Dremel-assembly of arrays of values into lists
 
     Parameters
@@ -235,7 +235,10 @@ def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
         Can an entry be None?
     null_val: bool
         can list elements be None
+    max_defi: int
+        value of definition level that corresponds to non-null
     """
+    ## TODO: good case for cython
     if d:
         # dereference dict values
         val = dic[val]
@@ -243,10 +246,9 @@ def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
     vali = 0
     part = []
     started = False
-    append_value = 1 + null + null_val
     have_null = False
     if defi is None:
-        defi = value_maker(append_value)
+        defi = value_maker(max_defi)
     for de, re in zip(defi, rep):
         if not re:
             # new row - save what we have
@@ -257,7 +259,7 @@ def _assemble_objects(assign, defi, rep, val, dic, d, null, null_val):
             else:
                 # first time: no row to save yet
                 started = True
-        if de == append_value:
+        if de == max_defi:
             # append real value to current item
             part.append(val[vali])
             vali += 1
