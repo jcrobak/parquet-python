@@ -597,7 +597,7 @@ def statistics(obj):
 
     if isinstance(obj, ParquetFile):
         L = list(map(statistics, obj.row_groups))
-        d = {n: {col: [item[col].get(n, None) for item in L]
+        d = {n: {col: [item.get(col, {}).get(n, None) for item in L]
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
         if not L:
@@ -608,10 +608,15 @@ def statistics(obj):
             se = schema.schema_element(col.meta_data.path_in_schema)
             if se.converted_type is not None:
                 for name in ['min', 'max']:
-                    d[name][column] = (
-                        [None] if d[name][column] is None or None in d[name][column]
-                        else list(converted_types.convert(np.array(d[name][column]), se))
+                    try:
+                        d[name][column] = (
+                            [None] if d[name][column] is None
+                                      or None in d[name][column]
+                            else list(converted_types.convert(
+                                np.array(d[name][column]), se))
                         )
+                    except KeyError:
+                        d[name][column] = None
         return d
 
 
