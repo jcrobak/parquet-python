@@ -148,6 +148,56 @@ A couple of caveats should be noted:
 - complex numbers must have their real and imaginary parts stored as two
   separate float columns.
 
+Spark Timestamps
+----------------
+
+Fastparquet can read and write int96-style timestamps, as typically found in Apache
+Spark and Map-Reduce output.
+
+To read int96 columns as timestamps, include the columns' names in the ``timestamp96``
+keyword parameter. A convenient attribute of ParquetFiles, ``int96cols`` lists all
+columns that might be eligible, so if they are certain to all be times (quite likely),
+the the data could be read as
+
+.. code-block::
+
+    pf.to_pandas(timestamp96=pf.int96cols)
+
+Similarly on writing, the ``times`` keyword controls the encoding of timestamp columns:
+"int64" is the default and faster option, producing parquet standard compliant data, but
+"int96" is required to write data which is compatible with Spark.
+
+Reading Nested Schema
+---------------------
+
+Fastparquet can read nested schemas. The principal mechamism is *flattening*, whereby
+parquet schema struct columns become top-level columns. For instance, if a schema looks
+like
+
+.. code-block::
+
+    root
+    | - visitor: OPTIONAL
+      | - ip: BYTE_ARRAY, UTF8, OPTIONAL
+        - network_id: BYTE_ARRAY, UTF8, OPTIONAL
+
+then the ``ParquetFile`` will include entries "visitor.ip" and "visitor.network_id" in its
+``columns``, and these will become ordinary Pandas columns.
+
+Fastparquet also handles some parquet LIST and MAP types. For instance, the schema may include
+
+.. code-block::
+
+    | - tags: LIST, OPTIONAL
+        - list: REPEATED
+           - element: BYTE_ARRAY, UTF8, OPTIONAL
+
+In this case, ``columns`` would include an entry "tags", which evaluates to an object column
+containing lists of strings. Reading such columns will be relatively slow.
+If the 'element' type is anything other than a primitive type,
+i.e., a struct, map or list, than fastparquet will not be able to read it, and the resulting
+column will either not be contained in the output, or contain only ``None`` values.
+
 Partitions and row-groups
 -------------------------
 
