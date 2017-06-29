@@ -440,7 +440,7 @@ class ParquetFile(object):
             return {}
 
     @property
-    def in96cols(self):
+    def int96cols(self):
         """List of columns that might be non-standard timestamps"""
         return [n for n, d in self.dtypes.items() if d == 'S12']
 
