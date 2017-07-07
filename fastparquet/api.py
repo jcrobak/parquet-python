@@ -575,13 +575,19 @@ def statistics(obj):
             return rv
         if s.max is not None:
             try:
-                rv['max'] = encoding.read_plain(ensure_bytes(s.max),
-                                                md.type, 1)[0]
+                if md.type == parquet_thrift.Type.BYTE_ARRAY:
+                    rv['max'] = ensure_bytes(s.max)
+                else:
+                    rv['max'] = encoding.read_plain(ensure_bytes(s.max),
+                                                    md.type, 1)[0]
             except:
                 rv['max'] = None
         if s.min is not None:
             try:
-                rv['min'] = encoding.read_plain(ensure_bytes(s.min),
+                if md.type == parquet_thrift.Type.BYTE_ARRAY:
+                    rv['min'] = ensure_bytes(s.min)
+                else:
+                    rv['min'] = encoding.read_plain(ensure_bytes(s.min),
                                                 md.type, 1)[0]
             except:
                 rv['min'] = None
