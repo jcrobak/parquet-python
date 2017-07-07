@@ -601,7 +601,7 @@ def statistics(obj):
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
         if not L:
-             return d
+            return d
         schema = obj.schema
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
@@ -611,7 +611,7 @@ def statistics(obj):
                     try:
                         d[name][column] = (
                             [None] if d[name][column] is None
-                                      or None in d[name][column]
+                            or None in d[name][column]
                             else list(converted_types.convert(
                                 np.array(d[name][column]), se))
                         )
