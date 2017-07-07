@@ -575,13 +575,19 @@ def statistics(obj):
             return rv
         if s.max is not None:
             try:
-                rv['max'] = encoding.read_plain(ensure_bytes(s.max),
-                                                md.type, 1)[0]
+                if md.type == parquet_thrift.Type.BYTE_ARRAY:
+                    rv['max'] = ensure_bytes(s.max)
+                else:
+                    rv['max'] = encoding.read_plain(ensure_bytes(s.max),
+                                                    md.type, 1)[0]
             except:
                 rv['max'] = None
         if s.min is not None:
             try:
-                rv['min'] = encoding.read_plain(ensure_bytes(s.min),
+                if md.type == parquet_thrift.Type.BYTE_ARRAY:
+                    rv['min'] = ensure_bytes(s.min)
+                else:
+                    rv['min'] = encoding.read_plain(ensure_bytes(s.min),
                                                 md.type, 1)[0]
             except:
                 rv['min'] = None
@@ -601,7 +607,7 @@ def statistics(obj):
                  for col in obj.columns}
              for n in ['min', 'max', 'null_count', 'distinct_count']}
         if not L:
-             return d
+            return d
         schema = obj.schema
         for col in obj.row_groups[0].columns:
             column = '.'.join(col.meta_data.path_in_schema)
@@ -611,7 +617,7 @@ def statistics(obj):
                     try:
                         d[name][column] = (
                             [None] if d[name][column] is None
-                                      or None in d[name][column]
+                            or None in d[name][column]
                             else list(converted_types.convert(
                                 np.array(d[name][column]), se))
                         )

@@ -502,8 +502,13 @@ def write_column(f, data, selement, compression=None):
         try:
             if num_nulls == 0:
                 max, min = data.values.max(), data.values.min()
-                max = encode['PLAIN'](pd.Series([max]), selement)
-                min = encode['PLAIN'](pd.Series([min]), selement)
+                if selement.type == parquet_thrift.Type.BYTE_ARRAY:
+                    if selement.converted_type is not None:
+                        max = encode['PLAIN'](pd.Series([max]), selement)[4:]
+                        min = encode['PLAIN'](pd.Series([min]), selement)[4:]
+                else:
+                    max = encode['PLAIN'](pd.Series([max]), selement)
+                    min = encode['PLAIN'](pd.Series([min]), selement)
         except TypeError:
             pass
         data = data.cat.codes
@@ -519,8 +524,13 @@ def write_column(f, data, selement, compression=None):
     try:
         if encoding != 'PLAIN_DICTIONARY' and num_nulls == 0:
             max, min = data.values.max(), data.values.min()
-            max = encode['PLAIN'](pd.Series([max], dtype=data.dtype), selement)
-            min = encode['PLAIN'](pd.Series([min], dtype=data.dtype), selement)
+            if selement.type == parquet_thrift.Type.BYTE_ARRAY:
+                if selement.converted_type is not None:
+                    max = encode['PLAIN'](pd.Series([max]), selement)[4:]
+                    min = encode['PLAIN'](pd.Series([min]), selement)[4:]
+            else:
+                max = encode['PLAIN'](pd.Series([max]), selement)
+                min = encode['PLAIN'](pd.Series([min]), selement)
     except TypeError:
         pass
 
