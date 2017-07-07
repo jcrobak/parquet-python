@@ -81,6 +81,11 @@ def test_sorted_row_group_columns(tempdir):
 
     pf = ParquetFile(fn)
 
+    # string stats should be stored without byte-encoding
+    zcol = [c for c in pf.row_groups[0].columns
+            if c.meta_data.path_in_schema == ['z']][0]
+    assert zcol.meta_data.statistics.min == 'a'
+
     result = sorted_partitioned_columns(pf)
     expected = {'x': {'min': [1, 3], 'max': [2, 4]},
                 'z': {'min': ['a', 'c'], 'max': ['b', 'd']}}
