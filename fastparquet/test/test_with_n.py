@@ -7,6 +7,7 @@ TEST_DATA = 'test-data'
 here = os.path.dirname(__file__)
 count = 1000
 
+
 def test_read_bitpacked():
     results = np.empty(1000000, dtype=np.int32)
     with open(os.path.join(here, 'bitpack')) as f:

@@ -321,8 +321,8 @@ def read_row_group_arrays(file, rg, columns, categories, schema_helper, cats,
                     key, value = out[name], maps[name]
                 else:
                     value, key = out[name], maps[name]
-                for i, (k, v) in enumerate(zip(key, value)):
-                    out[name][i] = dict(zip(k, v)) if k is not None else None
+                out[name][:] = [dict(zip(k, v)) if k is not None else None
+                                for k, v in zip(key, value)]
 
 
 def read_row_group(file, rg, columns, categories, schema_helper, cats,
