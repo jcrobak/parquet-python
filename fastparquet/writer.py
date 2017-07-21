@@ -940,7 +940,8 @@ def write_common_metadata(fn, fmd, open_with=default_open,
         f.write(MARKER)
 
 
-def merge(file_list, verify_schema=True, open_with=default_open):
+def merge(file_list, verify_schema=True, open_with=default_open,
+          root=False):
     """
     Create a logical data-set out of multiple parquet files.
 
@@ -958,13 +959,18 @@ def merge(file_list, verify_schema=True, open_with=default_open):
     open_with: func
         Used for opening a file for writing as f(path, mode). If input list
         is ParquetFile instances, will be inferred from the first one of these.
+    root: str
+        If passing a list of files, the top directory of the data-set may
+        be ambiguous for partitioning where the upmost field has only one
+        value. Use this to specify the data'set root directory, if required.
 
     Returns
     -------
     ParquetFile instance corresponding to the merged data.
     """
     sep = sep_from_open(open_with)
-    basepath, fmd = metadata_from_many(file_list, verify_schema, open_with)
+    basepath, fmd = metadata_from_many(file_list, verify_schema, open_with,
+                                       root=root)
 
     out_file = sep.join([basepath, '_metadata'])
     write_common_metadata(out_file, fmd, open_with, no_row_groups=False)
