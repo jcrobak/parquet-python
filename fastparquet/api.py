@@ -40,6 +40,10 @@ class ParquetFile(object):
         evaluated to a file open for reading. Defaults to the built-in `open`.
     sep: string [`os.sep`]
         Path separator to use, if data is in multiple files.
+    root: str
+        If passing a list of files, the top directory of the data-set may
+        be ambiguous for partitioning where the upmost field has only one
+        value. Use this to specify the data'set root directory, if required.
         
     Attributes
     ----------
@@ -74,11 +78,11 @@ class ParquetFile(object):
         Max/min/count of each column chunk
     """
     def __init__(self, fn, verify=False, open_with=default_open,
-                 sep=os.sep):
+                 sep=os.sep, root=False):
         self.sep = sep
         if isinstance(fn, (tuple, list)):
             basepath, fmd = metadata_from_many(fn, verify_schema=verify,
-                                               open_with=open_with)
+                                               open_with=open_with, root=root)
             self.fn = sep.join([basepath, '_metadata'])  # effective file
             self.fmd = fmd
             self._set_attrs()

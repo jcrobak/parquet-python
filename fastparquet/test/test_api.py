@@ -191,6 +191,23 @@ def test_read_multiple_no_metadata(tempdir):
     pd.util.testing.assert_frame_equal(out, df)
 
 
+def test_single_upper_directory(tempdir):
+    df = pd.DataFrame({'x': [1, 5, 2, 5], 'y': ['aa'] * 4})
+    write(tempdir, df, file_scheme='hive', partition_on='y')
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas()
+    assert (out.y == 'aa').all()
+
+    os.unlink(os.path.join(tempdir, '_metadata'))
+    os.unlink(os.path.join(tempdir, '_common_metadata'))
+    import glob
+    flist = list(sorted(glob.glob(os.path.join(tempdir, '*/*'))))
+    pf = ParquetFile(flist, root=tempdir)
+    assert pf.fn == os.path.join(tempdir, '_metadata')
+    out = pf.to_pandas()
+    assert (out.y == 'aa').all()
+
+
 def test_filter_without_paths(tempdir):
     fn = os.path.join(tempdir, 'test.parq')
     df = pd.DataFrame({
