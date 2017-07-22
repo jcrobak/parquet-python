@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 import json
 import os
+import re
 import six
 import struct
 
@@ -500,6 +501,8 @@ def _pre_allocate(size, columns, categories, index, cs, dt):
     dtypes.extend(['category'] * len(cs))
     df, views = dataframe.empty(dtypes, size, cols=cols, index_name=index,
                                 index_type=index_type, cats=cats)
+    if index and re.match(r'__index_level_\d+__', index):
+        df.index.name = None
     return df, views
 
 
