@@ -275,3 +275,13 @@ def test_index_not_in_columns(tempdir):
     assert out.index.tolist() == ['x', 'y', 'z']
     out = pf.to_pandas(columns=['b'], index=False)
     assert out.index.tolist() == [0, 1, 2]
+
+
+def test_no_index_name(tempdir):
+    df = pd.DataFrame({'__index_name_0__': ['x', 'y', 'z'],
+                       'b': [4, 5, 6]}).set_index('__index_name_0__')
+    write(tempdir, df, file_scheme='hive')
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(columns=['b'])
+    assert out.index.name is None
+    assert out.index.tolist() == ['x', 'y', 'z']
