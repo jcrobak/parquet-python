@@ -278,10 +278,23 @@ def test_index_not_in_columns(tempdir):
 
 
 def test_no_index_name(tempdir):
-    df = pd.DataFrame({'__index_name_0__': ['x', 'y', 'z'],
-                       'b': [4, 5, 6]}).set_index('__index_name_0__')
+    df = pd.DataFrame({'__index_level_0__': ['x', 'y', 'z'],
+                       'b': [4, 5, 6]}).set_index('__index_level_0__')
     write(tempdir, df, file_scheme='hive')
     pf = ParquetFile(tempdir)
-    out = pf.to_pandas(columns=['b'])
+    out = pf.to_pandas()
     assert out.index.name is None
     assert out.index.tolist() == ['x', 'y', 'z']
+
+    df = pd.DataFrame({'__index_level_0__': ['x', 'y', 'z'],
+                       'b': [4, 5, 6]})
+    write(tempdir, df, file_scheme='hive')
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas(index='__index_level_0__', columns=['b'])
+    assert out.index.name is None
+    assert out.index.tolist() == ['x', 'y', 'z']
+
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas()
+    assert out.index.name is None
+    assert out.index.tolist() == [0, 1, 2]
