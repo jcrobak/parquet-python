@@ -595,7 +595,7 @@ def statistics(obj):
                     rv['min'] = ensure_bytes(s.min)
                 else:
                     rv['min'] = encoding.read_plain(ensure_bytes(s.min),
-                                                md.type, 1)[0]
+                                                    md.type, 1)[0]
             except:
                 rv['min'] = None
         if s.null_count is not None:
@@ -628,8 +628,9 @@ def statistics(obj):
                             else list(converted_types.convert(
                                 np.array(d[name][column]), se))
                         )
-                    except KeyError:
-                        d[name][column] = None
+                    except (KeyError, ValueError):
+                        # catch no stat and bad conversions
+                        d[name][column] = [None]
         return d
 
 
