@@ -169,7 +169,7 @@ Fastparquet can read nested schemas. The principal mechamism is *flattening*, wh
 parquet schema struct columns become top-level columns. For instance, if a schema looks
 like
 
-.. code-block::
+.. code-block:: python
 
     root
     | - visitor: OPTIONAL
@@ -181,7 +181,7 @@ then the ``ParquetFile`` will include entries "visitor.ip" and "visitor.network_
 
 Fastparquet also handles some parquet LIST and MAP types. For instance, the schema may include
 
-.. code-block::
+.. code-block:: python
 
     | - tags: LIST, OPTIONAL
         - list: REPEATED
