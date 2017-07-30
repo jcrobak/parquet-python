@@ -199,9 +199,9 @@ def ex_from_sep(sep):
     """Generate regex for category folder matching"""
     if sep not in seps:
         if sep in r'\^$.|?*+()[]':
-            s = re.compile(r"([a-zA-Z_]+)=([^\{}]+)".format(sep))
+            s = re.compile(r"([a-zA-Z_0-9]+)=([^\{}]+)".format(sep))
         else:
-            s = re.compile("([a-zA-Z_]+)=([^{}]+)".format(sep))
+            s = re.compile("([a-zA-Z_0-9]+)=([^{}]+)".format(sep))
         seps[sep] = s
     return seps[sep]
 

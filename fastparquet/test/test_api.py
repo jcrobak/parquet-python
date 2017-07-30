@@ -208,6 +208,15 @@ def test_single_upper_directory(tempdir):
     assert (out.y == 'aa').all()
 
 
+def test_numerical_partition_name(tempdir):
+    df = pd.DataFrame({'x': [1, 5, 2, 5], 'y1': ['aa', 'aa', 'bb', 'aa']})
+    write(tempdir, df, file_scheme='hive', partition_on=['y1'])
+    pf = ParquetFile(tempdir)
+    out = pf.to_pandas()
+    assert out[out.y1 == 'aa'].x.tolist() == [1, 5, 5]
+    assert out[out.y1 == 'bb'].x.tolist() == [2]
+
+
 def test_filter_without_paths(tempdir):
     fn = os.path.join(tempdir, 'test.parq')
     df = pd.DataFrame({
