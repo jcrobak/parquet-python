@@ -511,6 +511,7 @@ def write_column(f, data, selement, compression=None):
                     min = encode['PLAIN'](pd.Series([min]), selement)
         except TypeError:
             pass
+        ncats = len(data.cat.categories)
         data = data.cat.codes
         cats = True
         encoding = "PLAIN_DICTIONARY"
@@ -585,6 +586,10 @@ def write_column(f, data, selement, compression=None):
                 page_type=parquet_thrift.PageType.DICTIONARY_PAGE,
                 encoding=parquet_thrift.Encoding.PLAIN, count=1))
         cmd.dictionary_page_offset = dict_start
+        cmd.key_value_metadata.append(
+            parquet_thrift.KeyValue(key='num_categories', value=str(ncats)))
+        cmd.key_value_metadata.append(
+            parquet_thrift.KeyValue(key='numpy_dtype', value=str(data.dtype)))
     chunk = parquet_thrift.ColumnChunk(file_offset=offset,
                                        meta_data=cmd)
     write_thrift(f, chunk)
@@ -684,7 +689,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
-    meta.value = json.dumps(pandas_metadata)
+    meta.value = json.dumps(pandas_metadata, sort_keys=True)
     return fmd
 
 
@@ -927,6 +932,7 @@ def write_common_metadata(fn, fmd, open_with=default_open,
         Strip out row groups from metadata before writing - used for "common
         metadata" files, containing only the schema.
     """
+    consolidate_categories(fmd)
     with open_with(fn, 'wb') as f:
         f.write(MARKER)
         if no_row_groups:
@@ -938,6 +944,23 @@ def write_common_metadata(fn, fmd, open_with=default_open,
             foot_size = write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
         f.write(MARKER)
+
+
+def consolidate_categories(fmd):
+    key_value = [k for k in fmd.key_value_metadata
+                 if k.key == 'pandas'][0]
+    meta = json.loads(key_value.value)
+    cats = [c for c in meta['columns']
+            if 'num_categories' in (c['metadata'] or [])]
+    for cat in cats:
+        for rg in fmd.row_groups:
+            for col in rg.columns:
+                if ".".join(col.meta_data.path_in_schema) == cat['name']:
+                    ncats = [k.value for k in col.meta_data.key_value_metadata
+                             if k.key == 'num_categories'][0]
+                    if int(ncats) > cat['metadata']['num_categories']:
+                        cat['metadata']['num_categories'] = int(ncats)
+    key_value.value = json.dumps(meta, sort_keys=True)
 
 
 def merge(file_list, verify_schema=True, open_with=default_open,
