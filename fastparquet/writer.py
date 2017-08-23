@@ -689,7 +689,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
             se.repetition_type = parquet_thrift.FieldRepetitionType.OPTIONAL
         fmd.schema.append(se)
         root.num_children += 1
-    meta.value = json.dumps(pandas_metadata)
+    meta.value = json.dumps(pandas_metadata, sort_keys=True)
     return fmd
 
 
@@ -960,7 +960,7 @@ def consolidate_categories(fmd):
                              if k.key == 'num_categories'][0]
                     if int(ncats) > cat['metadata']['num_categories']:
                         cat['metadata']['num_categories'] = int(ncats)
-    key_value.value = json.dumps(meta)
+    key_value.value = json.dumps(meta, sort_keys=True)
 
 
 def merge(file_list, verify_schema=True, open_with=default_open,
