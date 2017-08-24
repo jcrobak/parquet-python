@@ -12,7 +12,6 @@ import six
 import struct
 
 import numpy as np
-import warnings
 
 from .core import read_thrift
 from .thrift_structures import parquet_thrift
@@ -433,8 +432,6 @@ class ParquetFile(object):
         # old track
         vals = self.key_value_metadata.get("fastparquet.cats", None)
         if vals:
-            warnings.warn('Regression warning: found category spec from '
-                          'fastparquet <= 0.0.6')
             return json.loads(vals)
         else:
             return {}
