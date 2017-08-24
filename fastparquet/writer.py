@@ -957,9 +957,10 @@ def consolidate_categories(fmd):
             for col in rg.columns:
                 if ".".join(col.meta_data.path_in_schema) == cat['name']:
                     ncats = [k.value for k in col.meta_data.key_value_metadata
-                             if k.key == 'num_categories'][0]
-                    if int(ncats) > cat['metadata']['num_categories']:
-                        cat['metadata']['num_categories'] = int(ncats)
+                             if k.key == 'num_categories']
+                    if ncats and int(ncats[0]) > cat['metadata'][
+                            'num_categories']:
+                        cat['metadata']['num_categories'] = int(ncats[0])
     key_value.value = json.dumps(meta, sort_keys=True)
 
 
