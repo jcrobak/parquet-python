@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fastparquet.util import tempdir
 from fastparquet import write, ParquetFile
 from fastparquet.api import statistics, sorted_partitioned_columns
 
