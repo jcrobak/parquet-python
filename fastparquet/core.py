@@ -24,7 +24,7 @@ def read_thrift(file_obj, ttype):
     starting_pos = file_obj.seek(0, 1)
     # set up the protocol chain
     ft = TFileObjectTransport(file_obj)
-    bufsize = 4096
+    bufsize = 2 ** 16
     bt = TBufferedTransport(ft, bufsize)
     pin = TCompactProtocol(bt)
     # read out type
@@ -35,7 +35,8 @@ def read_thrift(file_obj, ttype):
     ending_pos = file_obj.seek(0, 1)
     actual_buffer_end_pos = (ending_pos - starting_pos) % bufsize
     delta = buffer_pos - actual_buffer_end_pos
-    file_obj.seek(delta, 1)
+    # seek packwards for how far we actually need to go.
+    result_pos = file_obj.seek(delta, 1)
     return page_header
 
 

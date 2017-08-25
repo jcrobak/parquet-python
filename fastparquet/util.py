@@ -92,6 +92,10 @@ TBase.__str__ = thrift_print
 TBase.__repr__ = thrift_print
 
 
+def is_thrift_item(item):
+    return isinstance(item, TBase) or (hasattr(item, 'thrift_spec') and hasattr(item, 'read'))
+
+
 def thrift_copy(structure):
     """
     Recursively copy a thriftpy structure
@@ -99,14 +103,14 @@ def thrift_copy(structure):
     base = structure.__class__()
     for key in dir(structure):
         if key.startswith('_') or key in ['thrift_spec', 'read', 'write',
-                                          'default_spec']:
+                                          'default_spec', 'validate']:
             continue
         val = getattr(structure, key)
         if isinstance(val, list):
             setattr(base, key, [thrift_copy(item)
-                                if isinstance(item, TBase)
+                                if is_thrift_item(item)
                                 else item for item in val])
-        elif isinstance(val, TBase):
+        elif is_thrift_item(val):
             setattr(base, key, thrift_copy(val))
         else:
             setattr(base, key, val)
