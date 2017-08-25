@@ -15,34 +15,8 @@ from .compression import decompress_data
 from .converted_types import convert, typemap
 from .schema import _is_list_like, _is_map_like
 from .speedups import unpack_byte_array
-from .thrift_structures import parquet_thrift
+from .thrift_structures import parquet_thrift, read_thrift
 from .util import val_to_num, byte_buffer, ex_from_sep
-
-
-def read_thrift(file_obj, ttype):
-    """Read a thrift structure from the given fo."""
-    from thrift.transport.TTransport import TFileObjectTransport, TBufferedTransport
-    starting_pos = file_obj.tell()
-
-    # set up the protocol chain
-    ft = TFileObjectTransport(file_obj)
-    bufsize = 2 ** 16
-    # for accelerated reading ensure that we wrap this so that the CReadable transport can be used.
-    bt = TBufferedTransport(ft, bufsize)
-    pin = TCompactProtocol(bt)
-
-    # read out type
-    obj = ttype()
-    obj.read(pin)
-
-    # The read will actually overshoot due to the buffering that thrift does. Seek backwards to the correct spot,.
-    buffer_pos = bt.cstringio_buf.tell()
-    ending_pos = file_obj.tell()
-    blocks = ((ending_pos - starting_pos) // bufsize) - 1
-    if blocks < 0:
-        blocks = 0
-    file_obj.seek(starting_pos + blocks * bufsize + buffer_pos)
-    return obj
 
 
 def _read_page(file_obj, page_header, column_metadata):

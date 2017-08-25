@@ -5,13 +5,8 @@ from __future__ import division
 from __future__ import print_function
 
 import array
-import io
-import math
 import numba
 import numpy as np
-import os
-import struct
-import sys
 
 from .speedups import unpack_byte_array
 from .thrift_structures import parquet_thrift

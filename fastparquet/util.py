@@ -1,14 +1,14 @@
 import ast
-import os, os.path
+import os
+import os.path
 import shutil
 import pandas as pd
 import pytest
 import re
 import tempfile
-import thrift
-import sys
 import six
-from thrift.protocol.TBase import TBase
+
+from .thrift_structures import thrift_copy
 
 PY2 = six.PY2
 PY3 = six.PY3
@@ -72,49 +72,6 @@ if PY2:
 else:
     def ensure_bytes(s):
         return s.encode('utf-8') if isinstance(s, str) else s
-
-
-def thrift_print(structure, offset=0):
-    """
-    Handy recursive text ouput for thrift structures
-    """
-    if not isinstance(structure, TBase):
-        return str(structure)
-    s = str(structure.__class__) + '\n'
-    for key in dir(structure):
-        if key.startswith('_') or key in ['thrift_spec', 'read', 'write',
-                                          'default_spec']:
-            continue
-        s = s + ' ' * offset + key + ': ' + thrift_print(getattr(structure, key)
-                                                         , offset+2) + '\n'
-    return s
-TBase.__str__ = thrift_print
-TBase.__repr__ = thrift_print
-
-
-def is_thrift_item(item):
-    return isinstance(item, TBase) or (hasattr(item, 'thrift_spec') and hasattr(item, 'read'))
-
-
-def thrift_copy(structure):
-    """
-    Recursively copy a thriftpy structure
-    """
-    base = structure.__class__()
-    for key in dir(structure):
-        if key.startswith('_') or key in ['thrift_spec', 'read', 'write',
-                                          'default_spec', 'validate']:
-            continue
-        val = getattr(structure, key)
-        if isinstance(val, list):
-            setattr(base, key, [thrift_copy(item)
-                                if is_thrift_item(item)
-                                else item for item in val])
-        elif is_thrift_item(val):
-            setattr(base, key, thrift_copy(val))
-        else:
-            setattr(base, key, val)
-    return base
 
 
 def index_like(index):

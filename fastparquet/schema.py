@@ -5,7 +5,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from collections import OrderedDict
-import os
 from six import text_type
 
 from .thrift_structures import parquet_thrift
