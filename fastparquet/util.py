@@ -9,6 +9,12 @@ import thrift
 import sys
 import six
 from thrift.protocol.TBase import TBase
+try:
+    from pandas.api.types import is_categorical_dtype
+except ImportError:
+    # Pandas <= 0.18.1
+    from pandas.core.common import is_categorical_dtype
+
 
 PY2 = six.PY2
 PY3 = six.PY3
@@ -260,7 +266,7 @@ def get_column_metadata(column, name):
     inferred_dtype = infer_dtype(column)
     dtype = column.dtype
 
-    if str(dtype) == 'category':
+    if is_categorical_dtype(dtype):
         extra_metadata = {
             'num_categories': len(column.cat.categories),
             'ordered': column.cat.ordered,
@@ -289,6 +295,13 @@ def get_column_metadata(column, name):
             'integer': str(dtype),
             'floating': str(dtype),
         }.get(inferred_dtype, inferred_dtype),
-        'numpy_type': str(dtype),
+        'numpy_type': get_numpy_type(dtype),
         'metadata': extra_metadata,
     }
+
+
+def get_numpy_type(dtype):
+    if is_categorical_dtype(dtype):
+        return 'category'
+    else:
+        return str(dtype)
