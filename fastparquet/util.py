@@ -5,10 +5,10 @@ import pandas as pd
 import pytest
 import re
 import tempfile
-import thriftpy
+import thrift
 import sys
 import six
-
+from thrift.protocol.TBase import TBase
 
 PY2 = six.PY2
 PY3 = six.PY3
@@ -78,7 +78,7 @@ def thrift_print(structure, offset=0):
     """
     Handy recursive text ouput for thrift structures
     """
-    if not isinstance(structure, thriftpy.thrift.TPayload):
+    if not isinstance(structure, TBase):
         return str(structure)
     s = str(structure.__class__) + '\n'
     for key in dir(structure):
@@ -88,8 +88,8 @@ def thrift_print(structure, offset=0):
         s = s + ' ' * offset + key + ': ' + thrift_print(getattr(structure, key)
                                                          , offset+2) + '\n'
     return s
-thriftpy.thrift.TPayload.__str__ = thrift_print
-thriftpy.thrift.TPayload.__repr__ = thrift_print
+TBase.__str__ = thrift_print
+TBase.__repr__ = thrift_print
 
 
 def thrift_copy(structure):
@@ -104,9 +104,9 @@ def thrift_copy(structure):
         val = getattr(structure, key)
         if isinstance(val, list):
             setattr(base, key, [thrift_copy(item)
-                                if isinstance(item, thriftpy.thrift.TPayload)
+                                if isinstance(item, TBase)
                                 else item for item in val])
-        elif isinstance(val, thriftpy.thrift.TPayload):
+        elif isinstance(val, TBase):
             setattr(base, key, thrift_copy(val))
         else:
             setattr(base, key, val)

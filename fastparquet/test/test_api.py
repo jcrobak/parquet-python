@@ -84,7 +84,7 @@ def test_sorted_row_group_columns(tempdir):
     # string stats should be stored without byte-encoding
     zcol = [c for c in pf.row_groups[0].columns
             if c.meta_data.path_in_schema == ['z']][0]
-    assert zcol.meta_data.statistics.min == 'a'
+    assert zcol.meta_data.statistics.min == b'a'
 
     result = sorted_partitioned_columns(pf)
     expected = {'x': {'min': [1, 3], 'max': [2, 4]},

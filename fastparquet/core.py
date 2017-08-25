@@ -5,7 +5,8 @@ import struct
 
 import numpy as np
 import pandas as pd
-from thriftpy.protocol.compact import TCompactProtocol
+from thrift.protocol.TCompactProtocol import TCompactProtocolAccelerated as TCompactProtocol
+# from thriftpy.protocol.compact import TCompactProtocol
 
 from . import encoding
 from .compression import decompress_data
@@ -18,9 +19,23 @@ from .util import val_to_num, byte_buffer, ex_from_sep
 
 def read_thrift(file_obj, ttype):
     """Read a thrift structure from the given fo."""
-    pin = TCompactProtocol(file_obj, True)
+    from thrift.transport.TTransport import TFileObjectTransport, TBufferedTransport
+    # this is a little gross but thrift required that things use the CReadable Transport for things to work properly.
+    starting_pos = file_obj.seek(0, 1)
+    # set up the protocol chain
+    ft = TFileObjectTransport(file_obj)
+    bufsize = 4096
+    bt = TBufferedTransport(ft, bufsize)
+    pin = TCompactProtocol(bt)
+    # read out type
     page_header = ttype()
     page_header.read(pin)
+    # The read will actually overshoot due to the buffering that thrift does.  Seek backwards to the correct spot,.
+    buffer_pos = bt.cstringio_buf.seek(0, 1)
+    ending_pos = file_obj.seek(0, 1)
+    actual_buffer_end_pos = (ending_pos - starting_pos) % bufsize
+    delta = buffer_pos - actual_buffer_end_pos
+    file_obj.seek(delta, 1)
     return page_header
 
 
