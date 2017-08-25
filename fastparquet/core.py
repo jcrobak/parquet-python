@@ -5,8 +5,10 @@ import struct
 
 import numpy as np
 import pandas as pd
-from thrift.protocol.TCompactProtocol import TCompactProtocolAccelerated as TCompactProtocol
-# from thriftpy.protocol.compact import TCompactProtocol
+try:
+    from thrift.protocol.TCompactProtocol import TCompactProtocolAccelerated as TCompactProtocol
+except ImportError:
+    from thrift.protocol.TCompactProtocol import TCompactProtocol
 
 from . import encoding
 from .compression import decompress_data
@@ -20,24 +22,27 @@ from .util import val_to_num, byte_buffer, ex_from_sep
 def read_thrift(file_obj, ttype):
     """Read a thrift structure from the given fo."""
     from thrift.transport.TTransport import TFileObjectTransport, TBufferedTransport
-    # this is a little gross but thrift required that things use the CReadable Transport for things to work properly.
-    starting_pos = file_obj.seek(0, 1)
+    starting_pos = file_obj.tell()
+
     # set up the protocol chain
     ft = TFileObjectTransport(file_obj)
     bufsize = 2 ** 16
+    # for accelerated reading ensure that we wrap this so that the CReadable transport can be used.
     bt = TBufferedTransport(ft, bufsize)
     pin = TCompactProtocol(bt)
+
     # read out type
-    page_header = ttype()
-    page_header.read(pin)
-    # The read will actually overshoot due to the buffering that thrift does.  Seek backwards to the correct spot,.
-    buffer_pos = bt.cstringio_buf.seek(0, 1)
-    ending_pos = file_obj.seek(0, 1)
-    actual_buffer_end_pos = (ending_pos - starting_pos) % bufsize
-    delta = buffer_pos - actual_buffer_end_pos
-    # seek packwards for how far we actually need to go.
-    result_pos = file_obj.seek(delta, 1)
-    return page_header
+    obj = ttype()
+    obj.read(pin)
+
+    # The read will actually overshoot due to the buffering that thrift does. Seek backwards to the correct spot,.
+    buffer_pos = bt.cstringio_buf.tell()
+    ending_pos = file_obj.tell()
+    blocks = ((ending_pos - starting_pos) // bufsize) - 1
+    if blocks < 0:
+        blocks = 0
+    file_obj.seek(starting_pos + blocks * bufsize + buffer_pos)
+    return obj
 
 
 def _read_page(file_obj, page_header, column_metadata):
