@@ -9,13 +9,13 @@ import re
 import shutil
 import struct
 import sys
-import thriftpy
+import thrift
 import warnings
 
 import numba
 
-from thriftpy.protocol.compact import TCompactProtocol
-from thriftpy.protocol.exc import TProtocolException
+from thrift.protocol.TCompactProtocol import TCompactProtocolAccelerated as TCompactProtocol
+from thrift.protocol.TProtocol import TProtocolException
 from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from .converted_types import tobson
