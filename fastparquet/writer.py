@@ -10,6 +10,12 @@ import warnings
 import numba
 
 from .thrift_structures import parquet_thrift, write_thrift
+try:
+    from pandas.api.types import is_categorical_dtype
+except ImportError:
+    # Pandas <= 0.18.1
+    from pandas.core.common import is_categorical_dtype
+from .thrift_structures import parquet_thrift
 from .compression import compress_data, decompress_data
 from .converted_types import tobson
 from . import encoding, api
@@ -411,14 +417,14 @@ def write_column(f, data, selement, compression=None):
     encoding = "PLAIN"
 
     if has_nulls:
-        if str(data.dtype) == 'category':
+        if is_categorical_dtype(data.dtype):
             num_nulls = (data.cat.codes == -1).sum()
         elif data.dtype.kind in ['i', 'b']:
             num_nulls = 0
         else:
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
-        if data.dtype.kind == "O" and str(data.dtype) != 'category':
+        if data.dtype.kind == "O" and not is_categorical_dtype(data.dtype):
             if selement.type == parquet_thrift.Type.INT64:
                 data = data.astype(int)
             elif selement.type == parquet_thrift.Type.BOOLEAN:
@@ -435,7 +441,7 @@ def write_column(f, data, selement, compression=None):
     diff = 0
     max, min = None, None
 
-    if str(data.dtype) == 'category':
+    if is_categorical_dtype(data.dtype):
         dph = parquet_thrift.DictionaryPageHeader(
                 num_values=len(data.cat.categories),
                 encoding=parquet_thrift.Encoding.PLAIN)
@@ -630,7 +636,7 @@ def make_metadata(data, has_nulls=True, ignore_columns=[], fixed_text=None,
         oencoding = (object_encoding if isinstance(object_encoding, STR_TYPE)
                      else object_encoding.get(column, None))
         fixed = None if fixed_text is None else fixed_text.get(column, None)
-        if str(data[column].dtype) == 'category':
+        if is_categorical_dtype(data[column].dtype):
             se, type = find_type(data[column].cat.categories,
                                  fixed_text=fixed, object_encoding=oencoding)
             se.name = column

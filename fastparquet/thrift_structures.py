@@ -101,7 +101,7 @@ def thrift_print(structure, offset=0):
     s = str(structure.__class__) + '\n'
     for key in dir(structure):
         if key.startswith('_') or key in ['thrift_spec', 'read', 'write',
-                                          'default_spec']:
+                                          'default_spec', 'validate']:
             continue
         s = s + ' ' * offset + key + ': ' + thrift_print(getattr(structure, key)
                                                          , offset+2) + '\n'
@@ -109,7 +109,7 @@ def thrift_print(structure, offset=0):
 
 
 for cls in dir(parquet_thrift):
-    if cls.startswith("T"):
+    if cls[0].isupper():
         c = getattr(parquet_thrift, cls)
         c.__str__ = thrift_print
         c.__repr__ = thrift_print

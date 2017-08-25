@@ -5,6 +5,11 @@ from pandas.core.generic import NDFrame
 from pandas.core.frame import DataFrame
 from pandas.core.index import RangeIndex, Index
 from pandas.core.categorical import Categorical, CategoricalDtype
+try:
+    from pandas.api.types import is_categorical_dtype
+except ImportError:
+    # Pandas <= 0.18.1
+    from pandas.core.common import is_categorical_dtype
 from .util import STR_TYPE
 
 
@@ -110,7 +115,7 @@ def empty(types, size, cats=None, cols=None, index_type=None, index_name=None):
             inds = list(range(inds.start, inds.stop, inds.step))
         for i, ind in enumerate(inds):
             col = df.columns[ind]
-            if str(dtype) == 'category':
+            if is_categorical_dtype(dtype):
                 views[col] = block.values._codes
                 views[col+'-catdef'] = block.values
             else:
