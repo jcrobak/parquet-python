@@ -17,7 +17,7 @@ import pytest
 import fastparquet
 from fastparquet import writer, core
 
-from fastparquet.test.util import TEST_DATA
+from fastparquet.test.util import TEST_DATA, s3
 
 
 @pytest.yield_fixture()
