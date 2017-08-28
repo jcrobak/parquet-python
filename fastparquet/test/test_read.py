@@ -5,16 +5,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import io
 from itertools import product
-import json
 import numpy as np
 import os
-import pandas as pd
 import shutil
-import sys
 import tempfile
-import unittest
 
 import pandas as pd
 import pytest
@@ -22,7 +17,7 @@ import pytest
 import fastparquet
 from fastparquet import writer, core
 
-from fastparquet.test.util import sql, s3, TEST_DATA
+from fastparquet.test.util import TEST_DATA, s3
 
 
 @pytest.yield_fixture()

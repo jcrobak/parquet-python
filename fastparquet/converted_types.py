@@ -16,11 +16,6 @@ import json
 import logging
 import numba
 import numpy as np
-import os
-import pandas as pd
-import struct
-import sys
-from decimal import Decimal
 import binascii
 
 from .thrift_structures import parquet_thrift

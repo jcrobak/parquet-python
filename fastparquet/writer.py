@@ -1,21 +1,15 @@
 from __future__ import print_function
 
-import io
 import json
 import numpy as np
-import os
 import pandas as pd
 import re
-import shutil
 import struct
-import sys
-import thrift
 import warnings
 
 import numba
 
-from thrift.protocol.TCompactProtocol import TCompactProtocolAccelerated as TCompactProtocol
-from thrift.protocol.TProtocol import TProtocolException
+from .thrift_structures import parquet_thrift, write_thrift
 try:
     from pandas.api.types import is_categorical_dtype
 except ImportError:
@@ -237,42 +231,6 @@ def time_shift(indata, outdata, factor=1000):  # pragma: no cover
             outdata[i] = nat
         else:
             outdata[i] = indata[i] // factor
-
-
-def write_thrift(fobj, thrift):
-    """Write binary compact representation of thiftpy structured object
-
-    Parameters
-    ----------
-    fobj: open file-like object (binary mode)
-    thrift: thriftpy object to write
-
-    Returns
-    -------
-    Number of bytes written
-    """
-    t0 = fobj.tell()
-    pout = TCompactProtocol(fobj)
-    try:
-        thrift.write(pout)
-        fail = False
-    except TProtocolException as e:
-        typ, val, tb = sys.exc_info()
-        frames = []
-        while tb is not None:
-            frames.append(tb)
-            tb = tb.tb_next
-        frame = [tb for tb in frames if 'write_struct' in str(tb.tb_frame.f_code)]
-        variables = frame[0].tb_frame.f_locals
-        obj = variables['obj']
-        name = variables['fname']
-        fail = True
-    if fail:
-        raise ParquetException('Thrift parameter validation failure %s'
-                               ' when writing: %s-> Field: %s' % (
-            val.args[0], obj, name
-        ))
-    return fobj.tell() - t0
 
 
 def encode_plain(data, se):
