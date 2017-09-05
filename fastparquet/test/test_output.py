@@ -873,6 +873,5 @@ def test_bad_object_encoding(tempdir):
     with pytest.raises(ValueError) as e:
         write(tempdir, df, file_scheme='hive', object_encoding='int')
     assert "INT64" in str(e)
-    assert "int()" in str(e)
     assert "primitive" in str(e)
     assert '"a"' in str(e)
