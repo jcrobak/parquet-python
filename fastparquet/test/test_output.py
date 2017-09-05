@@ -860,3 +860,20 @@ def test_consolidate_cats(tempdir):
     writer.consolidate_categories(pf.fmd)
     assert 5 == json.loads(pf.fmd.key_value_metadata[0].value)['columns'][0][
         'metadata']['num_categories']
+
+
+def test_bad_object_encoding(tempdir):
+    df = pd.DataFrame({'a': [b'00']})
+    with pytest.raises(ValueError) as e:
+        write(tempdir, df, file_scheme='hive', object_encoding='utf8')
+    assert "UTF8" in str(e)
+    assert "bytes" in str(e)
+    assert '"a"' in str(e)
+
+    df = pd.DataFrame({'a': [0, "hello", 0]})
+    with pytest.raises(ValueError) as e:
+        write(tempdir, df, file_scheme='hive', object_encoding='int')
+    assert "INT64" in str(e)
+    assert "int()" in str(e)
+    assert "primitive" in str(e)
+    assert '"a"' in str(e)

@@ -163,24 +163,31 @@ def convert(data, se):
     elif "S" in str(dtype)[:2] or "U" in str(dtype)[:2]:
         out = data.values
     elif dtype == "O":
-        if converted_type == parquet_thrift.ConvertedType.UTF8:
-            out = array_encode_utf8(data)
-        elif converted_type is None:
-            if type in revmap:
-                out = data.values.astype(revmap[type], copy=False)
-            elif type == parquet_thrift.Type.BOOLEAN:
-                padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
-                                    'constant', constant_values=(0, 0))
-                out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
-            else:
-                out = data.values
-        elif converted_type == parquet_thrift.ConvertedType.JSON:
-            out = np.array([json.dumps(x).encode('utf8') for x in data],
-                           dtype="O")
-        elif converted_type == parquet_thrift.ConvertedType.BSON:
-            out = data.map(tobson).values
-        if type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
-            out = out.astype('S%i' % se.type_length)
+        try:
+            if converted_type == parquet_thrift.ConvertedType.UTF8:
+                out = array_encode_utf8(data)
+            elif converted_type is None:
+                if type in revmap:
+                    out = data.values.astype(revmap[type], copy=False)
+                elif type == parquet_thrift.Type.BOOLEAN:
+                    padded = np.lib.pad(data.values, (0, 8 - (len(data) % 8)),
+                                        'constant', constant_values=(0, 0))
+                    out = np.packbits(padded.reshape(-1, 8)[:, ::-1].ravel())
+                else:
+                    out = data.values
+            elif converted_type == parquet_thrift.ConvertedType.JSON:
+                out = np.array([json.dumps(x).encode('utf8') for x in data],
+                               dtype="O")
+            elif converted_type == parquet_thrift.ConvertedType.BSON:
+                out = data.map(tobson).values
+            if type == parquet_thrift.Type.FIXED_LEN_BYTE_ARRAY:
+                out = out.astype('S%i' % se.type_length)
+        except Exception as e:
+            ct = parquet_thrift.ConvertedType._VALUES_TO_NAMES[
+                converted_type] if converted_type is not None else None
+            raise ValueError('Error converting column "%s" to bytes using '
+                             'encoding %s. Original error: '
+                             '%s' % (data.name, ct, e))
     elif converted_type == parquet_thrift.ConvertedType.TIMESTAMP_MICROS:
         out = np.empty(len(data), 'int64')
         time_shift(data.values.view('int64'), out)
@@ -425,10 +432,17 @@ def write_column(f, data, selement, compression=None):
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
         if data.dtype.kind == "O" and not is_categorical_dtype(data.dtype):
-            if selement.type == parquet_thrift.Type.INT64:
-                data = data.astype(int)
-            elif selement.type == parquet_thrift.Type.BOOLEAN:
-                data = data.astype(bool)
+            try:
+                if selement.type == parquet_thrift.Type.INT64:
+                    data = data.astype(int)
+                elif selement.type == parquet_thrift.Type.BOOLEAN:
+                    data = data.astype(bool)
+            except ValueError as e:
+                t = parquet_thrift.Type._VALUES_TO_NAMES[selement.type]
+                raise ValueError('Error converting column "%s" to primitive '
+                                 'type %s. Original error: '
+                                 '%s' % (data.name, t, e))
+
     else:
         definition_data = b""
         num_nulls = 0
