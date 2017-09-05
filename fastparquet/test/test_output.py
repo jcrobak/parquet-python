@@ -518,8 +518,7 @@ def test_auto_null(tempdir):
     test_cols = list(set(df) - set(object_cols)) + ['d']
     fn = os.path.join(tmp, "test.parq")
 
-    with pytest.raises((TypeError, AttributeError)):
-        ## TODO: this should be a nicer error?
+    with pytest.raises(ValueError):
         write(fn, df, has_nulls=False)
 
     write(fn, df, has_nulls=True)
