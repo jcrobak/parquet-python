@@ -307,3 +307,55 @@ def test_no_index_name(tempdir):
     out = pf.to_pandas()
     assert out.index.name is None
     assert out.index.tolist() == [0, 1, 2]
+
+
+def test_drill_list(tempdir):
+    df = pd.DataFrame({'a': ['x', 'y', 'z'], 'b': [4, 5, 6]})
+    dir1 = os.path.join(tempdir, 'x')
+    fn1 = os.path.join(dir1, 'part.0.parquet')
+    os.makedirs(dir1)
+    write(fn1, df)
+    dir2 = os.path.join(tempdir, 'y')
+    fn2 = os.path.join(dir2, 'part.0.parquet')
+    os.makedirs(dir2)
+    write(fn2, df)
+
+    pf = ParquetFile([fn1, fn2])
+    out = pf.to_pandas()
+    assert out.a.tolist() == ['x', 'y', 'z'] * 2
+    assert out.dir0.tolist() == ['x'] * 3 + ['y'] * 3
+
+
+def test_hive_and_drill_list(tempdir):
+    df = pd.DataFrame({'a': ['x', 'y', 'z'], 'b': [4, 5, 6]})
+    dir1 = os.path.join(tempdir, 'x=0')
+    fn1 = os.path.join(dir1, 'part.0.parquet')
+    os.makedirs(dir1)
+    write(fn1, df)
+    dir2 = os.path.join(tempdir, 'y')
+    fn2 = os.path.join(dir2, 'part.0.parquet')
+    os.makedirs(dir2)
+    write(fn2, df)
+
+    pf = ParquetFile([fn1, fn2])
+    out = pf.to_pandas()
+    assert out.a.tolist() == ['x', 'y', 'z'] * 2
+    assert out.dir0.tolist() == ['x=0'] * 3 + ['y'] * 3
+
+
+def test_bad_file_paths(tempdir):
+    df = pd.DataFrame({'a': ['x', 'y', 'z'], 'b': [4, 5, 6]})
+    dir1 = os.path.join(tempdir, 'x=0')
+    fn1 = os.path.join(dir1, 'part.=.parquet')
+    os.makedirs(dir1)
+    write(fn1, df)
+    dir2 = os.path.join(tempdir, 'y/z')
+    fn2 = os.path.join(dir2, 'part.0.parquet')
+    os.makedirs(dir2)
+    write(fn2, df)
+
+    pf = ParquetFile([fn1, fn2])
+    assert pf.file_scheme == 'other'
+    out = pf.to_pandas()
+    assert out.a.tolist() == ['x', 'y', 'z'] * 2
+    assert 'dir0' not in out

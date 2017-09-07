@@ -173,16 +173,14 @@ def ex_from_sep(sep):
 
 
 def analyse_paths(file_list, sep=os.sep, root=False):
-    """Consolidate list of file-paths into acceptable parquet relative paths"""
+    """Consolidate list of file-paths into  parquet relative paths"""
     path_parts_list = [fn.split(sep) for fn in file_list]
-    if len({len(path_parts) for path_parts in path_parts_list}) > 1:
-        raise ValueError('Mixed nesting in merge files')
-    s = ex_from_sep(sep)
     if root is False:
         basepath = path_parts_list[0][:-1]
         for i, path_parts in enumerate(path_parts_list):
             j = len(path_parts) - 1
-            for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
+            for k, (base_part, path_part) in enumerate(
+                    zip(basepath, path_parts)):
                 if base_part != path_part:
                     j = k
                     break
@@ -195,14 +193,8 @@ def analyse_paths(file_list, sep=os.sep, root=False):
         assert all(p[:l] == basepath for p in path_parts_list
                    ), "All paths must begin with the given root"
     l = len(basepath)
-    if len({tuple([p.split('=')[0] for p in parts[l:-1]])
-            for parts in path_parts_list}) > 1:
-        raise ValueError('Partitioning directories do not agree')
     out_list = []
     for path_parts in path_parts_list:
-        for path_part in path_parts[l:-1]:
-            if s.match(path_part) is None:
-                raise ValueError('Malformed paths set at', sep.join(path_parts))
         out_list.append(sep.join(path_parts[l:]))
 
     return sep.join(basepath), out_list
@@ -261,3 +253,47 @@ def get_numpy_type(dtype):
         return 'category'
     else:
         return str(dtype)
+
+
+def get_file_scheme(paths, sep='/'):
+    """For the given row groups, figure out if the partitioning scheme
+
+    Parameters
+    ----------
+    paths: list of str
+        normally from row_group.columns[0].file_path
+    sep: str
+        path separator such as '/'
+
+    Returns
+    -------
+    'empty': no rgs at all
+    'simple': all rgs in a single file
+    'flat': multiple files in one directory
+    'hive': directories are all `key=value`; all files are at the same
+        directory depth
+    'drill': assume directory names are labels, and field names are of the
+        form dir0, dir1; all files are at the same directory depth
+    'other': none of the above, assume no partitioning
+    """
+    if not paths:
+        return 'empty'
+    if set(paths) == {None}:
+        return 'simple'
+    if None in paths:
+        return 'other'
+    parts = [p.split(sep) for p in paths]
+    lens = [len(p) for p in parts]
+    if len(set(lens)) > 1:
+        return 'other'
+    if set(lens) == {1}:
+        return 'flat'
+    s = ex_from_sep(sep)
+    dirs = [p.rsplit(sep, 1)[0] for p in paths]
+    matches = [s.findall(d) for d in dirs]
+    if all(len(m) == (l - 1) for (m, l) in
+           zip(matches, lens)):
+        keys = (tuple(m[0] for m in parts) for parts in matches)
+        if len(set(keys)) == 1:
+            return 'hive'
+    return 'drill'
