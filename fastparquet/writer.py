@@ -803,7 +803,7 @@ def write(filename, data, row_group_offsets=50000000,
     elif file_scheme in ['hive', 'drill']:
         if append:
             pf = api.ParquetFile(filename, open_with=open_with)
-            if pf.file_scheme not in ['hive', 'empty']:
+            if pf.file_scheme not in ['hive', 'empty', 'flat']:
                 raise ValueError('Requested file scheme is %s, but '
                                  'existing file scheme is not.' % file_scheme)
             fmd = pf.fmd

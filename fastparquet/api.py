@@ -18,7 +18,7 @@ from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, val_to_num,
                    ensure_bytes, check_column_names, metadata_from_many,
-                   ex_from_sep)
+                   ex_from_sep, get_file_scheme)
 
 
 class ParquetFile(object):
@@ -97,14 +97,6 @@ class ParquetFile(object):
                 self.fn = fn
                 with open_with(fn, 'rb') as f:
                     self._parse_header(f, verify)
-        if not self.row_groups:
-            self.file_scheme = 'empty'
-        elif all(rg.columns[0].file_path is None for rg in self.row_groups):
-            self.file_scheme = 'simple'
-        elif all(rg.columns[0].file_path is not None for rg in self.row_groups):
-            self.file_scheme = 'hive'
-        else:
-            self.file_scheme = 'mixed'
         self.open = open_with
 
     def _parse_header(self, f, verify=True):
@@ -143,6 +135,8 @@ class ParquetFile(object):
                 self.group_files.setdefault(i, set()).add(chunk.file_path)
         self.schema = schema.SchemaHelper(self._schema)
         self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python"
+        self.file_scheme = get_file_scheme([rg.columns[0].file_path
+                                           for rg in self.row_groups], self.sep)
         self._read_partitions()
         self._dtypes()
 
@@ -163,15 +157,19 @@ class ParquetFile(object):
         return statistics(self)
 
     def _read_partitions(self):
+        if self.file_scheme in ['simple', 'flat', 'other']:
+            self.cats = {}
+            return
         cats = {}
         for rg in self.row_groups:
             for col in rg.columns:
                 s = ex_from_sep(self.sep)
-                partitions = s.findall(col.file_path or "")
-                if partitions:
+                path = col.file_path or ""
+                if self.file_scheme == 'hive':
+                    partitions = s.findall(path)
                     for key, val in partitions:
                         cats.setdefault(key, set()).add(val)
-                elif self.sep in (col.file_path or ""):
+                else:
                     for i, val in enumerate(col.file_path.split(self.sep)[:-1]):
                         key = 'dir%i' % i
                         cats.setdefault(key, set()).add(val)
@@ -199,7 +197,7 @@ class ParquetFile(object):
         core.read_row_group_file(
                 fn, rg, columns, categories, self.schema, self.cats,
                 open=self.open, selfmade=self.selfmade, index=index,
-                assign=assign)
+                assign=assign, scheme=self.file_scheme)
         if ret:
             return df
 
@@ -217,7 +215,8 @@ class ParquetFile(object):
             ret = True
         core.read_row_group(
                 infile, rg, columns, categories, self.schema, self.cats,
-                self.selfmade, index=index, assign=assign, sep=self.sep)
+                self.selfmade, index=index, assign=assign, sep=self.sep,
+                scheme=self.file_scheme)
         if ret:
             return df
 

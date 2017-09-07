@@ -1,6 +1,6 @@
 import pytest
 
-from fastparquet.util import thrift_copy, analyse_paths
+from fastparquet.util import thrift_copy, analyse_paths, get_file_scheme
 from fastparquet import parquet_thrift
 
 
@@ -25,21 +25,6 @@ def test_analyse_paths():
     base, out = analyse_paths(file_list, '\\')
     assert (base, out) == ('c', ['cat=1\\a', 'cat=2\\b', 'cat=1\\c'])
 
-    file_list = ['c/cat=2/b', 'c/cat/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        analyse_paths(file_list, '/')
-    assert 'c/cat/a' in str(e)
-
-    file_list = ['c/cat=2/b', 'c/fred=2/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        analyse_paths(file_list, '/')
-    assert 'directories' in str(e)
-
-    file_list = ['c/cat=2/b', 'c/a', 'c/cat=1/c']
-    with pytest.raises(ValueError) as e:
-        analyse_paths(file_list, '/')
-    assert 'nesting' in str(e)
-
 
 def test_thrift_copy():
     fmd = parquet_thrift.FileMetaData()
@@ -56,3 +41,24 @@ def test_thrift_copy():
     assert fmd2.row_groups[0] is not rg0
     rg0.num_rows = 25
     assert fmd2.row_groups[0].num_rows == 5
+
+
+def test_file_scheme():
+    paths = [None, None]
+    assert get_file_scheme(paths) == 'simple'
+    paths = []
+    assert get_file_scheme(paths) == 'empty'  # this is pointless
+    paths = ['file']
+    assert get_file_scheme(paths) == 'flat'
+    paths = ['file', 'file']
+    assert get_file_scheme(paths) == 'flat'
+    paths = ['a=1/b=2/file', 'a=2/b=1/file']
+    assert get_file_scheme(paths) == 'hive'
+    paths = ['a=1/z=2/file', 'a=2/b=6/file']  # note key names do not match
+    assert get_file_scheme(paths) == 'drill'
+    paths = ['a=1/b=2/file', 'a=2/b/file']
+    assert get_file_scheme(paths) == 'drill'
+    paths = ['a/b/c/file', 'a/b/file']
+    assert get_file_scheme(paths) == 'other'
+
+
