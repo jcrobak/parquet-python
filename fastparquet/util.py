@@ -267,6 +267,7 @@ def get_file_scheme(paths, sep='/'):
 
     Returns
     -------
+    'empty': no rgs at all
     'simple': all rgs in a single file
     'flat': multiple files in one directory
     'hive': directories are all `key=value`; all files are at the same
