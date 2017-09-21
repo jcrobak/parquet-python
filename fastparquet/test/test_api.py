@@ -129,6 +129,18 @@ def test_attributes(tempdir):
         assert pf.dtypes[col] == df.dtypes[col]
 
 
+def test_open_standard(tempdir):
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [1.0, 2.0, 1.0, 2.0],
+                       'z': ['a', 'b', 'c', 'd']})
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df, row_group_offsets=[0, 2], file_scheme='hive',
+          open_with=open)
+    pf = ParquetFile(fn, open_with=open)
+    d2 = pf.to_pandas()
+    pd.util.testing.assert_frame_equal(d2, df)
+
+
 def test_cast_index(tempdir):
     df = pd.DataFrame({'i8': np.array([1, 2, 3, 4], dtype='uint8'),
                        'i16': np.array([1, 2, 3, 4], dtype='int16'),
