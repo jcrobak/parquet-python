@@ -313,7 +313,7 @@ class ParquetFile(object):
         rgs = self.filter_row_groups(filters)
         if all(column.file_path is None for rg in self.row_groups
                for column in rg.columns):
-            with self.open(self.fn) as f:
+            with self.open(self.fn, 'rb') as f:
                 for rg in rgs:
                     df, views = self.pre_allocate(rg.num_rows, columns,
                                                   categories, index)
@@ -383,7 +383,7 @@ class ParquetFile(object):
         df, views = self.pre_allocate(size, columns, categories, index)
         start = 0
         if self.file_scheme == 'simple':
-            with self.open(self.fn) as f:
+            with self.open(self.fn, 'rb') as f:
                 for rg in rgs:
                     parts = {name: (v if name.endswith('-catdef')
                                     else v[start:start + rg.num_rows])
