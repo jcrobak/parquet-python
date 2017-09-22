@@ -181,7 +181,7 @@ class ParquetFile(object):
 
     def row_group_filename(self, rg):
         if rg.columns[0].file_path:
-            base = self.fn.replace('_metadata', '')
+            base = self.fn.replace('_metadata', '').rstrip(self.sep)
             if base:
                 return self.sep.join([base, rg.columns[0].file_path])
             else:
