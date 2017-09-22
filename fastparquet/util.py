@@ -188,7 +188,7 @@ def analyse_paths(file_list, sep=os.sep, root=False):
         l = len(basepath)
 
     else:
-        basepath = root.split(sep)
+        basepath = root.rstrip(sep).split(sep)
         l = len(basepath)
         assert all(p[:l] == basepath for p in path_parts_list
                    ), "All paths must begin with the given root"

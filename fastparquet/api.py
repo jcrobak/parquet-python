@@ -83,7 +83,10 @@ class ParquetFile(object):
         if isinstance(fn, (tuple, list)):
             basepath, fmd = metadata_from_many(fn, verify_schema=verify,
                                                open_with=open_with, root=root)
-            self.fn = sep.join([basepath, '_metadata'])  # effective file
+            if basepath:
+                self.fn = sep.join([basepath, '_metadata'])  # effective file
+            else:
+                self.fn = '_metadata'
             self.fmd = fmd
             self._set_attrs()
         else:
@@ -178,8 +181,11 @@ class ParquetFile(object):
 
     def row_group_filename(self, rg):
         if rg.columns[0].file_path:
-            return self.sep.join([os.path.dirname(self.fn),
-                                  rg.columns[0].file_path])
+            base = self.fn.replace('_metadata', '')
+            if base:
+                return self.sep.join([base, rg.columns[0].file_path])
+            else:
+                return rg.columns[0].file_path
         else:
             return self.fn
 
