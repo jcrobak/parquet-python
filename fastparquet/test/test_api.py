@@ -371,3 +371,15 @@ def test_bad_file_paths(tempdir):
     out = pf.to_pandas()
     assert out.a.tolist() == ['x', 'y', 'z'] * 2
     assert 'dir0' not in out
+
+    path1 = os.path.join(tempdir, 'data')
+    fn1 = os.path.join(path1, 'out.parq')
+    os.makedirs(path1)
+    write(fn1, df)
+    path2 = os.path.join(tempdir, 'data2')
+    fn2 = os.path.join(path2, 'out.parq')
+    os.makedirs(path2)
+    write(fn2, df)
+    pf = ParquetFile([fn1, fn2])
+    out = pf.to_pandas()
+    assert out.a.tolist() == ['x', 'y', 'z'] * 2
