@@ -1,6 +1,7 @@
 import pytest
 
-from fastparquet.util import thrift_copy, analyse_paths, get_file_scheme
+from fastparquet.util import (thrift_copy, analyse_paths, get_file_scheme,
+                              val_to_num)
 from fastparquet import parquet_thrift
 
 
@@ -62,3 +63,8 @@ def test_file_scheme():
     assert get_file_scheme(paths) == 'other'
 
 
+def test_val_to_num():
+    assert val_to_num('7') == 7
+    assert val_to_num('.7') == .7
+    assert val_to_num('0.7') == .7
+    assert val_to_num('07') == 7

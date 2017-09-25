@@ -51,7 +51,7 @@ def val_to_num(x):
     if x in ['NOW', 'TODAY']:
         return x
     try:
-        return ast.literal_eval(x)
+        return ast.literal_eval(x.lstrip('0'))
     except:
         pass
     try:
