@@ -50,6 +50,9 @@ def default_open(f, mode='rb'):
 def val_to_num(x):
     if x in ['NOW', 'TODAY']:
         return x
+    if set(x) == {'0'}:
+        # special case for values like "000"
+        return 0
     try:
         return ast.literal_eval(x.lstrip('0'))
     except:

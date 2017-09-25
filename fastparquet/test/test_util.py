@@ -68,3 +68,5 @@ def test_val_to_num():
     assert val_to_num('.7') == .7
     assert val_to_num('0.7') == .7
     assert val_to_num('07') == 7
+    assert val_to_num('0') == 0
+    assert val_to_num('00') == 0
