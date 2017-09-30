@@ -1,11 +1,8 @@
 import ast
 import os
 import os.path
-import shutil
 import pandas as pd
-import pytest
 import re
-import tempfile
 import six
 
 from .thrift_structures import thrift_copy
@@ -66,13 +63,6 @@ def val_to_num(x):
     except:
         return x
 
-
-@pytest.yield_fixture()
-def tempdir():
-    d = tempfile.mkdtemp()
-    yield d
-    if os.path.exists(d):
-        shutil.rmtree(d, ignore_errors=True)
 
 if PY2:
     def ensure_bytes(s):

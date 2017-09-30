@@ -10,12 +10,9 @@ from fastparquet import ParquetFile
 from fastparquet import write, parquet_thrift
 from fastparquet import writer, encoding
 import pytest
-import shutil
-import tempfile
 
-from fastparquet.util import tempdir, default_mkdirs
-from fastparquet.test.util import s3, sql
-from fastparquet.compression import compressions
+from fastparquet.util import default_mkdirs
+from fastparquet.test.util import s3, tempdir, sql
 
 TEST_DATA = "test-data"
 

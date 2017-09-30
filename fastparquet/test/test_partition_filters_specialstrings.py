@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from pandas.tslib import Timestamp
-from fastparquet.util import tempdir
+from fastparquet.test.util import tempdir
 from fastparquet import write, ParquetFile
 import datetime as dt
 import string

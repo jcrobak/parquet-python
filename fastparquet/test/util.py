@@ -1,6 +1,8 @@
 from itertools import product
 import os
 import pytest
+import tempfile
+import shutil
 
 TEST_DATA = "test-data"
 
@@ -41,3 +43,11 @@ def sql():
     sc = pyspark.SparkContext.getOrCreate()
     sql = pyspark.SQLContext(sc)
     return sql
+
+
+@pytest.yield_fixture()
+def tempdir():
+    d = tempfile.mkdtemp()
+    yield d
+    if os.path.exists(d):
+        shutil.rmtree(d, ignore_errors=True)
