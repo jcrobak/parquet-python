@@ -8,8 +8,6 @@ from __future__ import unicode_literals
 from itertools import product
 import numpy as np
 import os
-import shutil
-import tempfile
 
 import pandas as pd
 import pytest
@@ -17,15 +15,7 @@ import pytest
 import fastparquet
 from fastparquet import writer, core
 
-from fastparquet.test.util import TEST_DATA, s3
-
-
-@pytest.yield_fixture()
-def tempdir():
-    d = tempfile.mkdtemp()
-    yield d
-    if os.path.exists(d):
-        shutil.rmtree(d, ignore_errors=True)
+from fastparquet.test.util import TEST_DATA, s3, tempdir
 
 
 def test_header_magic_bytes(tempdir):
