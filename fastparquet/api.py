@@ -274,7 +274,7 @@ class ParquetFile(object):
         """
         return [rg for rg in self.row_groups if
                 not(filter_out_stats(rg, filters, self.schema)) and
-                not(filter_out_cats(rg, filters))]
+                not(filter_out_cats(rg, filters, self.sep))]
 
     def iter_row_groups(self, columns=None, categories=None, filters=[],
                         index=None):
@@ -665,8 +665,8 @@ def sorted_partitioned_columns(pf):
             continue
         try:
             if (sorted(min) == min and
-                sorted(max) == max and
-                all(mx < mn for mx, mn in zip(max[:-1], min[1:]))):
+                    sorted(max) == max and
+                    all(mx < mn for mx, mn in zip(max[:-1], min[1:]))):
                 out[c] = {'min': min, 'max': max}
         except TypeError:
             # because some types, e.g., dicts cannot be sorted/compared
@@ -692,6 +692,7 @@ def filter_out_cats(rg, filters, sep='/'):
     -------
     True or False
     """
+    # TODO: fix for Drill
     if len(filters) == 0 or rg.columns[0].file_path is None:
         return False
     s = ex_from_sep(sep)
