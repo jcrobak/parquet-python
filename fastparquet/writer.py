@@ -808,7 +808,9 @@ def write(filename, data, row_group_offsets=50000000,
                                  'existing file scheme is not.' % file_scheme)
             fmd = pf.fmd
             i_offset = find_max_part(fmd.row_groups)
-            partition_on = list(pf.cats)
+            if tuple(partition_on) != tuple(pf.cats):
+                raise ValueError('When appending, partitioning columns must'
+                                 ' match existing data')
         else:
             i_offset = 0
         fn = sep.join([filename, '_metadata'])

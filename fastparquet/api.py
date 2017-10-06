@@ -163,7 +163,7 @@ class ParquetFile(object):
         if self.file_scheme in ['simple', 'flat', 'other']:
             self.cats = {}
             return
-        cats = {}
+        cats = OrderedDict()
         for rg in self.row_groups:
             for col in rg.columns:
                 s = ex_from_sep(self.sep)
@@ -177,7 +177,7 @@ class ParquetFile(object):
                         key = 'dir%i' % i
                         cats.setdefault(key, set()).add(val)
         self.cats = OrderedDict([(key, list([val_to_num(x) for x in v]))
-                     for key, v in cats.items()])
+                                for key, v in cats.items()])
 
     def row_group_filename(self, rg):
         if rg.columns[0].file_path:
