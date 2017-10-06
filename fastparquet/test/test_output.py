@@ -778,6 +778,25 @@ def test_append_fail(tempdir):
     assert 'existing file scheme' in str(e)
 
 
+def test_append_w_partitioning(tempdir):
+    fn = str(tempdir)
+    df = pd.DataFrame({'a': np.random.choice([1, 2, 3], size=50),
+                       'b': np.random.choice(['hello', 'world'], size=50),
+                       'c': np.random.randint(50, size=50)})
+    write(fn, df, file_scheme='hive', partition_on=['a', 'b'])
+    write(fn, df, file_scheme='hive', partition_on=['a', 'b'], append=True)
+    write(fn, df, file_scheme='hive', partition_on=['a', 'b'], append=True)
+    write(fn, df, file_scheme='hive', partition_on=['a', 'b'], append=True)
+    pf = ParquetFile(fn)
+    out = pf.to_pandas()
+    assert len(out) == 200
+    assert sorted(out.a)[::4] == sorted(df.a)
+    with pytest.raises(ValueError):
+        write(fn, df, file_scheme='hive', partition_on=['a'], append=True)
+    with pytest.raises(ValueError):
+        write(fn, df, file_scheme='hive', partition_on=['b', 'a'], append=True)
+
+
 def test_bad_object_encoding(tempdir):
     df = pd.DataFrame({'x': ['a', 'ab']})
     with pytest.raises(ValueError) as e:
