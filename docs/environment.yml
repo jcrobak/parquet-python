@@ -3,8 +3,7 @@ dependencies:
     - numba
     - pandas
     - numpy
-    - thriftpy>=0.3.6
+    - thrift
     - numpydoc
     - python=3
-    - pytest
     - cython
