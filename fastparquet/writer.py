@@ -1,26 +1,29 @@
 from __future__ import print_function
 
 import json
-import numpy as np
-import pandas as pd
 import re
 import struct
 import warnings
 
 import numba
+import numpy as np
+import pandas as pd
+from six import integer_types
 
-from .thrift_structures import parquet_thrift, write_thrift
+from fastparquet.util import join_path
+from .thrift_structures import write_thrift
+
 try:
     from pandas.api.types import is_categorical_dtype
 except ImportError:
     # Pandas <= 0.18.1
     from pandas.core.common import is_categorical_dtype
 from .thrift_structures import parquet_thrift
-from .compression import compress_data, decompress_data
+from .compression import compress_data
 from .converted_types import tobson
 from . import encoding, api
-from .util import (default_open, default_mkdirs, sep_from_open,
-                   ParquetException, index_like, PY2, STR_TYPE,
+from .util import (default_open, default_mkdirs,
+                   index_like, PY2, STR_TYPE,
                    check_column_names, metadata_from_many, created_by,
                    get_column_metadata)
 from .speedups import array_encode_utf8, pack_byte_array
@@ -223,7 +226,7 @@ def infer_object_encoding(data):
         return 'json'
     elif all(isinstance(i, bool) for i in head):
         return 'bool'
-    elif all(isinstance(i, int) for i in head):
+    elif all(isinstance(i, integer_types) for i in head):
         return 'int'
     elif all(isinstance(i, float) or isinstance(i, np.floating)
              for i in head):
@@ -781,7 +784,6 @@ def write(filename, data, row_group_offsets=50000000,
     """
     if str(has_nulls) == 'infer':
         has_nulls = None
-    sep = sep_from_open(open_with)
     if isinstance(row_group_offsets, int):
         l = len(data)
         nparts = max((l - 1) // row_group_offsets + 1, 1)
@@ -816,7 +818,7 @@ def write(filename, data, row_group_offsets=50000000,
                                  ' match existing data')
         else:
             i_offset = 0
-        fn = sep.join([filename, '_metadata'])
+        fn = join_path(filename, '_metadata')
         mkdirs(filename)
         for i, start in enumerate(row_group_offsets):
             end = (row_group_offsets[i+1] if i < (len(row_group_offsets) - 1)
@@ -825,12 +827,12 @@ def write(filename, data, row_group_offsets=50000000,
             if partition_on:
                 rgs = partition_on_columns(
                     data[start:end], partition_on, filename, part, fmd,
-                    sep, compression, open_with, mkdirs,
+                    compression, open_with, mkdirs,
                     with_field=file_scheme == 'hive'
                 )
                 fmd.row_groups.extend(rgs)
             else:
-                partname = sep.join([filename, part])
+                partname = join_path(filename, part)
                 with open_with(partname, 'wb') as f2:
                     rg = make_part_file(f2, data[start:end], fmd.schema,
                                         compression=compression, fmd=fmd)
@@ -840,7 +842,7 @@ def write(filename, data, row_group_offsets=50000000,
                 fmd.row_groups.append(rg)
 
         write_common_metadata(fn, fmd, open_with, no_row_groups=False)
-        write_common_metadata(sep.join([filename, '_common_metadata']), fmd,
+        write_common_metadata(join_path(filename, '_common_metadata'), fmd,
                               open_with)
     else:
         raise ValueError('File scheme should be simple|hive, not', file_scheme)
@@ -860,7 +862,7 @@ def find_max_part(row_groups):
         return 0
 
 
-def partition_on_columns(data, columns, root_path, partname, fmd, sep,
+def partition_on_columns(data, columns, root_path, partname, fmd,
                          compression, open_with, mkdirs, with_field=True):
     """
     Split each row-group by the given columns
@@ -869,7 +871,6 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
     be written in structured directories.
     """
     gb = data.groupby(columns)
-    sep = '/'  # internal paths
     remaining = list(data)
     for column in columns:
         remaining.remove(column)
@@ -881,13 +882,15 @@ def partition_on_columns(data, columns, root_path, partname, fmd, sep,
         if not isinstance(key, tuple):
             key = (key,)
         if with_field:
-            path = sep.join(["%s=%s" % (name, val)
-                             for name, val in zip(columns, key)])
+            path = join_path(*(
+                "%s=%s" % (name, val)
+                for name, val in zip(columns, key)
+            ))
         else:
-            path = sep.join(["%s" % val for val in key])
-        relname = sep.join([path, partname])
-        mkdirs(root_path + sep + path)
-        fullname = sep.join([root_path, path, partname])
+            path = join_path(*("%s" % val for val in key))
+        relname = join_path(path, partname)
+        mkdirs(join_path(root_path, path))
+        fullname = join_path(root_path, path, partname)
         with open_with(fullname, 'wb') as f2:
             rg = make_part_file(f2, df, fmd.schema,
                                 compression=compression, fmd=fmd)
@@ -975,14 +978,13 @@ def merge(file_list, verify_schema=True, open_with=default_open,
     -------
     ParquetFile instance corresponding to the merged data.
     """
-    sep = sep_from_open(open_with)
     basepath, fmd = metadata_from_many(file_list, verify_schema, open_with,
                                        root=root)
 
-    out_file = sep.join([basepath, '_metadata'])
+    out_file = join_path(basepath, '_metadata')
     write_common_metadata(out_file, fmd, open_with, no_row_groups=False)
     out = api.ParquetFile(out_file, open_with=open_with)
 
-    out_file = sep.join([basepath, '_common_metadata'])
+    out_file = join_path(basepath, '_common_metadata')
     write_common_metadata(out_file, fmd, open_with)
     return out
