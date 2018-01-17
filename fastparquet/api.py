@@ -77,7 +77,7 @@ class ParquetFile(object):
         Max/min/count of each column chunk
     """
     def __init__(self, fn, verify=False, open_with=default_open,
-                 root=False):
+                 root=False, sep=None):
         if isinstance(fn, (tuple, list)):
             basepath, fmd = metadata_from_many(fn, verify_schema=verify,
                                                open_with=open_with, root=root)
@@ -99,6 +99,7 @@ class ParquetFile(object):
                 with open_with(fn, 'rb') as f:
                     self._parse_header(f, verify)
         self.open = open_with
+        self.sep = sep
 
     def _parse_header(self, f, verify=True):
         try:
