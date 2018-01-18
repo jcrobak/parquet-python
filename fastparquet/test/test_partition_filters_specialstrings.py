@@ -31,47 +31,60 @@ def frame_symbol_dtTrade_type_strike(days=1 * 252,
                       index=index, columns=[x for x in string.ascii_uppercase[0:numbercolumns]])
     return df
 
-@pytest.mark.parametrize('tempdir,input_symbols,input_days,file_scheme,input_columns,partitions,filters',
-           [
-           (tempdir, ['NOW', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['now', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['TODAY', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['VIX*', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['QQQ*', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['QQQ!', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['Q%QQ', 'SPY', 'VIX'], 2*252, 'hive', 2, ['symbol', 'year'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['NOW', 'SPY', 'VIX'], 10, 'hive', 2, ['symbol', 'dtTrade'], [('symbol', '==', 'SPY')]),
-           (tempdir, ['NOW', 'SPY', 'VIX'], 10, 'hive', 2, ['symbol', 'dtTrade'],
-                                                           [('dtTrade','==','2005-01-02T00:00:00.000000000')]),
-           (tempdir, ['NOW', 'SPY', 'VIX'], 10, 'hive', 2, ['symbol', 'dtTrade'],
-                                                           [('dtTrade','==', Timestamp('2005-01-01 00:00:00'))]),
-           ]
-        )
-
-@pytest.mark.skipif(sys.platform=='win32' and PY2, reason='does not work on windows 32 py2.7')
-def test_frame_write_read_verify(tempdir, input_symbols, input_days, file_scheme,
-						    input_columns, partitions, filters):
-    #Generate Temp Director for parquet Files
+@pytest.mark.parametrize('input_symbols,input_days,file_scheme,input_columns,'
+                         'partitions,filters',
+                         [
+                             (['NOW', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['now', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['TODAY', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['VIX*', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['QQQ*', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['QQQ!', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['Q%QQ', 'SPY', 'VIX'], 2 * 252, 'hive', 2,
+                              ['symbol', 'year'], [('symbol', '==', 'SPY')]),
+                             (['NOW', 'SPY', 'VIX'], 10, 'hive', 2,
+                              ['symbol', 'dtTrade'], [('symbol', '==', 'SPY')]),
+                             (['NOW', 'SPY', 'VIX'], 10, 'hive', 2,
+                              ['symbol', 'dtTrade'],
+                              [('dtTrade', '==',
+                                '2005-01-02T00:00:00.000000000')]),
+                             (['NOW', 'SPY', 'VIX'], 10, 'hive', 2,
+                              ['symbol', 'dtTrade'],
+                              [('dtTrade', '==',
+                                Timestamp('2005-01-01 00:00:00'))]),
+                         ]
+                         )
+def test_frame_write_read_verify(tempdir, input_symbols, input_days,
+                                 file_scheme,
+                                 input_columns, partitions, filters):
+    # Generate Temp Director for parquet Files
     fdir = str(tempdir)
     fname = os.path.join(fdir, 'test')
 
-    #Generate Test Input Frame
+    # Generate Test Input Frame
     input_df = frame_symbol_dtTrade_type_strike(days=input_days,
-												symbols=input_symbols,
-												numbercolumns=input_columns)
+                                                symbols=input_symbols,
+                                                numbercolumns=input_columns)
     input_df.reset_index(inplace=True)
-    write(fname, input_df, partition_on=partitions, file_scheme=file_scheme, compression='SNAPPY')
+    write(fname, input_df, partition_on=partitions, file_scheme=file_scheme,
+          compression='SNAPPY')
 
-    #Read Back Whole Parquet Structure
+    # Read Back Whole Parquet Structure
     output_df = ParquetFile(fname).to_pandas()
     for col in output_df.columns:
         assert col in input_df.columns.values
     assert len(input_df) == len(output_df)
 
-    #Read with filters
+    # Read with filters
     filtered_output_df = ParquetFile(fname).to_pandas(filters=filters)
 
-    #Filter Input Frame to Match What Should Be Expected from parquet read
+    # Filter Input Frame to Match What Should Be Expected from parquet read
     # Handle either string or non-string inputs / works for timestamps
     filterStrings = []
     for name, operator, value in filters:
