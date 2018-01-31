@@ -431,3 +431,15 @@ def test_compression(tempdir):
     assert (False in set(df2["y"] == df["y"])) is False
     assert (False in set(df2["z"] == df["z"])) is False
 
+
+def test_int96_stats(tempdir):
+    df = pd.util.testing.makeMixedDataFrame()
+
+    fn = os.path.join(tempdir, 'foo.parquet')
+    write(fn, df, row_group_offsets=[0, 2], times='int96')
+
+    p = ParquetFile(fn)
+
+    s = statistics(p)
+    assert isinstance(s['min']['D'][0], (np.datetime64, pd.tslib.Timestamp))
+    assert 'D' in sorted_partitioned_columns(p)
