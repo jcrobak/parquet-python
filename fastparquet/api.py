@@ -449,24 +449,24 @@ class ParquetFile(object):
         """ Implied types of the columns in the schema """
         if categories is None:
             categories = self.categories
-        dtype = {name: (converted_types.typemap(f)
-                          if f.num_children in [None, 0] else np.dtype("O"))
-                 for name, f in self.schema.root.children.items()}
-        for col, dt in dtype.copy().items():
+        dtype = OrderedDict((name, (converted_types.typemap(f)
+                            if f.num_children in [None, 0] else np.dtype("O")))
+                            for name, f in self.schema.root.children.items())
+        for i, (col, dt) in enumerate(dtype.copy().items()):
             if dt.kind in ['i', 'b']:
                 # int/bool columns that may have nulls become float columns
                 num_nulls = 0
                 for rg in self.row_groups:
-                    chunks = [c for c in rg.columns
-                              if '.'.join(c.meta_data.path_in_schema) == col]
-                    for chunk in chunks:
-                        if chunk.meta_data.statistics is None:
-                            num_nulls = True
-                            break
-                        if chunk.meta_data.statistics.null_count is None:
-                            num_nulls = True
-                            break
-                        num_nulls += chunk.meta_data.statistics.null_count
+                    chunk = rg.columns[i]
+                    if chunk.meta_data.statistics is None:
+                        num_nulls = True
+                        break
+                    if chunk.meta_data.statistics.null_count is None:
+                        num_nulls = True
+                        break
+                    if chunk.meta_data.statistics.null_count:
+                        num_nulls = True
+                        break
                 if num_nulls:
                     if dtype[col].itemsize == 1:
                         dtype[col] = np.dtype('f2')
