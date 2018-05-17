@@ -9,6 +9,7 @@ import json
 import os
 import six
 import struct
+import warnings
 
 import numpy as np
 from fastparquet.util import join_path
@@ -18,7 +19,7 @@ from .thrift_structures import parquet_thrift
 from . import core, schema, converted_types, encoding, dataframe
 from .util import (default_open, ParquetException, val_to_num,
                    ensure_bytes, check_column_names, metadata_from_many,
-                   ex_from_sep, get_file_scheme, STR_TYPE)
+                   ex_from_sep, get_file_scheme, STR_TYPE, groupby_types)
 
 
 class ParquetFile(object):
@@ -26,6 +27,12 @@ class ParquetFile(object):
 
     Reads the metadata (row-groups and schema definition) and provides
     methods to extract the data from the files.
+
+    Note that when reading parquet files partitioned using directories
+    (i.e. using the hive/drill scheme), an attempt is made to coerce
+    the partition values to a number, datetime or timedelta. Fastparquet
+    cannot read a hive/drill parquet file with partition names which coerce
+    to the same value, such as "0.7" and ".7".
 
     Parameters
     ----------
@@ -62,7 +69,7 @@ class ParquetFile(object):
     file_scheme: str
         'simple': all row groups are within the same file; 'hive': all row
         groups are in other files; 'mixed': row groups in this file and others
-        too; 'empty': no row grops at all.
+        too; 'empty': no row groups at all.
     info: dict
         Combination of some of the other attributes
     key_value_metadata: list
@@ -172,6 +179,7 @@ class ParquetFile(object):
             self.cats = {}
             return
         cats = OrderedDict()
+        raw_cats = OrderedDict()
         for rg in self.row_groups:
             for col in rg.columns:
                 s = ex_from_sep('/')
@@ -179,12 +187,31 @@ class ParquetFile(object):
                 if self.file_scheme == 'hive':
                     partitions = s.findall(path)
                     for key, val in partitions:
-                        cats.setdefault(key, set()).add(val)
+                        cats.setdefault(key, set()).add(val_to_num(val))
+                        raw_cats.setdefault(key, set()).add(val)
                 else:
                     for i, val in enumerate(col.file_path.split('/')[:-1]):
                         key = 'dir%i' % i
-                        cats.setdefault(key, set()).add(val)
-        self.cats = OrderedDict([(key, list([val_to_num(x) for x in v]))
+                        cats.setdefault(key, set()).add(val_to_num(val))
+                        raw_cats.setdefault(key, set()).add(val)
+
+        for key, v in cats.items():
+            # Check that no partition names map to the same value after transformation by val_to_num
+            raw = raw_cats[key]
+            if len(v) != len(raw):
+                conflicts_by_value = OrderedDict()
+                for raw_val in raw_cats[key]:
+                    conflicts_by_value.setdefault(val_to_num(raw_val), set()).add(raw_val)
+                conflicts = [c for k in conflicts_by_value.values() if len(k) > 1 for c in k]
+                raise ValueError("Partition names map to the same value: %s" % conflicts)
+            vals_by_type = groupby_types(v)
+
+            # Check that all partition names map to the same type after transformation by val_to_num
+            if len(vals_by_type) > 1:
+                examples = [x[0] for x in vals_by_type.values()]
+                warnings.warn("Partition names coerce to values of different types, e.g. %s" % examples)
+
+        self.cats = OrderedDict([(key, list(v))
                                 for key, v in cats.items()])
 
     def row_group_filename(self, rg):

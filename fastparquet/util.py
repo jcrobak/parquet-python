@@ -5,6 +5,8 @@ import os.path
 import pandas as pd
 import re
 import six
+import numbers
+from collections import defaultdict
 
 try:
     from pandas.api.types import is_categorical_dtype
@@ -16,7 +18,6 @@ PY2 = six.PY2
 PY3 = six.PY3
 STR_TYPE = six.string_types[0]  # 'str' for Python3, 'basestring' for Python2
 created_by = "fastparquet-python version 1.0.0 (build 111)"
-
 
 class ParquetException(Exception):
     """Generic Exception related to unexpected data format when
@@ -38,13 +39,21 @@ def default_open(f, mode='rb'):
 
 
 def val_to_num(x):
-    if x in ['NOW', 'TODAY']:
+    """Parse a string as a number, date or timedelta if possible, otherwise return the string"""
+    if isinstance(x, numbers.Real):
         return x
-    if set(x) == {'0'}:
-        # special case for values like "000"
-        return 0
+    if x in ['now', 'NOW', 'TODAY', '']:
+        return x
+    if x == "True":
+        return True
+    if x == "False":
+        return False
     try:
-        return ast.literal_eval(x.lstrip('0'))
+        return int(x, base=10)
+    except:
+        pass
+    try:
+        return float(x)
     except:
         pass
     try:
@@ -52,10 +61,11 @@ def val_to_num(x):
     except:
         pass
     try:
+        # TODO: determine the valid usecases for this, then try to limit the set of
+        # strings which may get inadvertently converted to timedeltas
         return pd.to_timedelta(x)
     except:
         return x
-
 
 if PY2:
     def ensure_bytes(s):
@@ -198,6 +208,11 @@ def infer_dtype(column):
     except AttributeError:
         return pd.lib.infer_dtype(column)
 
+def groupby_types(iterable):
+    groups = defaultdict(list)
+    for x in iterable:
+        groups[type(x)].append(x)
+    return groups
 
 def get_column_metadata(column, name):
     """Produce pandas column metadata block"""
