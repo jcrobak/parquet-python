@@ -49,6 +49,9 @@ else:
 
 install_requires = open('requirements.txt').read().strip().split('\n')
 
+# add pytest-runner from setup_requires
+install_requires.append('pytest-runner')
+
 setup(
     name='fastparquet',
     version='0.1.5',
@@ -73,10 +76,11 @@ setup(
     packages=['fastparquet'],
     cmdclass={'build_ext': build_ext},
     install_requires=install_requires,
-    setup_requires=[
-        'pytest-runner',
-        [p for p in install_requires if p.startswith('numpy')][0]
-    ],
+    # remove wierd setup_requires to get rid of easy_install
+    # setup_requires=[
+    #    'pytest-runner',
+    #    [p for p in install_requires if p.startswith('numpy')][0]
+    #],
     tests_require=[
         'pytest',
         'python-snappy',
