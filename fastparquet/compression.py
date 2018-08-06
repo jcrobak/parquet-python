@@ -92,7 +92,11 @@ if 'ZSTD' not in compressions:
         def zstd_compress(data, **kwargs):
             kwargs['write_content_size'] = False
             cctx = zstd.ZstdCompressor(**kwargs)
-            return cctx.compress(data, allow_empty=True)
+            try:
+                return cctx.compress(data, allow_empty=True)
+            except TypeError:
+                # zstandard-0.9 removed allow_empy and made it the default.
+                return cctx.compress(data)
         def zstd_decompress(data, uncompressed_size):
             dctx = zstd.ZstdDecompressor()
             return dctx.decompress(data, max_output_size=uncompressed_size)
