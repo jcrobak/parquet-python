@@ -54,7 +54,7 @@ install_requires.append('pytest-runner')
 
 setup(
     name='fastparquet',
-    version='0.1.5',
+    version='0.1.6',
     description='Python support for Parquet file format',
     author='Martin Durant',
     author_email='mdurant@continuum.io',
@@ -68,9 +68,9 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: Implementation :: CPython',
     ],
     packages=['fastparquet'],
@@ -91,6 +91,6 @@ setup(
                       else ''),
     package_data={'fastparquet': ['*.thrift']},
     include_package_data=True,
-    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*",
+    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*,",
     **extra
 )
