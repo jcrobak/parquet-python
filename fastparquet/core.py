@@ -225,6 +225,7 @@ def read_col(column, schema_helper, infile, use_cat=False,
             my_nan = None
 
     num = 0
+    row_idx = 0
     while True:
         if (selfmade and hasattr(cmd, 'statistics') and
                 getattr(cmd.statistics, 'null_count', 1) == 0):
@@ -249,8 +250,8 @@ def read_col(column, schema_helper, infile, use_cat=False,
             null = not schema_helper.is_required(cmd.path_in_schema[0])
             null_val = (se.repetition_type !=
                         parquet_thrift.FieldRepetitionType.REQUIRED)
-            num = encoding._assemble_objects(assign, defi, rep, val, dic, d,
-                                             null, null_val, max_defi)
+            row_idx = 1 + encoding._assemble_objects(assign, defi, rep, val, dic, d,
+                                             null, null_val, max_defi, row_idx)
         elif defi is not None:
             max_defi = schema_helper.max_definition_level(cmd.path_in_schema)
             part = assign[num:num+len(defi)]
