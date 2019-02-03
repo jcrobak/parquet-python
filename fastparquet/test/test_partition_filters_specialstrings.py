@@ -8,7 +8,10 @@ import sys
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.tslib import Timestamp
+try:
+    from pandas.tslib import Timestamp
+except ImportError:
+    from pandas import Timestamp
 from six import PY2
 
 from fastparquet import write, ParquetFile

@@ -6,6 +6,10 @@ import os
 
 import numpy as np
 import pandas as pd
+try:
+    from pandas.tslib import Timestamp
+except ImportError:
+    from pandas import Timestamp
 import pytest
 
 from fastparquet.test.util import tempdir
@@ -47,7 +51,7 @@ def test_logical_types(tempdir):
 
     s = statistics(p)
 
-    assert isinstance(s['min']['D'][0], (np.datetime64, pd.tslib.Timestamp))
+    assert isinstance(s['min']['D'][0], (np.datetime64, Timestamp))
 
 
 def test_empty_statistics(tempdir):
@@ -668,7 +672,7 @@ def test_int96_stats(tempdir):
     p = ParquetFile(fn)
 
     s = statistics(p)
-    assert isinstance(s['min']['D'][0], (np.datetime64, pd.tslib.Timestamp))
+    assert isinstance(s['min']['D'][0], (np.datetime64, Timestamp))
     assert 'D' in sorted_partitioned_columns(p)
 
 
