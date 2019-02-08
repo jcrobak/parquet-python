@@ -85,3 +85,8 @@ Contributing
 
 Is done via Pull Requests. Please include tests with your changes and
 follow `pep8 <http://www.python.org/dev/peps/pep-0008/>`_.
+
+To run the tests you must install and execute ``tox`` (``pip install tox``) to
+run for all supported versions. If you want to run just for your current
+version, execute: ``pip install -r requirements-development.txt`` and then
+``nosetests``.

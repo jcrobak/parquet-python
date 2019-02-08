@@ -1,0 +1,5 @@
+tox
+nose
+python-snappy
+pymongo
+
