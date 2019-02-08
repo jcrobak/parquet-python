@@ -30,7 +30,7 @@ setup(
     packages=['parquet'],
     install_requires=[
         'python-snappy',
-        'thriftpy>=0.3.6',
+        'thriftpy2',
     ],
     extras_require={
         ':python_version=="2.7"': [
