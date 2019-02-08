@@ -29,12 +29,14 @@ setup(
     ],
     packages=['parquet'],
     install_requires=[
-        'python-snappy',
         'thriftpy2',
     ],
     extras_require={
         ':python_version=="2.7"': [
             "backports.csv",
+        ],
+        'snappy': [
+            'python-snappy',
         ],
     },
     entry_points={
