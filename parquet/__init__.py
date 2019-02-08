@@ -13,8 +13,8 @@ import struct
 import sys
 from collections import OrderedDict, defaultdict
 
-import thriftpy
-from thriftpy.protocol.compact import TCompactProtocolFactory
+import thriftpy2 as thriftpy
+from thriftpy2.protocol.compact import TCompactProtocolFactory
 
 from . import encoding
 from . import schema

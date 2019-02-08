@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 
 import os
 
-import thriftpy
+import thriftpy2 as thriftpy
 
 
 THRIFT_FILE = os.path.join(os.path.dirname(__file__), "parquet.thrift")

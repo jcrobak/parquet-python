@@ -4,7 +4,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from thriftpy.transport import TTransportBase
+from thriftpy2.transport import TTransportBase
 
 
 class TFileTransport(TTransportBase):  # pylint: disable=too-few-public-methods
