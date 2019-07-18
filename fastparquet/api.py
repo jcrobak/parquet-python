@@ -148,7 +148,7 @@ class ParquetFile(object):
                                    for k in fmd.key_value_metadata or []}
         self.created_by = fmd.created_by
         self.schema = schema.SchemaHelper(self._schema)
-        self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python"
+        self.selfmade = self.created_by.split(' ', 1)[0] == "fastparquet-python" if self.created_by is not None else False
         files = [rg.columns[0].file_path
                  for rg in self.row_groups
                  if rg.columns]
