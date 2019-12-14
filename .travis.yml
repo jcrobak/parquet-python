@@ -1,9 +1,14 @@
 language: python
+python:
+  - "2.7"
+  - "3.6"
+  - "3.7"
+  - "pypy"
+  - "pypy3"
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y libsnappy-dev
-  - pip install python-snappy
 install:
-  - pip install tox
+  - pip install tox-travis
 script:
   - tox
