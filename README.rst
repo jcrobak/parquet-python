@@ -21,8 +21,8 @@ project.
 requirements
 ============
 
-parquet-python has been tested on python 2.7, 3.4, and 3.5. It depends
-on ``thrift`` (0.9) and optionally on ``python-snappy`` (for snappy compressed
+parquet-python has been tested on python 2.7, 3.6, and 3.7. It depends
+on ``pythrift2`` and optionally on ``python-snappy`` (for snappy compressed
 files, please also install ``parquet-python[snappy]``).
 
 getting started
