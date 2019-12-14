@@ -22,7 +22,8 @@ requirements
 ============
 
 parquet-python has been tested on python 2.7, 3.4, and 3.5. It depends
-on ``thrift`` (0.9) and ``python-snappy`` (for snappy compressed files).
+on ``thrift`` (0.9) and optionally on ``python-snappy`` (for snappy compressed
+files, please also install ``parquet-python[snappy]``).
 
 getting started
 ===============
@@ -84,3 +85,8 @@ Contributing
 
 Is done via Pull Requests. Please include tests with your changes and
 follow `pep8 <http://www.python.org/dev/peps/pep-0008/>`_.
+
+To run the tests you must install and execute ``tox`` (``pip install tox``) to
+run for all supported versions. If you want to run just for your current
+version, execute: ``pip install -r requirements-development.txt`` and then
+``nosetests``.

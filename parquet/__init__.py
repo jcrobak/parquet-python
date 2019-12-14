@@ -1,8 +1,6 @@
 """parquet - read parquet files."""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
 import gzip
 import io
@@ -13,11 +11,10 @@ import struct
 import sys
 from collections import OrderedDict, defaultdict
 
-import thriftpy
-from thriftpy.protocol.compact import TCompactProtocolFactory
+import thriftpy2 as thriftpy
+from thriftpy2.protocol.compact import TCompactProtocolFactory
 
-from . import encoding
-from . import schema
+from . import encoding, schema
 from .converted_types import convert_column
 from .thrift_filetransport import TFileTransport
 
@@ -43,8 +40,6 @@ except ImportError:
 
 class ParquetFormatException(Exception):
     """Generic Exception related to unexpected data format when reading parquet file."""
-
-    pass
 
 
 def _check_header_magic_bytes(file_obj):
@@ -378,8 +373,8 @@ def read_data_page(file_obj, schema_helper, page_header, column_metadata,
                          len(vals), num_nulls)
 
     else:
-        raise ParquetFormatException("Unsupported encoding: %s",
-                                     _get_name(parquet_thrift.Encoding, daph.encoding))
+        raise ParquetFormatException("Unsupported encoding: {}".format(
+            _get_name(parquet_thrift.Encoding, daph.encoding)))
     return vals
 
 
@@ -485,7 +480,7 @@ def reader(file_obj, columns=None):
             yield [res[k][i] for k in keys if res[k]]
 
 
-class JsonWriter(object):  # pylint: disable=too-few-public-methods
+class JsonWriter:  # pylint: disable=too-few-public-methods
     """Utility for dumping rows as JSON objects."""
 
     def __init__(self, out):
