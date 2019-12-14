@@ -12,3 +12,8 @@ install:
   - pip install tox-travis
 script:
   - tox
+jobs:
+  include:
+    - stage: lint
+      python: "3.7"
+      script: tox -e pylint,flake8
