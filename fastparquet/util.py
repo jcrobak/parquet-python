@@ -7,6 +7,7 @@ import re
 import six
 import numbers
 from collections import defaultdict
+import itertools
 
 try:
     from pandas.api.types import is_categorical_dtype
@@ -32,7 +33,6 @@ if PY2:
 else:
     def default_mkdirs(f):
         os.makedirs(f, exist_ok=True)
-
 
 def default_open(f, mode='rb'):
     return open(f, mode)
@@ -361,3 +361,30 @@ def join_path(*path):
     else:
         joined = abs_prefix + ('/'.join(simpler))
     return joined
+
+
+if PY2:
+    filterfalse = itertools.ifilterfalse
+else:
+    filterfalse = itertools.filterfalse
+
+
+def unique_everseen(iterable, key=None):
+    """List unique elements, preserving order. Remember all elements ever seen.
+
+    unique_everseen('AAAABBBCCDAABBB') --> A B C D
+    unique_everseen('ABBCcAD', str.lower) --> A B C D
+    """
+    
+    seen = set()
+    seen_add = seen.add
+    if key is None:
+        for element in filterfalse(seen.__contains__, iterable):
+            seen_add(element)
+            yield element
+    else:
+        for element in iterable:
+            k = key(element)
+            if k not in seen:
+                seen_add(k)
+                yield element
