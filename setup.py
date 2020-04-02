@@ -76,20 +76,21 @@ setup(
     install_requires=install_requires,
     setup_requires=[
         'pytest-runner',
-        [p for p in install_requires if p.startswith('numpy')][0]
-    ],
+    ] + [p for p in install_requires if p.startswith('numpy')],
     extras_require={
         'brotli': ['brotli'],
         'lz4': ['lz4 >= 0.19.1'],
         'lzo': ['python-lzo'],
         'snappy': ['python-snappy'],
-        'zstandard': ['zstandard']
+        'zstandard': ['zstandard'],
+        'zstd': ['zstd'],
     },
     tests_require=[
         'pytest',
         'python-snappy',
         'lz4 >= 0.19.1',
         'zstandard',
+        'zstd',
     ],
     long_description=(open('README.rst').read() if os.path.exists('README.rst')
                       else ''),
