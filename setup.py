@@ -7,7 +7,7 @@ except ImportError:
 
 setup(
     name='parquet',
-    version='1.2',
+    version='1.3',
     description='Python support for Parquet file format',
     author='Joe Crobak',
     author_email='joecrow@gmail.com',
