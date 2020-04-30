@@ -5,10 +5,15 @@ try:
 except ImportError:
     from distutils.core import setup
 
+with open('README.rst') as f:
+    readme = f.read()
+
 setup(
     name='parquet',
     version='1.3',
     description='Python support for Parquet file format',
+    long_description_content_type="text/x-rst",
+    long_description=readme,
     author='Joe Crobak',
     author_email='joecrow@gmail.com',
     url='https://github.com/jcrobak/parquet-python',
