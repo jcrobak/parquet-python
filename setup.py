@@ -10,7 +10,7 @@ with open('README.rst') as f:
 
 setup(
     name='parquet',
-    version='1.3',
+    version='1.3.1',
     description='Python support for Parquet file format',
     long_description_content_type="text/x-rst",
     long_description=readme,
