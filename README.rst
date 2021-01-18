@@ -6,7 +6,7 @@ parquet-python
 
 parquet-python is a pure-python implementation (currently with only
 read-support) of the `parquet
-format <https://github.com/Parquet/parquet-format>`_. It comes with a
+format <https://github.com/apache/parquet-format>`_. It comes with a
 script for reading parquet files and outputting the data to stdout as
 JSON or TSV (without the overhead of JVM startup). Performance has not
 yet been optimized, but it's useful for debugging and quick viewing of
