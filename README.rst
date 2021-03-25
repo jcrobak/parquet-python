@@ -66,7 +66,7 @@ specified columns.
        # prints:
        # 1,2
        # 4,5
-       for row in parquet.reader(fo, columns=['foo', 'bar]):
+       for row in parquet.reader(fo, columns=['foo', 'bar']):
            print(",".join([str(r) for r in row]))
 
 Todos
