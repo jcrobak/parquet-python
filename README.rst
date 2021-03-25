@@ -54,7 +54,7 @@ specified columns.
     ## 1   2   3
     ## 4   5   6
 
-    with open("test.parquet") as fo:
+    with open("test.parquet", "rb") as fo:
        # prints:
        # {"foo": 1, "bar": 2}
        # {"foo": 4, "bar": 5}
@@ -62,7 +62,7 @@ specified columns.
            print(json.dumps(row))
 
 
-    with open("test.parquet") as fo:
+    with open("test.parquet", "rb") as fo:
        # prints:
        # 1,2
        # 4,5
