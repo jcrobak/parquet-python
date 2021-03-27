@@ -142,7 +142,7 @@ def dump_metadata(filename, show_row_group_metadata, out=sys.stdout):
                 "converted_type={converted_type}".format(
                     name=element.name,
                     type=parquet_thrift.Type._VALUES_TO_NAMES[element.type]  # pylint: disable=protected-access
-                    if element.type else None,
+                    if element.type is not None else None,
                     type_length=element.type_length,
                     repetition_type=_get_name(parquet_thrift.FieldRepetitionType,
                                               element.repetition_type),
@@ -410,7 +410,7 @@ def DictReader(file_obj, columns=None):  # pylint: disable=invalid-name
     """
     footer = _read_footer(file_obj)
     keys = columns if columns else [s.name for s in
-                                    footer.schema if s.type]
+                                    footer.schema if s.type is not None]
 
     for row in reader(file_obj, columns):
         yield OrderedDict(zip(keys, row))
@@ -432,7 +432,7 @@ def reader(file_obj, columns=None):
     footer = _read_footer(file_obj)
     schema_helper = schema.SchemaHelper(footer.schema)
     keys = columns if columns else [s.name for s in
-                                    footer.schema if s.type]
+                                    footer.schema if s.type is not None]
     debug_logging = logger.isEnabledFor(logging.DEBUG)
     for row_group in footer.row_groups:
         res = defaultdict(list)
