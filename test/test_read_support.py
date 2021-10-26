@@ -61,12 +61,12 @@ class TestMetadata(unittest.TestCase):
     def test_footer_bytes(self):
         """Test reading the footer size value."""
         with io.open(TEST_FILE, 'rb') as fo:
-            self.assertEquals(327, parquet._get_footer_size(fo))
+            self.assertEqual(327, parquet._get_footer_size(fo))
 
     def test_read_footer(self):
         """Test reading the footer."""
         footer = parquet.read_footer(TEST_FILE)
-        self.assertEquals(
+        self.assertEqual(
             set([s.name for s in footer.schema]),
             set(["schema", "n_regionkey", "n_name", "n_nationkey",
                  "n_comment"]))
@@ -180,14 +180,14 @@ class TestCompatibility(object):
         with open(parquet_file, "rb") as parquet_fo:
             actual_data = list(parquet.DictReader(parquet_fo))
 
-        self.tc.assertEquals(len(expected_data), len(actual_data))
+        self.tc.assertEqual(len(expected_data), len(actual_data))
         footer = parquet.read_footer(parquet_file)
         cols = [s.name for s in footer.schema]
 
         for expected, actual in zip(expected_data, actual_data):
-            self.tc.assertEquals(len(expected), len(actual))
+            self.tc.assertEqual(len(expected), len(actual))
             for i, c in enumerate([c for c in cols if c in actual]):
-                self.tc.assertEquals(
+                self.tc.assertEqual(
                     expected[i],
                     actual[c].decode('utf-8') if type(actual[c]) is bytes \
                     # this makes '0' = 0, since csv reads all strings.
