@@ -34,7 +34,7 @@ class TestPlain(unittest.TestCase):
 
     def test_float(self):
         """Test reading bytes containing float data."""
-        self.assertAlmostEquals(
+        self.assertAlmostEqual(
             9.99,
             parquet.encoding.read_plain_float(
                 io.BytesIO(struct.pack(b"<f", 9.99)), 1)[0],
