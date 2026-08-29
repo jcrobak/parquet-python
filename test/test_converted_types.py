@@ -28,7 +28,7 @@ class TestDecimal(unittest.TestCase):
 
         self.assertEqual(
             convert_column([9876543210], schema)[0],
-            Decimal('9.87654321')
+            Decimal('0.987654321')
         )
 
     def test_int64(self):
@@ -43,7 +43,7 @@ class TestDecimal(unittest.TestCase):
 
         self.assertEqual(
             convert_column([1099511627776], schema)[0],
-            Decimal('10995116277.76')
+            Decimal('1099511627.776')
         )
 
     def test_fixedlength(self):
@@ -59,7 +59,7 @@ class TestDecimal(unittest.TestCase):
 
         self.assertEqual(
             convert_column([b'\x02\x00\x01'], schema)[0],
-            Decimal('1310.73')
+            Decimal('131.073')
         )
 
     def test_binary(self):
@@ -74,7 +74,7 @@ class TestDecimal(unittest.TestCase):
 
         self.assertEqual(
             convert_column([b'\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01'], schema)[0],
-            Decimal('94447329657392904273.93')
+            Decimal('9444732965739290427.393')
         )
 
 
