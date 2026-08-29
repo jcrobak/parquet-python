@@ -60,7 +60,7 @@ def convert_column(data, schemae):
     """Convert known types from primitive to rich."""
     ctype = schemae.converted_type
     if ctype == parquet_thrift.ConvertedType.DECIMAL:
-        scale_factor = Decimal("10e-{}".format(schemae.scale))
+        scale_factor = Decimal("1e-{}".format(schemae.scale))
         if schemae.type == parquet_thrift.Type.INT32 or schemae.type == parquet_thrift.Type.INT64:
             return [Decimal(unscaled) * scale_factor for unscaled in data]
         return [Decimal(intbig(unscaled)) * scale_factor for unscaled in data]
